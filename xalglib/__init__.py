@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 3.18.0 (source code generated 2021-10-25)
+# ALGLIB 3.19.0 (source code generated 2022-06-07)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -89,11 +89,11 @@ curdir = os.path.dirname(__file__)
 if curdir=="":
     curdir = "."
 if sys.platform=="win32" or sys.platform=="cygwin":
-    _shared_lib_name = "alglib318_"+str(ctypes.sizeof(ctypes.c_void_p)*8)+"hpc"+".dll"
+    _shared_lib_name = "alglib319_"+str(ctypes.sizeof(ctypes.c_void_p)*8)+"hpc"+".dll"
     _so_candidates.append(os.path.join(curdir,_shared_lib_name))
     _so_candidates.append(os.path.join(sys.prefix,_shared_lib_name))
 else:
-    _shared_lib_name = "alglib318_"+str(ctypes.sizeof(ctypes.c_void_p)*8)+"hpc"+".so"
+    _shared_lib_name = "alglib319_"+str(ctypes.sizeof(ctypes.c_void_p)*8)+"hpc"+".so"
     _so_candidates.append(os.path.join(curdir,_shared_lib_name))
     _so_candidates.append(os.path.join(sys.prefix,_shared_lib_name))
     _so_candidates.append(os.path.join(os.sep+"usr","local",_shared_lib_name))
@@ -18469,6 +18469,92 @@ def lptestproblemcreate(n, hasknowntarget, targetf):
         pass
 
 
+_lib_alglib.alglib_xv2_lptestproblemhasknowntarget.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_lptestproblemhasknowntarget.restype = ctypes.c_int32
+def lptestproblemhasknowntarget(p):
+    pass
+    __result = ctypes.c_uint64(0)
+    __p = p.ptr
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_lptestproblemhasknowntarget(ctypes.byref(_error_msg), ctypes.byref(__result), ctypes.byref(__p), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'lptestproblemhasknowntarget'")
+        __r__result = __result.value!=0
+        return __r__result
+    finally:
+        pass
+
+
+_lib_alglib.alglib_xv2_lptestproblemgettargetf.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_lptestproblemgettargetf.restype = ctypes.c_int32
+def lptestproblemgettargetf(p):
+    pass
+    __result = ctypes.c_double(0)
+    __p = p.ptr
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_lptestproblemgettargetf(ctypes.byref(_error_msg), ctypes.byref(__result), ctypes.byref(__p), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'lptestproblemgettargetf'")
+        __r__result = __result.value
+        return __r__result
+    finally:
+        pass
+
+
+_lib_alglib.alglib_xv2_lptestproblemgetn.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_lptestproblemgetn.restype = ctypes.c_int32
+def lptestproblemgetn(p):
+    pass
+    __result = x_int()
+    __result.val = 0
+    __p = p.ptr
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_lptestproblemgetn(ctypes.byref(_error_msg), ctypes.byref(__result), ctypes.byref(__p), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'lptestproblemgetn'")
+        __r__result = __result.val
+        return __r__result
+    finally:
+        pass
+
+
+_lib_alglib.alglib_xv2_lptestproblemgetm.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_lptestproblemgetm.restype = ctypes.c_int32
+def lptestproblemgetm(p):
+    pass
+    __result = x_int()
+    __result.val = 0
+    __p = p.ptr
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_lptestproblemgetm(ctypes.byref(_error_msg), ctypes.byref(__result), ctypes.byref(__p), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'lptestproblemgetm'")
+        __r__result = __result.val
+        return __r__result
+    finally:
+        pass
+
+
 _lib_alglib.alglib_xv2_lptestproblemsetscale.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
 _lib_alglib.alglib_xv2_lptestproblemsetscale.restype = ctypes.c_int32
 def lptestproblemsetscale(p, s):
@@ -30120,6 +30206,119 @@ def rbfsetalgohierarchical(s, rbase, nlayers, lambdans):
         pass
 
 
+_lib_alglib.alglib_xv2_rbfsetalgothinplatespline.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_rbfsetalgothinplatespline.restype = ctypes.c_int32
+def rbfsetalgothinplatespline(*functionargs):
+    if len(functionargs)==2:
+        __friendly_form = False
+        s,lambdav = functionargs
+    elif len(functionargs)==1:
+        __friendly_form = True
+        s, = functionargs
+        lambdav = 0.0
+    else:
+        raise RuntimeError("Error while calling 'rbfsetalgothinplatespline': function must have 1 or 2 parameters")
+    __s = s.ptr
+    __lambdav = ctypes.c_double(lambdav)
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_rbfsetalgothinplatespline(ctypes.byref(_error_msg), ctypes.byref(__s), ctypes.byref(__lambdav), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'rbfsetalgothinplatespline'")
+        return
+    finally:
+        pass
+
+
+_lib_alglib.alglib_xv2_rbfsetalgomultiquadricmanual.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_rbfsetalgomultiquadricmanual.restype = ctypes.c_int32
+def rbfsetalgomultiquadricmanual(*functionargs):
+    if len(functionargs)==3:
+        __friendly_form = False
+        s,alpha,lambdav = functionargs
+    elif len(functionargs)==2:
+        __friendly_form = True
+        s,alpha = functionargs
+        lambdav = 0.0
+    else:
+        raise RuntimeError("Error while calling 'rbfsetalgomultiquadricmanual': function must have 2 or 3 parameters")
+    __s = s.ptr
+    __alpha = ctypes.c_double(alpha)
+    __lambdav = ctypes.c_double(lambdav)
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_rbfsetalgomultiquadricmanual(ctypes.byref(_error_msg), ctypes.byref(__s), ctypes.byref(__alpha), ctypes.byref(__lambdav), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'rbfsetalgomultiquadricmanual'")
+        return
+    finally:
+        pass
+
+
+_lib_alglib.alglib_xv2_rbfsetalgomultiquadricauto.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_rbfsetalgomultiquadricauto.restype = ctypes.c_int32
+def rbfsetalgomultiquadricauto(*functionargs):
+    if len(functionargs)==2:
+        __friendly_form = False
+        s,lambdav = functionargs
+    elif len(functionargs)==1:
+        __friendly_form = True
+        s, = functionargs
+        lambdav = 0.0
+    else:
+        raise RuntimeError("Error while calling 'rbfsetalgomultiquadricauto': function must have 1 or 2 parameters")
+    __s = s.ptr
+    __lambdav = ctypes.c_double(lambdav)
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_rbfsetalgomultiquadricauto(ctypes.byref(_error_msg), ctypes.byref(__s), ctypes.byref(__lambdav), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'rbfsetalgomultiquadricauto'")
+        return
+    finally:
+        pass
+
+
+_lib_alglib.alglib_xv2_rbfsetalgobiharmonic.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_rbfsetalgobiharmonic.restype = ctypes.c_int32
+def rbfsetalgobiharmonic(*functionargs):
+    if len(functionargs)==2:
+        __friendly_form = False
+        s,lambdav = functionargs
+    elif len(functionargs)==1:
+        __friendly_form = True
+        s, = functionargs
+        lambdav = 0.0
+    else:
+        raise RuntimeError("Error while calling 'rbfsetalgobiharmonic': function must have 1 or 2 parameters")
+    __s = s.ptr
+    __lambdav = ctypes.c_double(lambdav)
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_rbfsetalgobiharmonic(ctypes.byref(_error_msg), ctypes.byref(__s), ctypes.byref(__lambdav), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'rbfsetalgobiharmonic'")
+        return
+    finally:
+        pass
+
+
 _lib_alglib.alglib_xv2_rbfsetlinterm.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
 _lib_alglib.alglib_xv2_rbfsetlinterm.restype = ctypes.c_int32
 def rbfsetlinterm(s):
@@ -30334,6 +30533,87 @@ def rbfcalc3(s, x0, x1, x2):
         pass
 
 
+_lib_alglib.alglib_xv2_rbfdiff1.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_rbfdiff1.restype = ctypes.c_int32
+def rbfdiff1(s, x0):
+    pass
+    __s = s.ptr
+    __x0 = ctypes.c_double(x0)
+    __y = ctypes.c_double(0)
+    __dy0 = ctypes.c_double(0)
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_rbfdiff1(ctypes.byref(_error_msg), ctypes.byref(__s), ctypes.byref(__x0), ctypes.byref(__y), ctypes.byref(__dy0), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'rbfdiff1'")
+        __r__y = __y.value
+        __r__dy0 = __dy0.value
+        return (__r__y, __r__dy0)
+    finally:
+        pass
+
+
+_lib_alglib.alglib_xv2_rbfdiff2.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_rbfdiff2.restype = ctypes.c_int32
+def rbfdiff2(s, x0, x1):
+    pass
+    __s = s.ptr
+    __x0 = ctypes.c_double(x0)
+    __x1 = ctypes.c_double(x1)
+    __y = ctypes.c_double(0)
+    __dy0 = ctypes.c_double(0)
+    __dy1 = ctypes.c_double(0)
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_rbfdiff2(ctypes.byref(_error_msg), ctypes.byref(__s), ctypes.byref(__x0), ctypes.byref(__x1), ctypes.byref(__y), ctypes.byref(__dy0), ctypes.byref(__dy1), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'rbfdiff2'")
+        __r__y = __y.value
+        __r__dy0 = __dy0.value
+        __r__dy1 = __dy1.value
+        return (__r__y, __r__dy0, __r__dy1)
+    finally:
+        pass
+
+
+_lib_alglib.alglib_xv2_rbfdiff3.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_rbfdiff3.restype = ctypes.c_int32
+def rbfdiff3(s, x0, x1, x2):
+    pass
+    __s = s.ptr
+    __x0 = ctypes.c_double(x0)
+    __x1 = ctypes.c_double(x1)
+    __x2 = ctypes.c_double(x2)
+    __y = ctypes.c_double(0)
+    __dy0 = ctypes.c_double(0)
+    __dy1 = ctypes.c_double(0)
+    __dy2 = ctypes.c_double(0)
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_rbfdiff3(ctypes.byref(_error_msg), ctypes.byref(__s), ctypes.byref(__x0), ctypes.byref(__x1), ctypes.byref(__x2), ctypes.byref(__y), ctypes.byref(__dy0), ctypes.byref(__dy1), ctypes.byref(__dy2), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'rbfdiff3'")
+        __r__y = __y.value
+        __r__dy0 = __dy0.value
+        __r__dy1 = __dy1.value
+        __r__dy2 = __dy2.value
+        return (__r__y, __r__dy0, __r__dy1, __r__dy2)
+    finally:
+        pass
+
+
 _lib_alglib.alglib_xv2_rbfcalc.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
 _lib_alglib.alglib_xv2_rbfcalc.restype = ctypes.c_int32
 def rbfcalc(s, x):
@@ -30357,6 +30637,65 @@ def rbfcalc(s, x):
     finally:
         x_vector_clear(__x)
         x_vector_clear(__y)
+
+
+_lib_alglib.alglib_xv2_rbfdiff.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_rbfdiff.restype = ctypes.c_int32
+def rbfdiff(s, x):
+    pass
+    __s = s.ptr
+    if not is_real_vector(x):
+        raise ValueError("'x' parameter can't be cast to real_vector")
+    __x = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __y = x_vector(cnt=0,datatype=DT_REAL,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __dy = x_vector(cnt=0,datatype=DT_REAL,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        x_from_list(__x, x, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_rbfdiff(ctypes.byref(_error_msg), ctypes.byref(__s), ctypes.byref(__x), ctypes.byref(__y), ctypes.byref(__dy), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'rbfdiff'")
+        __r__y = list_from_x(__y)
+        __r__dy = list_from_x(__dy)
+        return (__r__y, __r__dy)
+    finally:
+        x_vector_clear(__x)
+        x_vector_clear(__y)
+        x_vector_clear(__dy)
+
+
+_lib_alglib.alglib_xv2_rbfhess.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_rbfhess.restype = ctypes.c_int32
+def rbfhess(s, x):
+    pass
+    __s = s.ptr
+    if not is_real_vector(x):
+        raise ValueError("'x' parameter can't be cast to real_vector")
+    __x = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __y = x_vector(cnt=0,datatype=DT_REAL,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __dy = x_vector(cnt=0,datatype=DT_REAL,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __d2y = x_vector(cnt=0,datatype=DT_REAL,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        x_from_list(__x, x, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_rbfhess(ctypes.byref(_error_msg), ctypes.byref(__s), ctypes.byref(__x), ctypes.byref(__y), ctypes.byref(__dy), ctypes.byref(__d2y), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'rbfhess'")
+        __r__y = list_from_x(__y)
+        __r__dy = list_from_x(__dy)
+        __r__d2y = list_from_x(__d2y)
+        return (__r__y, __r__dy, __r__d2y)
+    finally:
+        x_vector_clear(__x)
+        x_vector_clear(__y)
+        x_vector_clear(__dy)
+        x_vector_clear(__d2y)
 
 
 _lib_alglib.alglib_xv2_rbfcalcbuf.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
@@ -30387,6 +30726,80 @@ def rbfcalcbuf(s, x, y):
         x_vector_clear(__y)
 
 
+_lib_alglib.alglib_xv2_rbfdiffbuf.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_rbfdiffbuf.restype = ctypes.c_int32
+def rbfdiffbuf(s, x, y, dy):
+    pass
+    __s = s.ptr
+    if not is_real_vector(x):
+        raise ValueError("'x' parameter can't be cast to real_vector")
+    __x = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    if not is_real_vector(y):
+        raise ValueError("'y' parameter can't be cast to real_vector")
+    __y = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    if not is_real_vector(dy):
+        raise ValueError("'dy' parameter can't be cast to real_vector")
+    __dy = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        x_from_list(__x, x, DT_REAL, X_CREATE)
+        x_from_list(__y, y, DT_REAL, X_CREATE)
+        x_from_list(__dy, dy, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_rbfdiffbuf(ctypes.byref(_error_msg), ctypes.byref(__s), ctypes.byref(__x), ctypes.byref(__y), ctypes.byref(__dy), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'rbfdiffbuf'")
+        __r__y = list_from_x(__y)
+        __r__dy = list_from_x(__dy)
+        return (__r__y, __r__dy)
+    finally:
+        x_vector_clear(__x)
+        x_vector_clear(__y)
+        x_vector_clear(__dy)
+
+
+_lib_alglib.alglib_xv2_rbfhessbuf.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_rbfhessbuf.restype = ctypes.c_int32
+def rbfhessbuf(s, x, y, dy, d2y):
+    pass
+    __s = s.ptr
+    if not is_real_vector(x):
+        raise ValueError("'x' parameter can't be cast to real_vector")
+    __x = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    if not is_real_vector(y):
+        raise ValueError("'y' parameter can't be cast to real_vector")
+    __y = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    if not is_real_vector(dy):
+        raise ValueError("'dy' parameter can't be cast to real_vector")
+    __dy = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    if not is_real_vector(d2y):
+        raise ValueError("'d2y' parameter can't be cast to real_vector")
+    __d2y = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        x_from_list(__x, x, DT_REAL, X_CREATE)
+        x_from_list(__y, y, DT_REAL, X_CREATE)
+        x_from_list(__dy, dy, DT_REAL, X_CREATE)
+        x_from_list(__d2y, d2y, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_rbfhessbuf(ctypes.byref(_error_msg), ctypes.byref(__s), ctypes.byref(__x), ctypes.byref(__y), ctypes.byref(__dy), ctypes.byref(__d2y), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'rbfhessbuf'")
+        __r__y = list_from_x(__y)
+        __r__dy = list_from_x(__dy)
+        __r__d2y = list_from_x(__d2y)
+        return (__r__y, __r__dy, __r__d2y)
+    finally:
+        x_vector_clear(__x)
+        x_vector_clear(__y)
+        x_vector_clear(__dy)
+        x_vector_clear(__d2y)
+
+
 _lib_alglib.alglib_xv2_rbftscalcbuf.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
 _lib_alglib.alglib_xv2_rbftscalcbuf.restype = ctypes.c_int32
 def rbftscalcbuf(s, buf, x, y):
@@ -30414,6 +30827,82 @@ def rbftscalcbuf(s, buf, x, y):
     finally:
         x_vector_clear(__x)
         x_vector_clear(__y)
+
+
+_lib_alglib.alglib_xv2_rbftsdiffbuf.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_rbftsdiffbuf.restype = ctypes.c_int32
+def rbftsdiffbuf(s, buf, x, y, dy):
+    pass
+    __s = s.ptr
+    __buf = buf.ptr
+    if not is_real_vector(x):
+        raise ValueError("'x' parameter can't be cast to real_vector")
+    __x = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    if not is_real_vector(y):
+        raise ValueError("'y' parameter can't be cast to real_vector")
+    __y = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    if not is_real_vector(dy):
+        raise ValueError("'dy' parameter can't be cast to real_vector")
+    __dy = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        x_from_list(__x, x, DT_REAL, X_CREATE)
+        x_from_list(__y, y, DT_REAL, X_CREATE)
+        x_from_list(__dy, dy, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_rbftsdiffbuf(ctypes.byref(_error_msg), ctypes.byref(__s), ctypes.byref(__buf), ctypes.byref(__x), ctypes.byref(__y), ctypes.byref(__dy), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'rbftsdiffbuf'")
+        __r__y = list_from_x(__y)
+        __r__dy = list_from_x(__dy)
+        return (__r__y, __r__dy)
+    finally:
+        x_vector_clear(__x)
+        x_vector_clear(__y)
+        x_vector_clear(__dy)
+
+
+_lib_alglib.alglib_xv2_rbftshessbuf.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_rbftshessbuf.restype = ctypes.c_int32
+def rbftshessbuf(s, buf, x, y, dy, d2y):
+    pass
+    __s = s.ptr
+    __buf = buf.ptr
+    if not is_real_vector(x):
+        raise ValueError("'x' parameter can't be cast to real_vector")
+    __x = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    if not is_real_vector(y):
+        raise ValueError("'y' parameter can't be cast to real_vector")
+    __y = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    if not is_real_vector(dy):
+        raise ValueError("'dy' parameter can't be cast to real_vector")
+    __dy = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    if not is_real_vector(d2y):
+        raise ValueError("'d2y' parameter can't be cast to real_vector")
+    __d2y = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        x_from_list(__x, x, DT_REAL, X_CREATE)
+        x_from_list(__y, y, DT_REAL, X_CREATE)
+        x_from_list(__dy, dy, DT_REAL, X_CREATE)
+        x_from_list(__d2y, d2y, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_rbftshessbuf(ctypes.byref(_error_msg), ctypes.byref(__s), ctypes.byref(__buf), ctypes.byref(__x), ctypes.byref(__y), ctypes.byref(__dy), ctypes.byref(__d2y), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'rbftshessbuf'")
+        __r__y = list_from_x(__y)
+        __r__dy = list_from_x(__dy)
+        __r__d2y = list_from_x(__d2y)
+        return (__r__y, __r__dy, __r__d2y)
+    finally:
+        x_vector_clear(__x)
+        x_vector_clear(__y)
+        x_vector_clear(__dy)
+        x_vector_clear(__d2y)
 
 
 _lib_alglib.alglib_xv2_rbfgridcalc2.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
