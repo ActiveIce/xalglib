@@ -6,7 +6,7 @@ ALGLIB is a cross-platform numerical analysis and data processing library.
 
 ## Install with pip
 ```bash
-pip install xalglib
+python setup.py install
 ```
 
 ## Quickstart
