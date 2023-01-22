@@ -9041,7 +9041,7 @@ try:
 
             # unpack and test
             m, n, d, c = xalglib.spline2dunpackv(s)
-            _TestResult = _TestResult and doc_print_test(c, [[0, 1, 0, 1, 0,2,0,0, 1,3,0,0, 0,0,0,0, 0,0,0,0 ]], "real_matrix", 0.00005)
+            _TestResult = _TestResult and doc_print_test(c, [[0, 1, 0, 1, 0,2,0,0, 1,3,0,0, 0,0,0,0, 0,0,0,0, 1]], "real_matrix", 0.00005)
             _TestResult = _TestResult and (_spoil_scenario==-1)
         except (RuntimeError, ValueError):
             _TestResult = _TestResult and (_spoil_scenario!=-1)

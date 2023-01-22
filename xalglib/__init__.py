@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 3.19.0 (source code generated 2022-06-07)
+# ALGLIB 3.20.0 (source code generated 2022-12-19)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -89,11 +89,11 @@ curdir = os.path.dirname(__file__)
 if curdir=="":
     curdir = "."
 if sys.platform=="win32" or sys.platform=="cygwin":
-    _shared_lib_name = "alglib319_"+str(ctypes.sizeof(ctypes.c_void_p)*8)+"hpc"+".dll"
+    _shared_lib_name = "alglib320_"+str(ctypes.sizeof(ctypes.c_void_p)*8)+"hpc"+".dll"
     _so_candidates.append(os.path.join(curdir,_shared_lib_name))
     _so_candidates.append(os.path.join(sys.prefix,_shared_lib_name))
 else:
-    _shared_lib_name = "alglib319_"+str(ctypes.sizeof(ctypes.c_void_p)*8)+"hpc"+".so"
+    _shared_lib_name = "alglib320_"+str(ctypes.sizeof(ctypes.c_void_p)*8)+"hpc"+".so"
     _so_candidates.append(os.path.join(curdir,_shared_lib_name))
     _so_candidates.append(os.path.join(sys.prefix,_shared_lib_name))
     _so_candidates.append(os.path.join(os.sep+"usr","local",_shared_lib_name))
@@ -11376,7 +11376,9 @@ class x_optguardnonc0report(ctypes.Structure):
         ("f", x_vector),
         ("cnt", x_int),
         ("stpidxa", x_int),
-        ("stpidxb", x_int)
+        ("stpidxb", x_int),
+        ("inneriter", x_int),
+        ("outeriter", x_int)
         ]
 
 
@@ -11394,6 +11396,8 @@ class optguardnonc0report(object):
         self.cnt = 0
         self.stpidxa = 0
         self.stpidxb = 0
+        self.inneriter = 0
+        self.outeriter = 0
 
 
 def x_optguardnonc0report_zero_fields(x):
@@ -11407,6 +11411,8 @@ def x_optguardnonc0report_zero_fields(x):
     x.cnt.val = 0
     x.stpidxa.val = 0
     x.stpidxb.val = 0
+    x.inneriter.val = 0
+    x.outeriter.val = 0
     return
 
 
@@ -11434,6 +11440,8 @@ def x_from_optguardnonc0report(x,v):
     x.cnt.val = int(v.cnt)
     x.stpidxa.val = int(v.stpidxa)
     x.stpidxb.val = int(v.stpidxb)
+    x.inneriter.val = int(v.inneriter)
+    x.outeriter.val = int(v.outeriter)
     return
 
 
@@ -11451,6 +11459,8 @@ def optguardnonc0report_from_x(x):
     r.cnt = x.cnt.val
     r.stpidxa = x.stpidxa.val
     r.stpidxb = x.stpidxb.val
+    r.inneriter = x.inneriter.val
+    r.outeriter = x.outeriter.val
     return r
 
 
@@ -11468,7 +11478,9 @@ class x_optguardnonc1test0report(ctypes.Structure):
         ("f", x_vector),
         ("cnt", x_int),
         ("stpidxa", x_int),
-        ("stpidxb", x_int)
+        ("stpidxb", x_int),
+        ("inneriter", x_int),
+        ("outeriter", x_int)
         ]
 
 
@@ -11486,6 +11498,8 @@ class optguardnonc1test0report(object):
         self.cnt = 0
         self.stpidxa = 0
         self.stpidxb = 0
+        self.inneriter = 0
+        self.outeriter = 0
 
 
 def x_optguardnonc1test0report_zero_fields(x):
@@ -11499,6 +11513,8 @@ def x_optguardnonc1test0report_zero_fields(x):
     x.cnt.val = 0
     x.stpidxa.val = 0
     x.stpidxb.val = 0
+    x.inneriter.val = 0
+    x.outeriter.val = 0
     return
 
 
@@ -11526,6 +11542,8 @@ def x_from_optguardnonc1test0report(x,v):
     x.cnt.val = int(v.cnt)
     x.stpidxa.val = int(v.stpidxa)
     x.stpidxb.val = int(v.stpidxb)
+    x.inneriter.val = int(v.inneriter)
+    x.outeriter.val = int(v.outeriter)
     return
 
 
@@ -11543,6 +11561,8 @@ def optguardnonc1test0report_from_x(x):
     r.cnt = x.cnt.val
     r.stpidxa = x.stpidxa.val
     r.stpidxb = x.stpidxb.val
+    r.inneriter = x.inneriter.val
+    r.outeriter = x.outeriter.val
     return r
 
 
@@ -11561,7 +11581,9 @@ class x_optguardnonc1test1report(ctypes.Structure):
         ("g", x_vector),
         ("cnt", x_int),
         ("stpidxa", x_int),
-        ("stpidxb", x_int)
+        ("stpidxb", x_int),
+        ("inneriter", x_int),
+        ("outeriter", x_int)
         ]
 
 
@@ -11580,6 +11602,8 @@ class optguardnonc1test1report(object):
         self.cnt = 0
         self.stpidxa = 0
         self.stpidxb = 0
+        self.inneriter = 0
+        self.outeriter = 0
 
 
 def x_optguardnonc1test1report_zero_fields(x):
@@ -11594,6 +11618,8 @@ def x_optguardnonc1test1report_zero_fields(x):
     x.cnt.val = 0
     x.stpidxa.val = 0
     x.stpidxb.val = 0
+    x.inneriter.val = 0
+    x.outeriter.val = 0
     return
 
 
@@ -11622,6 +11648,8 @@ def x_from_optguardnonc1test1report(x,v):
     x.cnt.val = int(v.cnt)
     x.stpidxa.val = int(v.stpidxa)
     x.stpidxb.val = int(v.stpidxb)
+    x.inneriter.val = int(v.inneriter)
+    x.outeriter.val = int(v.outeriter)
     return
 
 
@@ -11640,6 +11668,8 @@ def optguardnonc1test1report_from_x(x):
     r.cnt = x.cnt.val
     r.stpidxa = x.stpidxa.val
     r.stpidxb = x.stpidxb.val
+    r.inneriter = x.inneriter.val
+    r.outeriter = x.outeriter.val
     return r
 
 
@@ -15595,7 +15625,7 @@ def minlpsetalgoipm(*functionargs):
     elif len(functionargs)==1:
         __friendly_form = True
         state, = functionargs
-        eps = 0
+        eps = 0.0
     else:
         raise RuntimeError("Error while calling 'minlpsetalgoipm': function must have 1 or 2 parameters")
     __state = state.ptr
@@ -28868,6 +28898,56 @@ def spline2dbuildbilinearv(x, n, y, m, f, d):
         x_vector_clear(__f)
 
 
+_lib_alglib.alglib_xv2_spline2dbuildbilinearmissing.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_spline2dbuildbilinearmissing.restype = ctypes.c_int32
+def spline2dbuildbilinearmissing(x, n, y, m, f, missing, d):
+    pass
+    if not is_real_vector(x):
+        raise ValueError("'x' parameter can't be cast to real_vector")
+    __x = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __n = x_int()
+    __n.val = int(n)
+    if __n.val!=n:
+        raise ValueError("Error while converting 'n' parameter to 'x_int'")
+    if not is_real_vector(y):
+        raise ValueError("'y' parameter can't be cast to real_vector")
+    __y = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __m = x_int()
+    __m.val = int(m)
+    if __m.val!=m:
+        raise ValueError("Error while converting 'm' parameter to 'x_int'")
+    if not is_real_vector(f):
+        raise ValueError("'f' parameter can't be cast to real_vector")
+    __f = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    if not is_bool_vector(missing):
+        raise ValueError("'missing' parameter can't be cast to bool_vector")
+    __missing = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __d = x_int()
+    __d.val = int(d)
+    if __d.val!=d:
+        raise ValueError("Error while converting 'd' parameter to 'x_int'")
+    __c = ctypes.c_void_p(0)
+    try:
+        x_from_list(__x, x, DT_REAL, X_CREATE)
+        x_from_list(__y, y, DT_REAL, X_CREATE)
+        x_from_list(__f, f, DT_REAL, X_CREATE)
+        x_from_list(__missing, missing, DT_BOOL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_spline2dbuildbilinearmissing(ctypes.byref(_error_msg), ctypes.byref(__x), ctypes.byref(__n), ctypes.byref(__y), ctypes.byref(__m), ctypes.byref(__f), ctypes.byref(__missing), ctypes.byref(__d), ctypes.byref(__c), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'spline2dbuildbilinearmissing'")
+        __r__c = spline2dinterpolant(__c)
+        return __r__c
+    finally:
+        x_vector_clear(__x)
+        x_vector_clear(__y)
+        x_vector_clear(__f)
+        x_vector_clear(__missing)
+
+
 _lib_alglib.alglib_xv2_spline2dbuildbicubicv.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
 _lib_alglib.alglib_xv2_spline2dbuildbicubicv.restype = ctypes.c_int32
 def spline2dbuildbicubicv(x, n, y, m, f, d):
@@ -28911,6 +28991,56 @@ def spline2dbuildbicubicv(x, n, y, m, f, d):
         x_vector_clear(__x)
         x_vector_clear(__y)
         x_vector_clear(__f)
+
+
+_lib_alglib.alglib_xv2_spline2dbuildbicubicmissing.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_spline2dbuildbicubicmissing.restype = ctypes.c_int32
+def spline2dbuildbicubicmissing(x, n, y, m, f, missing, d):
+    pass
+    if not is_real_vector(x):
+        raise ValueError("'x' parameter can't be cast to real_vector")
+    __x = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __n = x_int()
+    __n.val = int(n)
+    if __n.val!=n:
+        raise ValueError("Error while converting 'n' parameter to 'x_int'")
+    if not is_real_vector(y):
+        raise ValueError("'y' parameter can't be cast to real_vector")
+    __y = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __m = x_int()
+    __m.val = int(m)
+    if __m.val!=m:
+        raise ValueError("Error while converting 'm' parameter to 'x_int'")
+    if not is_real_vector(f):
+        raise ValueError("'f' parameter can't be cast to real_vector")
+    __f = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    if not is_bool_vector(missing):
+        raise ValueError("'missing' parameter can't be cast to bool_vector")
+    __missing = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __d = x_int()
+    __d.val = int(d)
+    if __d.val!=d:
+        raise ValueError("Error while converting 'd' parameter to 'x_int'")
+    __c = ctypes.c_void_p(0)
+    try:
+        x_from_list(__x, x, DT_REAL, X_CREATE)
+        x_from_list(__y, y, DT_REAL, X_CREATE)
+        x_from_list(__f, f, DT_REAL, X_CREATE)
+        x_from_list(__missing, missing, DT_BOOL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_spline2dbuildbicubicmissing(ctypes.byref(_error_msg), ctypes.byref(__x), ctypes.byref(__n), ctypes.byref(__y), ctypes.byref(__m), ctypes.byref(__f), ctypes.byref(__missing), ctypes.byref(__d), ctypes.byref(__c), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'spline2dbuildbicubicmissing'")
+        __r__c = spline2dinterpolant(__c)
+        return __r__c
+    finally:
+        x_vector_clear(__x)
+        x_vector_clear(__y)
+        x_vector_clear(__f)
+        x_vector_clear(__missing)
 
 
 _lib_alglib.alglib_xv2_spline2dunpackv.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
@@ -30442,6 +30572,26 @@ def rbfsetv2supportr(s, r):
         pass
 
 
+_lib_alglib.alglib_xv2_rbfsetv3tol.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_rbfsetv3tol.restype = ctypes.c_int32
+def rbfsetv3tol(s, tol):
+    pass
+    __s = s.ptr
+    __tol = ctypes.c_double(tol)
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_rbfsetv3tol(ctypes.byref(_error_msg), ctypes.byref(__s), ctypes.byref(__tol), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'rbfsetv3tol'")
+        return
+    finally:
+        pass
+
+
 _lib_alglib.alglib_xv2_rbfbuildmodel.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
 _lib_alglib.alglib_xv2_rbfbuildmodel.restype = ctypes.c_int32
 def rbfbuildmodel(s):
@@ -30612,6 +30762,51 @@ def rbfdiff3(s, x0, x1, x2):
         return (__r__y, __r__dy0, __r__dy1, __r__dy2)
     finally:
         pass
+
+
+_lib_alglib.alglib_xv2_rbfsetfastevaltol.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_rbfsetfastevaltol.restype = ctypes.c_int32
+def rbfsetfastevaltol(s, tol):
+    pass
+    __s = s.ptr
+    __tol = ctypes.c_double(tol)
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_rbfsetfastevaltol(ctypes.byref(_error_msg), ctypes.byref(__s), ctypes.byref(__tol), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'rbfsetfastevaltol'")
+        return
+    finally:
+        pass
+
+
+_lib_alglib.alglib_xv2_rbffastcalc.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_rbffastcalc.restype = ctypes.c_int32
+def rbffastcalc(s, x):
+    pass
+    __s = s.ptr
+    if not is_real_vector(x):
+        raise ValueError("'x' parameter can't be cast to real_vector")
+    __x = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __y = x_vector(cnt=0,datatype=DT_REAL,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        x_from_list(__x, x, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_rbffastcalc(ctypes.byref(_error_msg), ctypes.byref(__s), ctypes.byref(__x), ctypes.byref(__y), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'rbffastcalc'")
+        __r__y = list_from_x(__y)
+        return __r__y
+    finally:
+        x_vector_clear(__x)
+        x_vector_clear(__y)
 
 
 _lib_alglib.alglib_xv2_rbfcalc.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
