@@ -43,7 +43,8 @@ if libname=="":
 shutil.copyfile(os.path.join(dirname,libname), targetname)
 
 setup(
-    name        =   'alglib',
+    name        =   'xalglib',
+    version     =   '4.0.0',
     description =   'ALGLIB for Python: numerical library',
     author      =   'ALGLIB Project',
     url         =   'http://www.alglib.net/',
