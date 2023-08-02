@@ -1,0 +1,25 @@
+1 VERSIONINFO
+ FILEVERSION 0,0,0,0
+ PRODUCTVERSION 0,0,0,0
+ FILEFLAGSMASK 0x3fL
+ FILEOS 0x40004L
+ FILETYPE 0x2L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "000004b0"
+        BEGIN
+            VALUE "CompanyName", "ALGLIB Project"
+            VALUE "FileDescription", "ALGLIB native core"
+            VALUE "FileVersion", "0.0.0.0"
+            VALUE "ProductName", "ALGLIB native core"
+            VALUE "ProductVersion", "4.00.0.0"
+            VALUE "LegalCopyright", "version 4.00.0 built 2023-05-21"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0, 1200
+    END
+END

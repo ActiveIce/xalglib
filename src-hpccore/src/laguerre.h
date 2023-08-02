@@ -1,0 +1,78 @@
+###########################################################################
+# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# Copyright (c) Sergey Bochkanov (ALGLIB project).
+# 
+# >>> SOURCE LICENSE >>>
+# This software is a non-commercial edition of  ALGLIB  package,  which  is
+# licensed under ALGLIB Personal and Academic Use License Agreement (PAULA).
+# 
+# See paula-v1.0.pdf file in the archive  root  for  full  text  of  license
+# agreement.
+# >>> END OF LICENSE >>>
+
+##########################################################################
+
+#ifndef _laguerre_h
+#define _laguerre_h
+
+#include "aenv.h"
+#include "ialglib.h"
+#include "kernels.h"
+#include "smp.h"
+#include "kernels_hpc.h"
+
+
+/*$ Declarations $*/
+
+
+/*$ Body $*/
+
+
+/*************************************************************************
+Calculation of the value of the Laguerre polynomial.
+
+Parameters:
+    n   -   degree, n>=0
+    x   -   argument
+
+Result:
+    the value of the Laguerre polynomial Ln at x
+*************************************************************************/
+double laguerrecalculate(ae_int_t n, double x, ae_state *_state);
+
+
+/*************************************************************************
+Summation of Laguerre polynomials using Clenshaw's recurrence formula.
+
+This routine calculates c[0]*L0(x) + c[1]*L1(x) + ... + c[N]*LN(x)
+
+Parameters:
+    n   -   degree, n>=0
+    x   -   argument
+
+Result:
+    the value of the Laguerre polynomial at x
+*************************************************************************/
+double laguerresum(/* Real    */ const ae_vector* c,
+     ae_int_t n,
+     double x,
+     ae_state *_state);
+
+
+/*************************************************************************
+Representation of Ln as C[0] + C[1]*X + ... + C[N]*X^N
+
+Input parameters:
+    N   -   polynomial degree, n>=0
+
+Output parameters:
+    C   -   coefficients
+*************************************************************************/
+void laguerrecoefficients(ae_int_t n,
+     /* Real    */ ae_vector* c,
+     ae_state *_state);
+
+
+/*$ End $*/
+#endif
+
