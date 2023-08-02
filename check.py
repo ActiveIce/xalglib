@@ -3,6 +3,7 @@ import math
 import cmath
 import sys
 import random
+import traceback
 
 def doc_print_test(v, t, typecode, _threshold = 0):
     if typecode=="bool":
@@ -487,14 +488,105 @@ def s1_grad(x, grad, param):
     grad[0] = -0.2*math.pow(1+x[0],-1.2) +0.3*math.pow(1-x[0],-1.3) + 1000
     return math.pow(1+x[0],-0.2) + math.pow(1-x[0],-0.3) + 1000*x[0]
 
+def multiobjective2_fvec(x, fi, param):
+    #
+    # this callback calculates the bi-objective target
+    #
+    #     f0(x0,x1) = x0^2 + (x1-1)^2
+    #     f1(x0,x1) = (x0-1(^2 + x1^2
+    #
+    fi[0] = x[0]*x[0]+(x[1]-1)*(x[1]-1)
+    fi[1] = (x[0]-1)*(x[0]-1)+x[1]*x[1]
+    return
+def multiobjective2_jac(x, fi, jac, param):
+    #
+    # this callback calculates the bi-objective target
+    #
+    #     f0(x0,x1) = x0^2 + (x1-1)^2
+    #     f1(x0,x1) = (x0-1(^2 + x1^2
+    #
+    # and Jacobian matrix J = [dfi/dxj]
+    #
+    fi[0] = x[0]*x[0]+(x[1]-1)*(x[1]-1)
+    fi[1] = (x[0]-1)*(x[0]-1)+x[1]*x[1]
+    jac[0][0] = 2*x[0]
+    jac[0][1] = 2*(x[1]-1)
+    jac[1][0] = 2*(x[0]-1)
+    jac[1][1] = 2*x[1]
+    return
+def multiobjective2constr_fvec(x, fi, param):
+    #
+    # this callback calculates the bi-objective target
+    #
+    #     f0(x0,x1) = x0^2 + (x1-1)^2
+    #     f1(x0,x1) = (x0-1(^2 + x1^2
+    #
+    # nonlinear constraint function
+    #
+    #     f2(x0,x1) = x0^2 + x1^2
+    #
+    fi[0] = x[0]*x[0]+(x[1]-1)*(x[1]-1)
+    fi[1] = (x[0]-1)*(x[0]-1)+x[1]*x[1]
+    fi[2] = x[0]*x[0]+x[1]*x[1]
+    return
+def multiobjective2constr_jac(x, fi, jac, param):
+    #
+    # this callback calculates the bi-objective target
+    #
+    #     f0(x0,x1) = x0^2 + (x1-1)^2
+    #     f1(x0,x1) = (x0-1(^2 + x1^2
+    #
+    # nonlinear constraint function
+    #
+    #     f2(x0,x1) = x0^2 + x1^2
+    #
+    # and Jacobian matrix J = [dfi/dxj]
+    #
+    fi[0] = x[0]*x[0]+(x[1]-1)*(x[1]-1)
+    fi[1] = (x[0]-1)*(x[0]-1)+x[1]*x[1]
+    fi[2] = x[0]*x[0]+x[1]*x[1]
+    jac[0][0] = 2*x[0]
+    jac[0][1] = 2*(x[1]-1)
+    jac[1][0] = 2*(x[0]-1)
+    jac[1][1] = 2*x[1]
+    jac[2][0] = 2*x[0]
+    jac[2][1] = 2*x[1]
+    return
+
 _TotalResult = True
 sys.stdout.write("Python-ALGLIB communication tests. Please wait...\n")
 try:
     #
+    # TEST xdebug_t1
+    #      Test initialization (out parameter) and update (shared parameter) for records
+    #
+    sys.stdout.write("0/162\n")
+    _TestResult = True
+    try:
+
+        rec1 = xalglib.xdebuginitrecord1()
+        _TestResult = _TestResult and doc_print_test(rec1.i, 1, "int")
+        _TestResult = _TestResult and doc_print_test(rec1.c, 1+1j, "complex", 0.00005)
+        _TestResult = _TestResult and doc_print_test(rec1.a, [2,3], "real_vector", 0.0005)
+
+        xalglib.xdebugupdaterecord1(rec1)
+        _TestResult = _TestResult and doc_print_test(rec1.i, 2, "int")
+        _TestResult = _TestResult and doc_print_test(rec1.c, 3+4j, "complex", 0.00005)
+        _TestResult = _TestResult and doc_print_test(rec1.a, [2,3,6], "real_vector", 0.0005)
+    except (RuntimeError, ValueError):
+        _TestResult = False
+    except:
+        raise
+    if not _TestResult:
+        sys.stdout.write("xdebug_t1                        FAILED\n")
+        sys.stdout.flush()
+    _TotalResult = _TotalResult and _TestResult
+
+
+    #
     # TEST ablas_d_gemm
     #      Matrix multiplication (single-threaded)
     #
-    sys.stdout.write("0/151\n")
     _TestResult = True
     try:
         a = [[2,1],[1,3]]
@@ -546,14 +638,14 @@ try:
         beta = 0.0
         ic = 0
         jc = 0
-        c = xalglib.rmatrixgemm(m, n, k, alpha, a, ia, ja, optypea, b, ib, jb, optypeb, beta, c, ic, jc)
+        xalglib.rmatrixgemm(m, n, k, alpha, a, ia, ja, optypea, b, ib, jb, optypeb, beta, c, ic, jc)
         _TestResult = _TestResult and doc_print_test(c, [[4,3],[2,4]], "real_matrix", 0.0001)
 
         #
         # Now we try to apply some simple transformation to operands: C:=A*B^T
         #
         optypeb = 1
-        c = xalglib.rmatrixgemm(m, n, k, alpha, a, ia, ja, optypea, b, ib, jb, optypeb, beta, c, ic, jc)
+        xalglib.rmatrixgemm(m, n, k, alpha, a, ia, ja, optypea, b, ib, jb, optypeb, beta, c, ic, jc)
         _TestResult = _TestResult and doc_print_test(c, [[5,1],[5,3]], "real_matrix", 0.0001)
     except (RuntimeError, ValueError):
         _TestResult = False
@@ -611,7 +703,7 @@ try:
         c = [[0,0],[0,0]]
 
         # calculate product, store result into upper part of c
-        c = xalglib.rmatrixsyrk(n, k, alpha, a, ia, ja, optypea, beta, c, ic, jc, isupper)
+        xalglib.rmatrixsyrk(n, k, alpha, a, ia, ja, optypea, beta, c, ic, jc, isupper)
 
         # output result.
         # IMPORTANT: lower triangle of C was NOT updated!
@@ -637,7 +729,7 @@ try:
         a = [[2j,1j],[1,3]]
         b = [[2,1],[0,1]]
         c = [[0,0],[0,0]]
-        c = xalglib.cmatrixgemm(2, 2, 2, 1.0, a, 0, 0, 0, b, 0, 0, 0, 0.0, c, 0, 0)
+        xalglib.cmatrixgemm(2, 2, 2, 1.0, a, 0, 0, 0, b, 0, 0, 0, 0.0, c, 0, 0)
         _TestResult = _TestResult and doc_print_test(c, [[4j,3j],[2,4]], "complex_matrix", 0.0001)
     except (RuntimeError, ValueError):
         _TestResult = False
@@ -807,6 +899,1054 @@ try:
             raise
     if not _TestResult:
         sys.stdout.write("sparse_d_crs                     FAILED\n")
+        sys.stdout.flush()
+    _TotalResult = _TotalResult and _TestResult
+
+
+    #
+    # TEST solve_real
+    #      Solving dense linear equations
+    #
+    _TestResult = True
+    for _spoil_scenario in range(-1,43):
+        try:
+            #
+            # This example demonstrates solution of a dense real linear system
+            #
+
+            #
+            # First, solve A*x=b with a feature-rich rmatrixsolve() which supports iterative improvement
+            # and condition number estimation
+            #
+            a = [[4,2],[-1,3]]
+            if _spoil_scenario==0:
+                spoil_mat_by_nan(a)
+            if _spoil_scenario==1:
+                spoil_mat_by_posinf(a)
+            if _spoil_scenario==2:
+                spoil_mat_by_neginf(a)
+            if _spoil_scenario==3:
+                spoil_mat_by_adding_row(a)
+            if _spoil_scenario==4:
+                spoil_mat_by_adding_col(a)
+            if _spoil_scenario==5:
+                spoil_mat_by_deleting_row(a)
+            if _spoil_scenario==6:
+                spoil_mat_by_deleting_col(a)
+            b = [8,5]
+            if _spoil_scenario==7:
+                spoil_vec_by_nan(b)
+            if _spoil_scenario==8:
+                spoil_vec_by_posinf(b)
+            if _spoil_scenario==9:
+                spoil_vec_by_neginf(b)
+            if _spoil_scenario==10:
+                spoil_vec_by_adding_element(b)
+            if _spoil_scenario==11:
+                spoil_vec_by_deleting_element(b)
+            x, rep = xalglib.rmatrixsolve(a, b)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
+            _TestResult = _TestResult and doc_print_test(x, [1.0000, 2.0000], "real_vector", 0.00005)
+
+            #
+            # Then, solve C*x=d with rmatrixsolvefast() which has lower overhead
+            #
+            c = [[3,1],[2,4]]
+            if _spoil_scenario==12:
+                spoil_mat_by_nan(c)
+            if _spoil_scenario==13:
+                spoil_mat_by_posinf(c)
+            if _spoil_scenario==14:
+                spoil_mat_by_neginf(c)
+            if _spoil_scenario==15:
+                spoil_mat_by_adding_row(c)
+            if _spoil_scenario==16:
+                spoil_mat_by_adding_col(c)
+            if _spoil_scenario==17:
+                spoil_mat_by_deleting_row(c)
+            if _spoil_scenario==18:
+                spoil_mat_by_deleting_col(c)
+            d = [2,-2]
+            if _spoil_scenario==19:
+                spoil_vec_by_nan(d)
+            if _spoil_scenario==20:
+                spoil_vec_by_posinf(d)
+            if _spoil_scenario==21:
+                spoil_vec_by_neginf(d)
+            if _spoil_scenario==22:
+                spoil_vec_by_adding_element(d)
+            if _spoil_scenario==23:
+                spoil_vec_by_deleting_element(d)
+            xalglib.rmatrixsolvefast(c, d)
+            _TestResult = _TestResult and doc_print_test(d, [1.0000, -1.0000], "real_vector", 0.00005)
+
+            #
+            # Sometimes you have LU decomposition of the system matrix readily
+            # available. In such cases it is possible to save a lot of time by
+            # passing precomputed LU factors to rmatrixlusolve(). The only
+            # downside of such approach is that iterative refinement is unavailable
+            # because original (unmodified) form of the system matrix is unknown
+            # to ALGLIB.
+            #
+            # However, if you have BOTH original matrix and its LU decomposition,
+            # it is possible to use rmatrixmixedsolve() which accepts both matrix
+            # itself and its factors, and uses original matrix to refine solution
+            # obtained with LU factors.
+            #
+            e = [[3,4],[2,4]]
+            if _spoil_scenario==24:
+                spoil_mat_by_nan(e)
+            if _spoil_scenario==25:
+                spoil_mat_by_posinf(e)
+            if _spoil_scenario==26:
+                spoil_mat_by_neginf(e)
+            if _spoil_scenario==27:
+                spoil_mat_by_adding_row(e)
+            if _spoil_scenario==28:
+                spoil_mat_by_adding_col(e)
+            if _spoil_scenario==29:
+                spoil_mat_by_deleting_row(e)
+            if _spoil_scenario==30:
+                spoil_mat_by_deleting_col(e)
+            lue = [[3,4],[2,4]]
+            if _spoil_scenario==31:
+                spoil_mat_by_nan(lue)
+            if _spoil_scenario==32:
+                spoil_mat_by_posinf(lue)
+            if _spoil_scenario==33:
+                spoil_mat_by_neginf(lue)
+            if _spoil_scenario==34:
+                spoil_mat_by_adding_row(lue)
+            if _spoil_scenario==35:
+                spoil_mat_by_adding_col(lue)
+            if _spoil_scenario==36:
+                spoil_mat_by_deleting_row(lue)
+            if _spoil_scenario==37:
+                spoil_mat_by_deleting_col(lue)
+            f = [2,0]
+            if _spoil_scenario==38:
+                spoil_vec_by_nan(f)
+            if _spoil_scenario==39:
+                spoil_vec_by_posinf(f)
+            if _spoil_scenario==40:
+                spoil_vec_by_neginf(f)
+            if _spoil_scenario==41:
+                spoil_vec_by_adding_element(f)
+            if _spoil_scenario==42:
+                spoil_vec_by_deleting_element(f)
+            pivots = xalglib.rmatrixlu(lue)
+            x, rep = xalglib.rmatrixlusolve(lue, pivots, f)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
+            _TestResult = _TestResult and doc_print_test(x, [2.0000, -1.0000], "real_vector", 0.00005)
+
+            x, rep = xalglib.rmatrixmixedsolve(e, lue, pivots, f)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
+            _TestResult = _TestResult and doc_print_test(x, [2.0000, -1.0000], "real_vector", 0.00005)
+            _TestResult = _TestResult and (_spoil_scenario==-1)
+        except (RuntimeError, ValueError):
+            _TestResult = _TestResult and (_spoil_scenario!=-1)
+        except:
+            raise
+    if not _TestResult:
+        sys.stdout.write("solve_real                       FAILED\n")
+        sys.stdout.flush()
+    _TotalResult = _TotalResult and _TestResult
+
+
+    #
+    # TEST solve_ls
+    #      Solving dense linear equations in the least squares sense
+    #
+    _TestResult = True
+    for _spoil_scenario in range(-1,6):
+        try:
+            a = [[4,2],[-1,3],[6,5]]
+            if _spoil_scenario==0:
+                spoil_mat_by_nan(a)
+            if _spoil_scenario==1:
+                spoil_mat_by_posinf(a)
+            if _spoil_scenario==2:
+                spoil_mat_by_neginf(a)
+            b = [8,5,16]
+            if _spoil_scenario==3:
+                spoil_vec_by_nan(b)
+            if _spoil_scenario==4:
+                spoil_vec_by_posinf(b)
+            if _spoil_scenario==5:
+                spoil_vec_by_neginf(b)
+            x, rep = xalglib.rmatrixsolvels(a, b, 0.0)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
+            _TestResult = _TestResult and doc_print_test(x, [1.0000, 2.0000], "real_vector", 0.00005)
+            _TestResult = _TestResult and (_spoil_scenario==-1)
+        except (RuntimeError, ValueError):
+            _TestResult = _TestResult and (_spoil_scenario!=-1)
+        except:
+            raise
+    if not _TestResult:
+        sys.stdout.write("solve_ls                         FAILED\n")
+        sys.stdout.flush()
+    _TotalResult = _TotalResult and _TestResult
+
+
+    #
+    # TEST solve_real_m
+    #      Solving dense linear matrix equations
+    #
+    _TestResult = True
+    for _spoil_scenario in range(-1,37):
+        try:
+            #
+            # This example demonstrates solution of a dense real matrix system
+            #
+
+            #
+            # First, solve A*X=B with a feature-rich rmatrixsolvem() which supports
+            # iterative improvement and condition number estimation. Here A is
+            # an N*N matrix, X is an N*M matrix, B is an N*M matrix.
+            #
+            a = [[4,2],[-1,3]]
+            if _spoil_scenario==0:
+                spoil_mat_by_nan(a)
+            if _spoil_scenario==1:
+                spoil_mat_by_posinf(a)
+            if _spoil_scenario==2:
+                spoil_mat_by_neginf(a)
+            if _spoil_scenario==3:
+                spoil_mat_by_adding_row(a)
+            if _spoil_scenario==4:
+                spoil_mat_by_adding_col(a)
+            if _spoil_scenario==5:
+                spoil_mat_by_deleting_row(a)
+            if _spoil_scenario==6:
+                spoil_mat_by_deleting_col(a)
+            b = [[8,10,4],[5,1,-1]]
+            if _spoil_scenario==7:
+                spoil_mat_by_nan(b)
+            if _spoil_scenario==8:
+                spoil_mat_by_posinf(b)
+            if _spoil_scenario==9:
+                spoil_mat_by_neginf(b)
+            x, rep = xalglib.rmatrixsolvem(a, b, True)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
+            _TestResult = _TestResult and doc_print_test(x, [[1.0000, 2.0000,1.0000],[2.0000,1.0000,0.0000]], "real_matrix", 0.00005)
+
+            #
+            # Then, solve C*X=D with rmatrixsolvemfast() which has lower overhead
+            # due to condition number estimation and iterative refinement parts
+            # being dropped.
+            #
+            c = [[3,1],[2,4]]
+            if _spoil_scenario==10:
+                spoil_mat_by_nan(c)
+            if _spoil_scenario==11:
+                spoil_mat_by_posinf(c)
+            if _spoil_scenario==12:
+                spoil_mat_by_neginf(c)
+            if _spoil_scenario==13:
+                spoil_mat_by_adding_row(c)
+            if _spoil_scenario==14:
+                spoil_mat_by_adding_col(c)
+            if _spoil_scenario==15:
+                spoil_mat_by_deleting_row(c)
+            if _spoil_scenario==16:
+                spoil_mat_by_deleting_col(c)
+            d = [[2,1],[-2,4]]
+            if _spoil_scenario==17:
+                spoil_mat_by_nan(d)
+            if _spoil_scenario==18:
+                spoil_mat_by_posinf(d)
+            if _spoil_scenario==19:
+                spoil_mat_by_neginf(d)
+            xalglib.rmatrixsolvemfast(c, d)
+            _TestResult = _TestResult and doc_print_test(d, [[1.0000,0.0000],[-1.0000,1.0000]], "real_matrix", 0.00005)
+
+            #
+            # Sometimes you have LU decomposition of the system matrix readily
+            # available. In such cases it is possible to save a lot of time by
+            # passing precomputed LU factors to rmatrixlusolve(). The only
+            # downside of such approach is that iterative refinement is unavailable
+            # because original (unmodified) form of the system matrix is unknown
+            # to ALGLIB.
+            #
+            # However, if you have BOTH original matrix and its LU decomposition,
+            # it is possible to use rmatrixmixedsolve() which accepts both matrix
+            # itself and its factors, and uses original matrix to refine solution
+            # obtained with LU factors.
+            #
+            e = [[3,4],[2,4]]
+            if _spoil_scenario==20:
+                spoil_mat_by_nan(e)
+            if _spoil_scenario==21:
+                spoil_mat_by_posinf(e)
+            if _spoil_scenario==22:
+                spoil_mat_by_neginf(e)
+            if _spoil_scenario==23:
+                spoil_mat_by_adding_row(e)
+            if _spoil_scenario==24:
+                spoil_mat_by_adding_col(e)
+            if _spoil_scenario==25:
+                spoil_mat_by_deleting_row(e)
+            if _spoil_scenario==26:
+                spoil_mat_by_deleting_col(e)
+            lue = [[3,4],[2,4]]
+            if _spoil_scenario==27:
+                spoil_mat_by_nan(lue)
+            if _spoil_scenario==28:
+                spoil_mat_by_posinf(lue)
+            if _spoil_scenario==29:
+                spoil_mat_by_neginf(lue)
+            if _spoil_scenario==30:
+                spoil_mat_by_adding_row(lue)
+            if _spoil_scenario==31:
+                spoil_mat_by_adding_col(lue)
+            if _spoil_scenario==32:
+                spoil_mat_by_deleting_row(lue)
+            if _spoil_scenario==33:
+                spoil_mat_by_deleting_col(lue)
+            f = [[2,5],[0,6]]
+            if _spoil_scenario==34:
+                spoil_mat_by_nan(f)
+            if _spoil_scenario==35:
+                spoil_mat_by_posinf(f)
+            if _spoil_scenario==36:
+                spoil_mat_by_neginf(f)
+            pivots = xalglib.rmatrixlu(lue)
+            x, rep = xalglib.rmatrixlusolvem(lue, pivots, f)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
+            _TestResult = _TestResult and doc_print_test(x, [[2.0000,-1.0000],[-1.0000,2.0000]], "real_matrix", 0.00005)
+
+            x, rep = xalglib.rmatrixmixedsolvem(e, lue, pivots, f)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
+            _TestResult = _TestResult and doc_print_test(x, [[2.0000,-1.0000],[-1.0000,2.0000]], "real_matrix", 0.00005)
+            _TestResult = _TestResult and (_spoil_scenario==-1)
+        except (RuntimeError, ValueError):
+            _TestResult = _TestResult and (_spoil_scenario!=-1)
+        except:
+            raise
+    if not _TestResult:
+        sys.stdout.write("solve_real_m                     FAILED\n")
+        sys.stdout.flush()
+    _TotalResult = _TotalResult and _TestResult
+
+
+    #
+    # TEST solve_complex
+    #      Solving dense complex linear equations
+    #
+    _TestResult = True
+    for _spoil_scenario in range(-1,43):
+        try:
+            #
+            # This example demonstrates solution of a complex linear system
+            #
+
+            #
+            # First, solve A*x=b with a feature-rich cmatrixsolve() which supports iterative improvement
+            # and condition number estimation
+            #
+            a = [[-4,2j],[-1j,3]]
+            if _spoil_scenario==0:
+                spoil_mat_by_nan(a)
+            if _spoil_scenario==1:
+                spoil_mat_by_posinf(a)
+            if _spoil_scenario==2:
+                spoil_mat_by_neginf(a)
+            if _spoil_scenario==3:
+                spoil_mat_by_adding_row(a)
+            if _spoil_scenario==4:
+                spoil_mat_by_adding_col(a)
+            if _spoil_scenario==5:
+                spoil_mat_by_deleting_row(a)
+            if _spoil_scenario==6:
+                spoil_mat_by_deleting_col(a)
+            b = [8j,5]
+            if _spoil_scenario==7:
+                spoil_vec_by_nan(b)
+            if _spoil_scenario==8:
+                spoil_vec_by_posinf(b)
+            if _spoil_scenario==9:
+                spoil_vec_by_neginf(b)
+            if _spoil_scenario==10:
+                spoil_vec_by_adding_element(b)
+            if _spoil_scenario==11:
+                spoil_vec_by_deleting_element(b)
+            x, rep = xalglib.cmatrixsolve(a, b)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
+            _TestResult = _TestResult and doc_print_test(x, [-1.0000j, 2.0000], "complex_vector", 0.00005)
+
+            #
+            # Then, solve C*x=d with cmatrixsolvefast() which has lower overhead
+            #
+            c = [[3j,1],[2j,4]]
+            if _spoil_scenario==12:
+                spoil_mat_by_nan(c)
+            if _spoil_scenario==13:
+                spoil_mat_by_posinf(c)
+            if _spoil_scenario==14:
+                spoil_mat_by_neginf(c)
+            if _spoil_scenario==15:
+                spoil_mat_by_adding_row(c)
+            if _spoil_scenario==16:
+                spoil_mat_by_adding_col(c)
+            if _spoil_scenario==17:
+                spoil_mat_by_deleting_row(c)
+            if _spoil_scenario==18:
+                spoil_mat_by_deleting_col(c)
+            d = [2,-2]
+            if _spoil_scenario==19:
+                spoil_vec_by_nan(d)
+            if _spoil_scenario==20:
+                spoil_vec_by_posinf(d)
+            if _spoil_scenario==21:
+                spoil_vec_by_neginf(d)
+            if _spoil_scenario==22:
+                spoil_vec_by_adding_element(d)
+            if _spoil_scenario==23:
+                spoil_vec_by_deleting_element(d)
+            xalglib.cmatrixsolvefast(c, d)
+            _TestResult = _TestResult and doc_print_test(d, [-1.0000j, -1.0000], "complex_vector", 0.00005)
+
+            #
+            # Sometimes you have LU decomposition of the system matrix readily
+            # available. In such cases it is possible to save a lot of time by
+            # passing precomputed LU factors to cmatrixlusolve(). The only
+            # downside of such approach is that iterative refinement is unavailable
+            # because original (unmodified) form of the system matrix is unknown
+            # to ALGLIB.
+            #
+            # However, if you have BOTH original matrix and its LU decomposition,
+            # it is possible to use cmatrixmixedsolve() which accepts both matrix
+            # itself and its factors, and uses original matrix to refine solution
+            # obtained with LU factors.
+            #
+            e = [[-3,4j],[2j,4]]
+            if _spoil_scenario==24:
+                spoil_mat_by_nan(e)
+            if _spoil_scenario==25:
+                spoil_mat_by_posinf(e)
+            if _spoil_scenario==26:
+                spoil_mat_by_neginf(e)
+            if _spoil_scenario==27:
+                spoil_mat_by_adding_row(e)
+            if _spoil_scenario==28:
+                spoil_mat_by_adding_col(e)
+            if _spoil_scenario==29:
+                spoil_mat_by_deleting_row(e)
+            if _spoil_scenario==30:
+                spoil_mat_by_deleting_col(e)
+            lue = [[-3,4j],[2j,4]]
+            if _spoil_scenario==31:
+                spoil_mat_by_nan(lue)
+            if _spoil_scenario==32:
+                spoil_mat_by_posinf(lue)
+            if _spoil_scenario==33:
+                spoil_mat_by_neginf(lue)
+            if _spoil_scenario==34:
+                spoil_mat_by_adding_row(lue)
+            if _spoil_scenario==35:
+                spoil_mat_by_adding_col(lue)
+            if _spoil_scenario==36:
+                spoil_mat_by_deleting_row(lue)
+            if _spoil_scenario==37:
+                spoil_mat_by_deleting_col(lue)
+            f = [2j,0]
+            if _spoil_scenario==38:
+                spoil_vec_by_nan(f)
+            if _spoil_scenario==39:
+                spoil_vec_by_posinf(f)
+            if _spoil_scenario==40:
+                spoil_vec_by_neginf(f)
+            if _spoil_scenario==41:
+                spoil_vec_by_adding_element(f)
+            if _spoil_scenario==42:
+                spoil_vec_by_deleting_element(f)
+            pivots = xalglib.cmatrixlu(lue)
+            x, rep = xalglib.cmatrixlusolve(lue, pivots, f)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
+            _TestResult = _TestResult and doc_print_test(x, [-2.0000j, -1.0000], "complex_vector", 0.00005)
+
+            x, rep = xalglib.cmatrixmixedsolve(e, lue, pivots, f)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
+            _TestResult = _TestResult and doc_print_test(x, [-2.0000j, -1.0000], "complex_vector", 0.00005)
+            _TestResult = _TestResult and (_spoil_scenario==-1)
+        except (RuntimeError, ValueError):
+            _TestResult = _TestResult and (_spoil_scenario!=-1)
+        except:
+            raise
+    if not _TestResult:
+        sys.stdout.write("solve_complex                    FAILED\n")
+        sys.stdout.flush()
+    _TotalResult = _TotalResult and _TestResult
+
+
+    #
+    # TEST solve_complex_m
+    #      Solving complex matrix equations
+    #
+    _TestResult = True
+    for _spoil_scenario in range(-1,37):
+        try:
+            #
+            # This example demonstrates solution of a dense complex matrix system
+            #
+
+            #
+            # First, solve A*X=B with a feature-rich cmatrixsolvem() which supports
+            # iterative improvement and condition number estimation. Here A is
+            # an N*N matrix, X is an N*M matrix, B is an N*M matrix.
+            #
+            a = [[4j,-2],[-1,3j]]
+            if _spoil_scenario==0:
+                spoil_mat_by_nan(a)
+            if _spoil_scenario==1:
+                spoil_mat_by_posinf(a)
+            if _spoil_scenario==2:
+                spoil_mat_by_neginf(a)
+            if _spoil_scenario==3:
+                spoil_mat_by_adding_row(a)
+            if _spoil_scenario==4:
+                spoil_mat_by_adding_col(a)
+            if _spoil_scenario==5:
+                spoil_mat_by_deleting_row(a)
+            if _spoil_scenario==6:
+                spoil_mat_by_deleting_col(a)
+            b = [[8j,10j,4j],[5,1,-1]]
+            if _spoil_scenario==7:
+                spoil_mat_by_nan(b)
+            if _spoil_scenario==8:
+                spoil_mat_by_posinf(b)
+            if _spoil_scenario==9:
+                spoil_mat_by_neginf(b)
+            x, rep = xalglib.cmatrixsolvem(a, b, True)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
+            _TestResult = _TestResult and doc_print_test(x, [[1.0000, 2.0000,1.0000],[-2.0000j,-1.0000j,0.0000]], "complex_matrix", 0.00005)
+
+            #
+            # Then, solve C*X=D with cmatrixsolvemfast() which has lower overhead
+            # due to condition number estimation and iterative refinement parts
+            # being dropped.
+            #
+            c = [[3,1],[2,4]]
+            if _spoil_scenario==10:
+                spoil_mat_by_nan(c)
+            if _spoil_scenario==11:
+                spoil_mat_by_posinf(c)
+            if _spoil_scenario==12:
+                spoil_mat_by_neginf(c)
+            if _spoil_scenario==13:
+                spoil_mat_by_adding_row(c)
+            if _spoil_scenario==14:
+                spoil_mat_by_adding_col(c)
+            if _spoil_scenario==15:
+                spoil_mat_by_deleting_row(c)
+            if _spoil_scenario==16:
+                spoil_mat_by_deleting_col(c)
+            d = [[2,1],[-2,4]]
+            if _spoil_scenario==17:
+                spoil_mat_by_nan(d)
+            if _spoil_scenario==18:
+                spoil_mat_by_posinf(d)
+            if _spoil_scenario==19:
+                spoil_mat_by_neginf(d)
+            xalglib.cmatrixsolvemfast(c, d)
+            _TestResult = _TestResult and doc_print_test(d, [[1.0000,0.0000],[-1.0000,1.0000]], "complex_matrix", 0.00005)
+
+            #
+            # Sometimes you have LU decomposition of the system matrix readily
+            # available. In such cases it is possible to save a lot of time by
+            # passing precomputed LU factors to cmatrixlusolve(). The only
+            # downside of such approach is that iterative refinement is unavailable
+            # because original (unmodified) form of the system matrix is unknown
+            # to ALGLIB.
+            #
+            # However, if you have BOTH original matrix and its LU decomposition,
+            # it is possible to use cmatrixmixedsolve() which accepts both matrix
+            # itself and its factors, and uses original matrix to refine solution
+            # obtained with LU factors.
+            #
+            e = [[3,4],[2,4]]
+            if _spoil_scenario==20:
+                spoil_mat_by_nan(e)
+            if _spoil_scenario==21:
+                spoil_mat_by_posinf(e)
+            if _spoil_scenario==22:
+                spoil_mat_by_neginf(e)
+            if _spoil_scenario==23:
+                spoil_mat_by_adding_row(e)
+            if _spoil_scenario==24:
+                spoil_mat_by_adding_col(e)
+            if _spoil_scenario==25:
+                spoil_mat_by_deleting_row(e)
+            if _spoil_scenario==26:
+                spoil_mat_by_deleting_col(e)
+            lue = [[3,4],[2,4]]
+            if _spoil_scenario==27:
+                spoil_mat_by_nan(lue)
+            if _spoil_scenario==28:
+                spoil_mat_by_posinf(lue)
+            if _spoil_scenario==29:
+                spoil_mat_by_neginf(lue)
+            if _spoil_scenario==30:
+                spoil_mat_by_adding_row(lue)
+            if _spoil_scenario==31:
+                spoil_mat_by_adding_col(lue)
+            if _spoil_scenario==32:
+                spoil_mat_by_deleting_row(lue)
+            if _spoil_scenario==33:
+                spoil_mat_by_deleting_col(lue)
+            f = [[2,5],[0,6]]
+            if _spoil_scenario==34:
+                spoil_mat_by_nan(f)
+            if _spoil_scenario==35:
+                spoil_mat_by_posinf(f)
+            if _spoil_scenario==36:
+                spoil_mat_by_neginf(f)
+            pivots = xalglib.cmatrixlu(lue)
+            x, rep = xalglib.cmatrixlusolvem(lue, pivots, f)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
+            _TestResult = _TestResult and doc_print_test(x, [[2.0000,-1.0000],[-1.0000,2.0000]], "complex_matrix", 0.00005)
+
+            x, rep = xalglib.cmatrixmixedsolvem(e, lue, pivots, f)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
+            _TestResult = _TestResult and doc_print_test(x, [[2.0000,-1.0000],[-1.0000,2.0000]], "complex_matrix", 0.00005)
+            _TestResult = _TestResult and (_spoil_scenario==-1)
+        except (RuntimeError, ValueError):
+            _TestResult = _TestResult and (_spoil_scenario!=-1)
+        except:
+            raise
+    if not _TestResult:
+        sys.stdout.write("solve_complex_m                  FAILED\n")
+        sys.stdout.flush()
+    _TotalResult = _TotalResult and _TestResult
+
+
+    #
+    # TEST solve_spd
+    #      Solving symmetric positive definite linear equations
+    #
+    _TestResult = True
+    for _spoil_scenario in range(-1,18):
+        try:
+            #
+            # This example demonstrates solution of a symmetric positive definite real system
+            #
+            isupper = True
+
+            #
+            # First, solve A*x=b with a feature-rich spdmatrixsolve() which supports iterative improvement
+            # and condition number estimation
+            #
+            a = [[4,1],[1,4]]
+            if _spoil_scenario==0:
+                spoil_mat_by_adding_row(a)
+            if _spoil_scenario==1:
+                spoil_mat_by_adding_col(a)
+            if _spoil_scenario==2:
+                spoil_mat_by_deleting_row(a)
+            if _spoil_scenario==3:
+                spoil_mat_by_deleting_col(a)
+            b = [6,9]
+            if _spoil_scenario==4:
+                spoil_vec_by_adding_element(b)
+            if _spoil_scenario==5:
+                spoil_vec_by_deleting_element(b)
+            x, rep = xalglib.spdmatrixsolve(a, isupper, b)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
+            _TestResult = _TestResult and doc_print_test(x, [1.0000, 2.0000], "real_vector", 0.00005)
+
+            #
+            # Then, solve C*x=d with spdmatrixsolvefast() which has lower overhead
+            #
+            c = [[3,1],[1,3]]
+            if _spoil_scenario==6:
+                spoil_mat_by_adding_row(c)
+            if _spoil_scenario==7:
+                spoil_mat_by_adding_col(c)
+            if _spoil_scenario==8:
+                spoil_mat_by_deleting_row(c)
+            if _spoil_scenario==9:
+                spoil_mat_by_deleting_col(c)
+            d = [2,-2]
+            if _spoil_scenario==10:
+                spoil_vec_by_adding_element(d)
+            if _spoil_scenario==11:
+                spoil_vec_by_deleting_element(d)
+            xalglib.spdmatrixsolvefast(c, isupper, d)
+            _TestResult = _TestResult and doc_print_test(d, [1.0000, -1.0000], "real_vector", 0.00005)
+
+            #
+            # Sometimes you have Cholesky decomposition of the system matrix readily
+            # available. In such cases it is possible to save a lot of time by
+            # passing precomputed Cholesky factor to spdmatrixcholeskysolve(). The only
+            # downside of such approach is that iterative refinement is unavailable
+            # because original (unmodified) form of the system matrix is unknown
+            # to ALGLIB.
+            #
+            e = [[3,2],[2,3]]
+            if _spoil_scenario==12:
+                spoil_mat_by_adding_row(e)
+            if _spoil_scenario==13:
+                spoil_mat_by_adding_col(e)
+            if _spoil_scenario==14:
+                spoil_mat_by_deleting_row(e)
+            if _spoil_scenario==15:
+                spoil_mat_by_deleting_col(e)
+            f = [4,1]
+            if _spoil_scenario==16:
+                spoil_vec_by_adding_element(f)
+            if _spoil_scenario==17:
+                spoil_vec_by_deleting_element(f)
+            xalglib.spdmatrixcholesky(e, isupper)
+            x, rep = xalglib.spdmatrixcholeskysolve(e, isupper, f)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
+            _TestResult = _TestResult and doc_print_test(x, [2.0000, -1.0000], "real_vector", 0.00005)
+            _TestResult = _TestResult and (_spoil_scenario==-1)
+        except (RuntimeError, ValueError):
+            _TestResult = _TestResult and (_spoil_scenario!=-1)
+        except:
+            raise
+    if not _TestResult:
+        sys.stdout.write("solve_spd                        FAILED\n")
+        sys.stdout.flush()
+    _TotalResult = _TotalResult and _TestResult
+
+
+    #
+    # TEST solve_hpd
+    #      Solving Hermitian positive definite linear equations
+    #
+    _TestResult = True
+    for _spoil_scenario in range(-1,18):
+        try:
+            #
+            # This example demonstrates solution of a Hermitian positive definite complex system
+            #
+            isupper = True
+
+            #
+            # First, solve A*x=b with a feature-rich hpdmatrixsolve() which supports iterative improvement
+            # and condition number estimation
+            #
+            a = [[4,1j],[-1j,4]]
+            if _spoil_scenario==0:
+                spoil_mat_by_adding_row(a)
+            if _spoil_scenario==1:
+                spoil_mat_by_adding_col(a)
+            if _spoil_scenario==2:
+                spoil_mat_by_deleting_row(a)
+            if _spoil_scenario==3:
+                spoil_mat_by_deleting_col(a)
+            b = [6,-9j]
+            if _spoil_scenario==4:
+                spoil_vec_by_adding_element(b)
+            if _spoil_scenario==5:
+                spoil_vec_by_deleting_element(b)
+            x, rep = xalglib.hpdmatrixsolve(a, isupper, b)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
+            _TestResult = _TestResult and doc_print_test(x, [1.0000, -2.0000j], "complex_vector", 0.00005)
+
+            #
+            # Then, solve C*x=d with hpdmatrixsolvefast() which has lower overhead
+            #
+            c = [[3,-1j],[1j,3]]
+            if _spoil_scenario==6:
+                spoil_mat_by_adding_row(c)
+            if _spoil_scenario==7:
+                spoil_mat_by_adding_col(c)
+            if _spoil_scenario==8:
+                spoil_mat_by_deleting_row(c)
+            if _spoil_scenario==9:
+                spoil_mat_by_deleting_col(c)
+            d = [-2j,-2]
+            if _spoil_scenario==10:
+                spoil_vec_by_adding_element(d)
+            if _spoil_scenario==11:
+                spoil_vec_by_deleting_element(d)
+            xalglib.hpdmatrixsolvefast(c, isupper, d)
+            _TestResult = _TestResult and doc_print_test(d, [-1.0000j, -1.0000], "complex_vector", 0.00005)
+
+            #
+            # Sometimes you have Cholesky decomposition of the system matrix readily
+            # available. In such cases it is possible to save a lot of time by
+            # passing precomputed Cholesky factor to hpdmatrixcholeskysolve(). The only
+            # downside of such approach is that iterative refinement is unavailable
+            # because original (unmodified) form of the system matrix is unknown
+            # to ALGLIB.
+            #
+            e = [[3,2],[2,3]]
+            if _spoil_scenario==12:
+                spoil_mat_by_adding_row(e)
+            if _spoil_scenario==13:
+                spoil_mat_by_adding_col(e)
+            if _spoil_scenario==14:
+                spoil_mat_by_deleting_row(e)
+            if _spoil_scenario==15:
+                spoil_mat_by_deleting_col(e)
+            f = [4,1]
+            if _spoil_scenario==16:
+                spoil_vec_by_adding_element(f)
+            if _spoil_scenario==17:
+                spoil_vec_by_deleting_element(f)
+            xalglib.hpdmatrixcholesky(e, isupper)
+            x, rep = xalglib.hpdmatrixcholeskysolve(e, isupper, f)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
+            _TestResult = _TestResult and doc_print_test(x, [2.0000, -1.0000], "complex_vector", 0.00005)
+            _TestResult = _TestResult and (_spoil_scenario==-1)
+        except (RuntimeError, ValueError):
+            _TestResult = _TestResult and (_spoil_scenario!=-1)
+        except:
+            raise
+    if not _TestResult:
+        sys.stdout.write("solve_hpd                        FAILED\n")
+        sys.stdout.flush()
+    _TotalResult = _TotalResult and _TestResult
+
+
+    #
+    # TEST solve_real_tst
+    #      .
+    #
+    _TestResult = True
+    for _spoil_scenario in range(-1,36):
+        try:
+            a = [[4,2],[-1,3]]
+            if _spoil_scenario==0:
+                spoil_mat_by_nan(a)
+            if _spoil_scenario==1:
+                spoil_mat_by_posinf(a)
+            if _spoil_scenario==2:
+                spoil_mat_by_neginf(a)
+            if _spoil_scenario==3:
+                spoil_mat_by_deleting_row(a)
+            if _spoil_scenario==4:
+                spoil_mat_by_deleting_col(a)
+            b = [8,5]
+            if _spoil_scenario==5:
+                spoil_vec_by_nan(b)
+            if _spoil_scenario==6:
+                spoil_vec_by_posinf(b)
+            if _spoil_scenario==7:
+                spoil_vec_by_neginf(b)
+            if _spoil_scenario==8:
+                spoil_vec_by_deleting_element(b)
+            x, rep = xalglib.rmatrixsolve(a, 2, b)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
+            _TestResult = _TestResult and doc_print_test(x, [1.0000, 2.0000], "real_vector", 0.00005)
+            c = [[3,1],[2,4]]
+            if _spoil_scenario==9:
+                spoil_mat_by_nan(c)
+            if _spoil_scenario==10:
+                spoil_mat_by_posinf(c)
+            if _spoil_scenario==11:
+                spoil_mat_by_neginf(c)
+            if _spoil_scenario==12:
+                spoil_mat_by_deleting_row(c)
+            if _spoil_scenario==13:
+                spoil_mat_by_deleting_col(c)
+            d = [2,-2]
+            if _spoil_scenario==14:
+                spoil_vec_by_nan(d)
+            if _spoil_scenario==15:
+                spoil_vec_by_posinf(d)
+            if _spoil_scenario==16:
+                spoil_vec_by_neginf(d)
+            if _spoil_scenario==17:
+                spoil_vec_by_deleting_element(d)
+            xalglib.rmatrixsolvefast(c, 2, d)
+            _TestResult = _TestResult and doc_print_test(d, [1.0000, -1.0000], "real_vector", 0.00005)
+
+            e = [[3,4],[2,4]]
+            if _spoil_scenario==18:
+                spoil_mat_by_nan(e)
+            if _spoil_scenario==19:
+                spoil_mat_by_posinf(e)
+            if _spoil_scenario==20:
+                spoil_mat_by_neginf(e)
+            if _spoil_scenario==21:
+                spoil_mat_by_deleting_row(e)
+            if _spoil_scenario==22:
+                spoil_mat_by_deleting_col(e)
+            lue = [[3,4],[2,4]]
+            if _spoil_scenario==23:
+                spoil_mat_by_nan(lue)
+            if _spoil_scenario==24:
+                spoil_mat_by_posinf(lue)
+            if _spoil_scenario==25:
+                spoil_mat_by_neginf(lue)
+            if _spoil_scenario==26:
+                spoil_mat_by_deleting_row(lue)
+            if _spoil_scenario==27:
+                spoil_mat_by_deleting_col(lue)
+            f = [2,0]
+            if _spoil_scenario==28:
+                spoil_vec_by_nan(f)
+            if _spoil_scenario==29:
+                spoil_vec_by_posinf(f)
+            if _spoil_scenario==30:
+                spoil_vec_by_neginf(f)
+            if _spoil_scenario==31:
+                spoil_vec_by_deleting_element(f)
+            pivots = xalglib.rmatrixlu(lue, 2, 2)
+            x, rep = xalglib.rmatrixlusolve(lue, pivots, 2, f)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
+            _TestResult = _TestResult and doc_print_test(x, [2.0000, -1.0000], "real_vector", 0.00005)
+
+            x, rep = xalglib.rmatrixmixedsolve(e, lue, pivots, 2, f)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
+            _TestResult = _TestResult and doc_print_test(x, [2.0000, -1.0000], "real_vector", 0.00005)
+
+            f1 = [2,0]
+            if _spoil_scenario==32:
+                spoil_vec_by_nan(f1)
+            if _spoil_scenario==33:
+                spoil_vec_by_posinf(f1)
+            if _spoil_scenario==34:
+                spoil_vec_by_neginf(f1)
+            if _spoil_scenario==35:
+                spoil_vec_by_deleting_element(f1)
+            xalglib.rmatrixlusolvefast(lue, pivots, 2, f1)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
+            _TestResult = _TestResult and doc_print_test(f1, [2.0000, -1.0000], "real_vector", 0.00005)
+            _TestResult = _TestResult and (_spoil_scenario==-1)
+        except (RuntimeError, ValueError):
+            _TestResult = _TestResult and (_spoil_scenario!=-1)
+        except:
+            raise
+    if not _TestResult:
+        sys.stdout.write("solve_real_tst                   FAILED\n")
+        sys.stdout.flush()
+    _TotalResult = _TotalResult and _TestResult
+
+
+    #
+    # TEST solve_real_m_test
+    #      .
+    #
+    _TestResult = True
+    for _spoil_scenario in range(-1,43):
+        try:
+            a = [[4,2],[-1,3]]
+            if _spoil_scenario==0:
+                spoil_mat_by_nan(a)
+            if _spoil_scenario==1:
+                spoil_mat_by_posinf(a)
+            if _spoil_scenario==2:
+                spoil_mat_by_neginf(a)
+            if _spoil_scenario==3:
+                spoil_mat_by_deleting_row(a)
+            if _spoil_scenario==4:
+                spoil_mat_by_deleting_col(a)
+            b = [[8,10,4],[5,1,-1]]
+            if _spoil_scenario==5:
+                spoil_mat_by_nan(b)
+            if _spoil_scenario==6:
+                spoil_mat_by_posinf(b)
+            if _spoil_scenario==7:
+                spoil_mat_by_neginf(b)
+            if _spoil_scenario==8:
+                spoil_mat_by_deleting_row(b)
+            if _spoil_scenario==9:
+                spoil_mat_by_deleting_col(b)
+            x, rep = xalglib.rmatrixsolvem(a, 2, b, 3, True)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
+            _TestResult = _TestResult and doc_print_test(x, [[1.0000, 2.0000,1.0000],[2.0000,1.0000,0.0000]], "real_matrix", 0.00005)
+            c = [[3,1],[2,4]]
+            if _spoil_scenario==10:
+                spoil_mat_by_nan(c)
+            if _spoil_scenario==11:
+                spoil_mat_by_posinf(c)
+            if _spoil_scenario==12:
+                spoil_mat_by_neginf(c)
+            if _spoil_scenario==13:
+                spoil_mat_by_deleting_row(c)
+            if _spoil_scenario==14:
+                spoil_mat_by_deleting_col(c)
+            d = [[2,1],[-2,4]]
+            if _spoil_scenario==15:
+                spoil_mat_by_nan(d)
+            if _spoil_scenario==16:
+                spoil_mat_by_posinf(d)
+            if _spoil_scenario==17:
+                spoil_mat_by_neginf(d)
+            if _spoil_scenario==18:
+                spoil_mat_by_deleting_row(d)
+            if _spoil_scenario==19:
+                spoil_mat_by_deleting_col(d)
+            xalglib.rmatrixsolvemfast(c, 2, d, 2)
+            _TestResult = _TestResult and doc_print_test(d, [[1.0000,0.0000],[-1.0000,1.0000]], "real_matrix", 0.00005)
+
+            e = [[3,4],[2,4]]
+            if _spoil_scenario==20:
+                spoil_mat_by_nan(e)
+            if _spoil_scenario==21:
+                spoil_mat_by_posinf(e)
+            if _spoil_scenario==22:
+                spoil_mat_by_neginf(e)
+            if _spoil_scenario==23:
+                spoil_mat_by_deleting_row(e)
+            if _spoil_scenario==24:
+                spoil_mat_by_deleting_col(e)
+            lue = [[3,4],[2,4]]
+            if _spoil_scenario==25:
+                spoil_mat_by_nan(lue)
+            if _spoil_scenario==26:
+                spoil_mat_by_posinf(lue)
+            if _spoil_scenario==27:
+                spoil_mat_by_neginf(lue)
+            if _spoil_scenario==28:
+                spoil_mat_by_deleting_row(lue)
+            if _spoil_scenario==29:
+                spoil_mat_by_deleting_col(lue)
+            f = [[2,5],[0,6]]
+            if _spoil_scenario==30:
+                spoil_mat_by_nan(f)
+            if _spoil_scenario==31:
+                spoil_mat_by_posinf(f)
+            if _spoil_scenario==32:
+                spoil_mat_by_neginf(f)
+            if _spoil_scenario==33:
+                spoil_mat_by_deleting_row(f)
+            if _spoil_scenario==34:
+                spoil_mat_by_deleting_col(f)
+            pivots = xalglib.rmatrixlu(lue, 2, 2)
+            x, rep = xalglib.rmatrixlusolvem(lue, pivots, 2, f, 2)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
+            _TestResult = _TestResult and doc_print_test(x, [[2.0000,-1.0000],[-1.0000,2.0000]], "real_matrix", 0.00005)
+
+            x, rep = xalglib.rmatrixmixedsolvem(e, lue, pivots, 2, f, 2)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
+            _TestResult = _TestResult and doc_print_test(x, [[2.0000,-1.0000],[-1.0000,2.0000]], "real_matrix", 0.00005)
+
+            f1 = [[2,5],[0,6]]
+            if _spoil_scenario==35:
+                spoil_mat_by_nan(f1)
+            if _spoil_scenario==36:
+                spoil_mat_by_posinf(f1)
+            if _spoil_scenario==37:
+                spoil_mat_by_neginf(f1)
+            xalglib.rmatrixlusolvemfast(lue, pivots, f1)
+            _TestResult = _TestResult and doc_print_test(f1, [[2.0000,-1.0000],[-1.0000,2.0000]], "real_matrix", 0.00005)
+
+            f2 = [[2,5],[0,6]]
+            if _spoil_scenario==38:
+                spoil_mat_by_nan(f2)
+            if _spoil_scenario==39:
+                spoil_mat_by_posinf(f2)
+            if _spoil_scenario==40:
+                spoil_mat_by_neginf(f2)
+            if _spoil_scenario==41:
+                spoil_mat_by_deleting_row(f2)
+            if _spoil_scenario==42:
+                spoil_mat_by_deleting_col(f2)
+            xalglib.rmatrixlusolvemfast(lue, pivots, 2, f2, 2)
+            _TestResult = _TestResult and doc_print_test(f2, [[2.0000,-1.0000],[-1.0000,2.0000]], "real_matrix", 0.00005)
+            _TestResult = _TestResult and (_spoil_scenario==-1)
+        except (RuntimeError, ValueError):
+            _TestResult = _TestResult and (_spoil_scenario!=-1)
+        except:
+            raise
+    if not _TestResult:
+        sys.stdout.write("solve_real_m_test                FAILED\n")
         sys.stdout.flush()
     _TotalResult = _TotalResult and _TestResult
 
@@ -1095,8 +2235,8 @@ try:
                 spoil_mat_by_deleting_row(a)
             if _spoil_scenario==6:
                 spoil_mat_by_deleting_col(a)
-            a, info, rep = xalglib.rmatrixinverse(a)
-            _TestResult = _TestResult and doc_print_test(info, 1, "int")
+            rep = xalglib.rmatrixinverse(a)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
             _TestResult = _TestResult and doc_print_test(a, [[0.5,0.5],[-0.5,0.5]], "real_matrix", 0.00005)
             _TestResult = _TestResult and doc_print_test(rep.r1, 0.5, "real", 0.00005)
             _TestResult = _TestResult and doc_print_test(rep.rinf, 0.5, "real", 0.00005)
@@ -1133,8 +2273,8 @@ try:
                 spoil_mat_by_deleting_row(a)
             if _spoil_scenario==6:
                 spoil_mat_by_deleting_col(a)
-            a, info, rep = xalglib.cmatrixinverse(a)
-            _TestResult = _TestResult and doc_print_test(info, 1, "int")
+            rep = xalglib.cmatrixinverse(a)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
             _TestResult = _TestResult and doc_print_test(a, [[-0.5j,-0.5j],[-0.5,0.5]], "complex_matrix", 0.00005)
             _TestResult = _TestResult and doc_print_test(rep.r1, 0.5, "real", 0.00005)
             _TestResult = _TestResult and doc_print_test(rep.rinf, 0.5, "real", 0.00005)
@@ -1154,26 +2294,41 @@ try:
     #      SPD matrix inverse
     #
     _TestResult = True
-    for _spoil_scenario in range(-1,7):
+    for _spoil_scenario in range(-1,4):
         try:
             a = [[2,1],[1,2]]
             if _spoil_scenario==0:
-                spoil_mat_by_nan(a)
-            if _spoil_scenario==1:
-                spoil_mat_by_posinf(a)
-            if _spoil_scenario==2:
-                spoil_mat_by_neginf(a)
-            if _spoil_scenario==3:
                 spoil_mat_by_adding_row(a)
-            if _spoil_scenario==4:
+            if _spoil_scenario==1:
                 spoil_mat_by_adding_col(a)
-            if _spoil_scenario==5:
+            if _spoil_scenario==2:
                 spoil_mat_by_deleting_row(a)
-            if _spoil_scenario==6:
+            if _spoil_scenario==3:
                 spoil_mat_by_deleting_col(a)
-            a, info, rep = xalglib.spdmatrixinverse(a)
-            _TestResult = _TestResult and doc_print_test(info, 1, "int")
-            _TestResult = _TestResult and doc_print_test(a, [[0.666666,-0.333333],[-0.333333,0.666666]], "real_matrix", 0.00005)
+
+            #
+            # The matrix is given by its upper and lower triangles
+            #
+            #     [ 2 1 ]
+            #     [ 1 2 ]
+            #
+            # However, spdmatrixinverse() accepts and modifies only one triangle - either
+            # the upper or the lower one. The other triangle is left untouched. In this example
+            # we modify the lower triangle. Thus, the inverse matrix is
+            #
+            #     [  2/3 -1/3 ]
+            #     [ -1/3  2/3 ]
+            #
+            # but only lower triangle is returned, and the upper triangle is not modified:
+            #
+            #     [  2/3   1  ]
+            #     [ -1/3  2/3 ]
+            #
+            #
+            isupper = False
+            rep = xalglib.spdmatrixinverse(a, isupper)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
+            _TestResult = _TestResult and doc_print_test(a, [[0.666666,1],[-0.333333,0.666666]], "real_matrix", 0.00005)
             _TestResult = _TestResult and (_spoil_scenario==-1)
         except (RuntimeError, ValueError):
             _TestResult = _TestResult and (_spoil_scenario!=-1)
@@ -1190,26 +2345,41 @@ try:
     #      HPD matrix inverse
     #
     _TestResult = True
-    for _spoil_scenario in range(-1,7):
+    for _spoil_scenario in range(-1,4):
         try:
             a = [[2,1],[1,2]]
             if _spoil_scenario==0:
-                spoil_mat_by_nan(a)
-            if _spoil_scenario==1:
-                spoil_mat_by_posinf(a)
-            if _spoil_scenario==2:
-                spoil_mat_by_neginf(a)
-            if _spoil_scenario==3:
                 spoil_mat_by_adding_row(a)
-            if _spoil_scenario==4:
+            if _spoil_scenario==1:
                 spoil_mat_by_adding_col(a)
-            if _spoil_scenario==5:
+            if _spoil_scenario==2:
                 spoil_mat_by_deleting_row(a)
-            if _spoil_scenario==6:
+            if _spoil_scenario==3:
                 spoil_mat_by_deleting_col(a)
-            a, info, rep = xalglib.hpdmatrixinverse(a)
-            _TestResult = _TestResult and doc_print_test(info, 1, "int")
-            _TestResult = _TestResult and doc_print_test(a, [[0.666666,-0.333333],[-0.333333,0.666666]], "complex_matrix", 0.00005)
+
+            #
+            # The matrix is given by its upper and lower triangles
+            #
+            #     [ 2 1 ]
+            #     [ 1 2 ]
+            #
+            # However, hpdmatrixinverse() accepts and modifies only one triangle - either
+            # the upper or the lower one. The other triangle is left untouched. In this example
+            # we modify the lower triangle. Thus, the inverse matrix is
+            #
+            #     [  2/3 -1/3 ]
+            #     [ -1/3  2/3 ]
+            #
+            # but only lower triangle is returned, and the upper triangle is not modified:
+            #
+            #     [  2/3   1  ]
+            #     [ -1/3  2/3 ]
+            #
+            #
+            isupper = False
+            rep = xalglib.hpdmatrixinverse(a, isupper)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
+            _TestResult = _TestResult and doc_print_test(a, [[0.666666,1],[-0.333333,0.666666]], "complex_matrix", 0.00005)
             _TestResult = _TestResult and (_spoil_scenario==-1)
         except (RuntimeError, ValueError):
             _TestResult = _TestResult and (_spoil_scenario!=-1)
@@ -1228,8 +2398,8 @@ try:
     _TestResult = True
     try:
         a = [[1,-1],[-2,2]]
-        a, info, rep = xalglib.rmatrixinverse(a)
-        _TestResult = _TestResult and doc_print_test(info, -3, "int")
+        rep = xalglib.rmatrixinverse(a)
+        _TestResult = _TestResult and doc_print_test(rep.terminationtype, -3, "int")
         _TestResult = _TestResult and doc_print_test(rep.r1, 0.0, "real", 0.00005)
         _TestResult = _TestResult and doc_print_test(rep.rinf, 0.0, "real", 0.00005)
     except (RuntimeError, ValueError):
@@ -1249,8 +2419,8 @@ try:
     _TestResult = True
     try:
         a = [[1j,-1j],[-2,2]]
-        a, info, rep = xalglib.cmatrixinverse(a)
-        _TestResult = _TestResult and doc_print_test(info, -3, "int")
+        rep = xalglib.cmatrixinverse(a)
+        _TestResult = _TestResult and doc_print_test(rep.terminationtype, -3, "int")
         _TestResult = _TestResult and doc_print_test(rep.r1, 0.0, "real", 0.00005)
         _TestResult = _TestResult and doc_print_test(rep.rinf, 0.0, "real", 0.00005)
     except (RuntimeError, ValueError):
@@ -1259,44 +2429,6 @@ try:
         raise
     if not _TestResult:
         sys.stdout.write("matinv_t_c1                      FAILED\n")
-        sys.stdout.flush()
-    _TotalResult = _TotalResult and _TestResult
-
-
-    #
-    # TEST matinv_e_spd1
-    #      Attempt to use SPD function on nonsymmetrix matrix
-    #
-    _TestResult = True
-    try:
-        a = [[1,0],[1,1]]
-        a, info, rep = xalglib.spdmatrixinverse(a)
-        _TestResult = False
-    except (RuntimeError, ValueError):
-        pass
-    except:
-        raise
-    if not _TestResult:
-        sys.stdout.write("matinv_e_spd1                    FAILED\n")
-        sys.stdout.flush()
-    _TotalResult = _TotalResult and _TestResult
-
-
-    #
-    # TEST matinv_e_hpd1
-    #      Attempt to use SPD function on nonsymmetrix matrix
-    #
-    _TestResult = True
-    try:
-        a = [[1,0],[1,1]]
-        a, info, rep = xalglib.hpdmatrixinverse(a)
-        _TestResult = False
-    except (RuntimeError, ValueError):
-        pass
-    except:
-        raise
-    if not _TestResult:
-        sys.stdout.write("matinv_e_hpd1                    FAILED\n")
         sys.stdout.flush()
     _TotalResult = _TotalResult and _TestResult
 
@@ -1588,6 +2720,67 @@ try:
             raise
     if not _TestResult:
         sys.stdout.write("minlbfgs_numdiff                 FAILED\n")
+        sys.stdout.flush()
+    _TotalResult = _TotalResult and _TestResult
+
+
+    #
+    # TEST minlbfgs_t_1
+    #      Test buffered results which use shared convention for one of its parameters
+    #
+    _TestResult = True
+    for _spoil_scenario in range(-1,15):
+        try:
+            x = [0,0]
+            if _spoil_scenario==0:
+                spoil_vec_by_nan(x)
+            if _spoil_scenario==1:
+                spoil_vec_by_posinf(x)
+            if _spoil_scenario==2:
+                spoil_vec_by_neginf(x)
+            s = [1,1]
+            if _spoil_scenario==3:
+                spoil_vec_by_nan(s)
+            if _spoil_scenario==4:
+                spoil_vec_by_posinf(s)
+            if _spoil_scenario==5:
+                spoil_vec_by_neginf(s)
+            epsg = 0
+            if _spoil_scenario==6:
+                epsg = float("nan")
+            if _spoil_scenario==7:
+                epsg = float("+inf")
+            if _spoil_scenario==8:
+                epsg = float("-inf")
+            epsf = 0
+            if _spoil_scenario==9:
+                epsf = float("nan")
+            if _spoil_scenario==10:
+                epsf = float("+inf")
+            if _spoil_scenario==11:
+                epsf = float("-inf")
+            epsx = 0.0000000001
+            if _spoil_scenario==12:
+                epsx = float("nan")
+            if _spoil_scenario==13:
+                epsx = float("+inf")
+            if _spoil_scenario==14:
+                epsx = float("-inf")
+            maxits = 0
+            state = xalglib.minlbfgscreate(1, x)
+            xalglib.minlbfgssetcond(state, epsg, epsf, epsx, maxits)
+            xalglib.minlbfgssetscale(state, s)
+            xalglib.minlbfgsoptimize_g(state, function1_grad)
+            x, rep = xalglib.minlbfgsresults(state)
+            x = xalglib.minlbfgsresultsbuf(state, x, rep)
+            _TestResult = _TestResult and doc_print_test(x, [-3,3], "real_vector", 0.005)
+            _TestResult = _TestResult and (_spoil_scenario==-1)
+        except (RuntimeError, ValueError):
+            _TestResult = _TestResult and (_spoil_scenario!=-1)
+        except:
+            raise
+    if not _TestResult:
+        sys.stdout.write("minlbfgs_t_1                     FAILED\n")
         sys.stdout.flush()
     _TotalResult = _TotalResult and _TestResult
 
@@ -2001,7 +3194,7 @@ try:
     #      Unconstrained dense quadratic programming
     #
     _TestResult = True
-    for _spoil_scenario in range(-1,17):
+    for _spoil_scenario in range(-1,14):
         try:
             #
             # This example demonstrates minimization of F(x0,x1) = x0^2 + x1^2 -6*x0 - 4*x1
@@ -2025,46 +3218,41 @@ try:
             #
             a = [[2,0],[0,2]]
             if _spoil_scenario==0:
-                spoil_mat_by_nan(a)
-            if _spoil_scenario==1:
-                spoil_mat_by_posinf(a)
-            if _spoil_scenario==2:
-                spoil_mat_by_neginf(a)
-            if _spoil_scenario==3:
                 spoil_mat_by_deleting_row(a)
-            if _spoil_scenario==4:
+            if _spoil_scenario==1:
                 spoil_mat_by_deleting_col(a)
             b = [-6,-4]
-            if _spoil_scenario==5:
+            if _spoil_scenario==2:
                 spoil_vec_by_nan(b)
-            if _spoil_scenario==6:
+            if _spoil_scenario==3:
                 spoil_vec_by_posinf(b)
-            if _spoil_scenario==7:
+            if _spoil_scenario==4:
                 spoil_vec_by_neginf(b)
-            if _spoil_scenario==8:
+            if _spoil_scenario==5:
                 spoil_vec_by_deleting_element(b)
             x0 = [0,1]
-            if _spoil_scenario==9:
+            if _spoil_scenario==6:
                 spoil_vec_by_nan(x0)
-            if _spoil_scenario==10:
+            if _spoil_scenario==7:
                 spoil_vec_by_posinf(x0)
-            if _spoil_scenario==11:
+            if _spoil_scenario==8:
                 spoil_vec_by_neginf(x0)
-            if _spoil_scenario==12:
+            if _spoil_scenario==9:
                 spoil_vec_by_deleting_element(x0)
             s = [1,1]
-            if _spoil_scenario==13:
+            if _spoil_scenario==10:
                 spoil_vec_by_nan(s)
-            if _spoil_scenario==14:
+            if _spoil_scenario==11:
                 spoil_vec_by_posinf(s)
-            if _spoil_scenario==15:
+            if _spoil_scenario==12:
                 spoil_vec_by_neginf(s)
-            if _spoil_scenario==16:
+            if _spoil_scenario==13:
                 spoil_vec_by_deleting_element(s)
+            isupper = True
 
             # create solver, set quadratic/linear terms
             state = xalglib.minqpcreate(2)
-            xalglib.minqpsetquadraticterm(state, a)
+            xalglib.minqpsetquadraticterm(state, a, isupper)
             xalglib.minqpsetlinearterm(state, b)
             xalglib.minqpsetstartingpoint(state, x0)
 
@@ -2137,7 +3325,7 @@ try:
     #      Bound constrained dense quadratic programming
     #
     _TestResult = True
-    for _spoil_scenario in range(-1,21):
+    for _spoil_scenario in range(-1,18):
         try:
             #
             # This example demonstrates minimization of F(x0,x1) = x0^2 + x1^2 -6*x0 - 4*x1
@@ -2162,56 +3350,51 @@ try:
             #
             a = [[2,0],[0,2]]
             if _spoil_scenario==0:
-                spoil_mat_by_nan(a)
-            if _spoil_scenario==1:
-                spoil_mat_by_posinf(a)
-            if _spoil_scenario==2:
-                spoil_mat_by_neginf(a)
-            if _spoil_scenario==3:
                 spoil_mat_by_deleting_row(a)
-            if _spoil_scenario==4:
+            if _spoil_scenario==1:
                 spoil_mat_by_deleting_col(a)
             b = [-6,-4]
-            if _spoil_scenario==5:
+            if _spoil_scenario==2:
                 spoil_vec_by_nan(b)
-            if _spoil_scenario==6:
+            if _spoil_scenario==3:
                 spoil_vec_by_posinf(b)
-            if _spoil_scenario==7:
+            if _spoil_scenario==4:
                 spoil_vec_by_neginf(b)
-            if _spoil_scenario==8:
+            if _spoil_scenario==5:
                 spoil_vec_by_deleting_element(b)
             x0 = [0,1]
-            if _spoil_scenario==9:
+            if _spoil_scenario==6:
                 spoil_vec_by_nan(x0)
-            if _spoil_scenario==10:
+            if _spoil_scenario==7:
                 spoil_vec_by_posinf(x0)
-            if _spoil_scenario==11:
+            if _spoil_scenario==8:
                 spoil_vec_by_neginf(x0)
-            if _spoil_scenario==12:
+            if _spoil_scenario==9:
                 spoil_vec_by_deleting_element(x0)
             s = [1,1]
-            if _spoil_scenario==13:
+            if _spoil_scenario==10:
                 spoil_vec_by_nan(s)
-            if _spoil_scenario==14:
+            if _spoil_scenario==11:
                 spoil_vec_by_posinf(s)
-            if _spoil_scenario==15:
+            if _spoil_scenario==12:
                 spoil_vec_by_neginf(s)
-            if _spoil_scenario==16:
+            if _spoil_scenario==13:
                 spoil_vec_by_deleting_element(s)
             bndl = [0.0,0.0]
-            if _spoil_scenario==17:
+            if _spoil_scenario==14:
                 spoil_vec_by_nan(bndl)
-            if _spoil_scenario==18:
+            if _spoil_scenario==15:
                 spoil_vec_by_deleting_element(bndl)
             bndu = [2.5,2.5]
-            if _spoil_scenario==19:
+            if _spoil_scenario==16:
                 spoil_vec_by_nan(bndu)
-            if _spoil_scenario==20:
+            if _spoil_scenario==17:
                 spoil_vec_by_deleting_element(bndu)
+            isupper = True
 
             # create solver, set quadratic/linear terms
             state = xalglib.minqpcreate(2)
-            xalglib.minqpsetquadraticterm(state, a)
+            xalglib.minqpsetquadraticterm(state, a, isupper)
             xalglib.minqpsetlinearterm(state, b)
             xalglib.minqpsetstartingpoint(state, x0)
             xalglib.minqpsetbc(state, bndl, bndu)
@@ -2284,7 +3467,7 @@ try:
     #      Linearly constrained dense quadratic programming
     #
     _TestResult = True
-    for _spoil_scenario in range(-1,16):
+    for _spoil_scenario in range(-1,13):
         try:
             #
             # This example demonstrates minimization of F(x0,x1) = x0^2 + x1^2 -6*x0 - 4*x1
@@ -2303,45 +3486,40 @@ try:
             #
             a = [[2,0],[0,2]]
             if _spoil_scenario==0:
-                spoil_mat_by_nan(a)
-            if _spoil_scenario==1:
-                spoil_mat_by_posinf(a)
-            if _spoil_scenario==2:
-                spoil_mat_by_neginf(a)
-            if _spoil_scenario==3:
                 spoil_mat_by_deleting_row(a)
-            if _spoil_scenario==4:
+            if _spoil_scenario==1:
                 spoil_mat_by_deleting_col(a)
             b = [-6,-4]
-            if _spoil_scenario==5:
+            if _spoil_scenario==2:
                 spoil_vec_by_nan(b)
-            if _spoil_scenario==6:
+            if _spoil_scenario==3:
                 spoil_vec_by_posinf(b)
-            if _spoil_scenario==7:
+            if _spoil_scenario==4:
                 spoil_vec_by_neginf(b)
-            if _spoil_scenario==8:
+            if _spoil_scenario==5:
                 spoil_vec_by_deleting_element(b)
             s = [1,1]
-            if _spoil_scenario==9:
+            if _spoil_scenario==6:
                 spoil_vec_by_nan(s)
-            if _spoil_scenario==10:
+            if _spoil_scenario==7:
                 spoil_vec_by_posinf(s)
-            if _spoil_scenario==11:
+            if _spoil_scenario==8:
                 spoil_vec_by_neginf(s)
-            if _spoil_scenario==12:
+            if _spoil_scenario==9:
                 spoil_vec_by_deleting_element(s)
             c = [[1.0,1.0,2.0]]
-            if _spoil_scenario==13:
+            if _spoil_scenario==10:
                 spoil_mat_by_nan(c)
-            if _spoil_scenario==14:
+            if _spoil_scenario==11:
                 spoil_mat_by_posinf(c)
-            if _spoil_scenario==15:
+            if _spoil_scenario==12:
                 spoil_mat_by_neginf(c)
             ct = [-1]
+            isupper = True
 
             # create solver, set quadratic/linear terms
             state = xalglib.minqpcreate(2)
-            xalglib.minqpsetquadraticterm(state, a)
+            xalglib.minqpsetquadraticterm(state, a, isupper)
             xalglib.minqpsetlinearterm(state, b)
             xalglib.minqpsetlc(state, c, ct)
 
@@ -2511,7 +3689,7 @@ try:
     #      Nonconvex quadratic programming
     #
     _TestResult = True
-    for _spoil_scenario in range(-1,21):
+    for _spoil_scenario in range(-1,18):
         try:
             #
             # This example demonstrates minimization of nonconvex function
@@ -2536,47 +3714,42 @@ try:
             #
             a = [[-2,0],[0,-2]]
             if _spoil_scenario==0:
-                spoil_mat_by_nan(a)
-            if _spoil_scenario==1:
-                spoil_mat_by_posinf(a)
-            if _spoil_scenario==2:
-                spoil_mat_by_neginf(a)
-            if _spoil_scenario==3:
                 spoil_mat_by_deleting_row(a)
-            if _spoil_scenario==4:
+            if _spoil_scenario==1:
                 spoil_mat_by_deleting_col(a)
             x0 = [1,1]
-            if _spoil_scenario==5:
+            if _spoil_scenario==2:
                 spoil_vec_by_nan(x0)
-            if _spoil_scenario==6:
+            if _spoil_scenario==3:
                 spoil_vec_by_posinf(x0)
-            if _spoil_scenario==7:
+            if _spoil_scenario==4:
                 spoil_vec_by_neginf(x0)
-            if _spoil_scenario==8:
+            if _spoil_scenario==5:
                 spoil_vec_by_deleting_element(x0)
             s = [1,1]
-            if _spoil_scenario==9:
+            if _spoil_scenario==6:
                 spoil_vec_by_nan(s)
-            if _spoil_scenario==10:
+            if _spoil_scenario==7:
                 spoil_vec_by_posinf(s)
-            if _spoil_scenario==11:
+            if _spoil_scenario==8:
                 spoil_vec_by_neginf(s)
-            if _spoil_scenario==12:
+            if _spoil_scenario==9:
                 spoil_vec_by_deleting_element(s)
             bndl = [1.0,1.0]
-            if _spoil_scenario==13:
+            if _spoil_scenario==10:
                 spoil_vec_by_nan(bndl)
-            if _spoil_scenario==14:
+            if _spoil_scenario==11:
                 spoil_vec_by_deleting_element(bndl)
             bndu = [2.0,2.0]
-            if _spoil_scenario==15:
+            if _spoil_scenario==12:
                 spoil_vec_by_nan(bndu)
-            if _spoil_scenario==16:
+            if _spoil_scenario==13:
                 spoil_vec_by_deleting_element(bndu)
+            isupper = True
 
             # create solver, set quadratic/linear terms, constraints
             state = xalglib.minqpcreate(2)
-            xalglib.minqpsetquadraticterm(state, a)
+            xalglib.minqpsetquadraticterm(state, a, isupper)
             xalglib.minqpsetstartingpoint(state, x0)
             xalglib.minqpsetbc(state, bndl, bndu)
 
@@ -2634,14 +3807,14 @@ try:
             # -4 is returned as completion code. However, DENSE-AUL is unable to detect
             # such situation and it will cycle forever (we do not test it here).
             nobndl = [-float("inf"),-float("inf")]
-            if _spoil_scenario==17:
+            if _spoil_scenario==14:
                 spoil_vec_by_nan(nobndl)
-            if _spoil_scenario==18:
+            if _spoil_scenario==15:
                 spoil_vec_by_deleting_element(nobndl)
             nobndu = [float("inf"),float("inf")]
-            if _spoil_scenario==19:
+            if _spoil_scenario==16:
                 spoil_vec_by_nan(nobndu)
-            if _spoil_scenario==20:
+            if _spoil_scenario==17:
                 spoil_vec_by_deleting_element(nobndu)
             xalglib.minqpsetbc(state, nobndl, nobndu)
             xalglib.minqpsetalgobleic(state, 0.0, 0.0, 0.0, 0)
@@ -4110,6 +5283,149 @@ try:
 
 
     #
+    # TEST minmo_biobjective
+    #      Unconstrained biobjective optimization
+    #
+    sys.stdout.write("50/162\n")
+    _TestResult = True
+    for _spoil_scenario in range(-1,4):
+        try:
+            #
+            # This example demonstrates minimization of two targets
+            #
+            #     f0(x0,x1) = x0^2 + (x1-1)^2
+            #     f1(x0,x1) = (x0-1(^2 + x1^2
+            #
+            # These targets are Euclidean distances to (0,1) and (1,0) respectively, thus solutions
+            # to this problem occupy the straight line segment connecting these points. (Points
+            # outside of the line are Pareto non-optimal because one can always decrease both distances
+            # by moving closer to the line).
+            #
+            nvars = 2
+            nobjectives = 2
+            x0 = [0,0]
+            if _spoil_scenario==0:
+                spoil_vec_by_nan(x0)
+            if _spoil_scenario==1:
+                spoil_vec_by_posinf(x0)
+            if _spoil_scenario==2:
+                spoil_vec_by_neginf(x0)
+            if _spoil_scenario==3:
+                spoil_vec_by_deleting_element(x0)
+            frontsize = 10
+            polishsolutions = True
+            state = xalglib.minmocreate(nvars, nobjectives, x0)
+
+            #
+            # The solver is configured to compute 10 points approximating the Pareto front,
+            # and to polish solutions (i.e. use an additional optimization phase that improves
+            # accuracy on degenerate problems; not actually necessary for this simple example).
+            #
+            xalglib.minmosetalgonbi(state, frontsize, polishsolutions)
+
+            #
+            # Optimize and test results.
+            #
+            # The optimization is performed using analytic (user-provided) Jacobian matrix.
+            # Use minmocreatef(), if you do not know analytic form of the Jacobian and want
+            # ALGLIB to perform numerical differentiation.
+            #
+            # We requested 10 Pareto-optimal points and we expect solver to compute all points
+            # (it is possible to return less if the solver was terminated)
+            #
+            xalglib.minmooptimize_j(state, multiobjective2_jac)
+            paretofront, frontsize, rep = xalglib.minmoresults(state)
+            _TestResult = _TestResult and doc_print_test(frontsize, 10, "int")
+            _TestResult = _TestResult and (_spoil_scenario==-1)
+        except (RuntimeError, ValueError):
+            _TestResult = _TestResult and (_spoil_scenario!=-1)
+        except:
+            raise
+    if not _TestResult:
+        sys.stdout.write("minmo_biobjective                FAILED\n")
+        sys.stdout.flush()
+    _TotalResult = _TotalResult and _TestResult
+
+
+    #
+    # TEST minmo_biobjective_constr
+    #      Nonlinearly constrained biobjective optimization
+    #
+    _TestResult = True
+    for _spoil_scenario in range(-1,8):
+        try:
+            #
+            # This example demonstrates minimization of two targets
+            #
+            #     f0(x0,x1) = x0^2 + (x1-1)^2
+            #     f1(x0,x1) = (x0-1(^2 + x1^2
+            #
+            # subject to a nonlinear constraint
+            #
+            #     f2(x0,x1) = x0^2 + x1^2 >= 1
+            #
+            # These targets are Euclidean distances to (0,1) and (1,0) respectively, thus solutions to this
+            # problem should occupy the straight line segment connecting these points. However, due to the
+            # nonlinear constraint being present, Pareto front has another shape.
+            #
+            nvars = 2
+            nobjectives = 2
+            x0 = [0,0]
+            if _spoil_scenario==0:
+                spoil_vec_by_nan(x0)
+            if _spoil_scenario==1:
+                spoil_vec_by_posinf(x0)
+            if _spoil_scenario==2:
+                spoil_vec_by_neginf(x0)
+            if _spoil_scenario==3:
+                spoil_vec_by_deleting_element(x0)
+            frontsize = 10
+            polishsolutions = True
+            lowerbnd = [1]
+            if _spoil_scenario==4:
+                spoil_vec_by_nan(lowerbnd)
+            if _spoil_scenario==5:
+                spoil_vec_by_deleting_element(lowerbnd)
+            upperbnd = [float("inf")]
+            if _spoil_scenario==6:
+                spoil_vec_by_nan(upperbnd)
+            if _spoil_scenario==7:
+                spoil_vec_by_deleting_element(upperbnd)
+            state = xalglib.minmocreate(nvars, nobjectives, x0)
+            xalglib.minmosetnlc2(state, lowerbnd, upperbnd, 1)
+
+            #
+            # The solver is configured to compute 10 points approximating the Pareto front,
+            # and to polish solutions (i.e. use an additional optimization phase that improves
+            # accuracy on degenerate problems; not actually necessary for this simple example).
+            #
+            xalglib.minmosetalgonbi(state, frontsize, polishsolutions)
+
+            #
+            # Optimize and test results.
+            #
+            # The optimization is performed using analytic (user-provided) Jacobian matrix.
+            # Use minmocreatef(), if you do not know analytic form of the Jacobian and want
+            # ALGLIB to perform numerical differentiation.
+            #
+            # We requested 10 Pareto-optimal points and we expect solver to compute all points
+            # (it is possible to return less if the solver was terminated)
+            #
+            xalglib.minmooptimize_j(state, multiobjective2constr_jac)
+            paretofront, frontsize, rep = xalglib.minmoresults(state)
+            _TestResult = _TestResult and doc_print_test(frontsize, 10, "int")
+            _TestResult = _TestResult and (_spoil_scenario==-1)
+        except (RuntimeError, ValueError):
+            _TestResult = _TestResult and (_spoil_scenario!=-1)
+        except:
+            raise
+    if not _TestResult:
+        sys.stdout.write("minmo_biobjective_constr         FAILED\n")
+        sys.stdout.flush()
+    _TotalResult = _TotalResult and _TestResult
+
+
+    #
     # TEST minns_d_unconstrained
     #      Nonsmooth unconstrained optimization
     #
@@ -4953,12 +6269,20 @@ try:
             ny = 0
             normtype = 2
             r = [[]]
+
             kdt = xalglib.kdtreebuild(a, nx, ny, normtype)
+
             x = [-1,0]
             k = xalglib.kdtreequeryknn(kdt, x, 1)
             _TestResult = _TestResult and doc_print_test(k, 1, "int")
             r = xalglib.kdtreequeryresultsx(kdt, r)
             _TestResult = _TestResult and doc_print_test(r, [[0,0]], "real_matrix", 0.05)
+
+            x1 = [+0.9,0.1]
+            k = xalglib.kdtreequeryknn(kdt, x1, 1)
+            _TestResult = _TestResult and doc_print_test(k, 1, "int")
+            r = xalglib.kdtreequeryresultsx(kdt, r)
+            _TestResult = _TestResult and doc_print_test(r, [[1,0]], "real_matrix", 0.05)
             _TestResult = _TestResult and (_spoil_scenario==-1)
         except (RuntimeError, ValueError):
             _TestResult = _TestResult and (_spoil_scenario!=-1)
@@ -5062,7 +6386,6 @@ try:
     # TEST odesolver_d1
     #      Solving y'=-y with ODE solver
     #
-    sys.stdout.write("50/151\n")
     _TestResult = True
     for _spoil_scenario in range(-1,13):
         try:
@@ -7221,6 +8544,7 @@ try:
     # TEST spline1d_d_monotone
     #      Monotone interpolation
     #
+    sys.stdout.write("100/162\n")
     _TestResult = True
     for _spoil_scenario in range(-1,10):
         try:
@@ -7512,8 +8836,8 @@ try:
             state = xalglib.lsfitcreatef(x, y, c, diffstep)
             xalglib.lsfitsetcond(state, epsx, maxits)
             xalglib.lsfitfit_f(state, function_cx_1_func)
-            info, c, rep = xalglib.lsfitresults(state)
-            _TestResult = _TestResult and doc_print_test(info, 2, "int")
+            c, rep = xalglib.lsfitresults(state)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 2, "int")
             _TestResult = _TestResult and doc_print_test(c, [1.5], "real_vector", 0.05)
 
             #
@@ -7534,8 +8858,8 @@ try:
             state = xalglib.lsfitcreatewf(x, y, w, c, diffstep)
             xalglib.lsfitsetcond(state, epsx, maxits)
             xalglib.lsfitfit_f(state, function_cx_1_func)
-            info, c, rep = xalglib.lsfitresults(state)
-            _TestResult = _TestResult and doc_print_test(info, 2, "int")
+            c, rep = xalglib.lsfitresults(state)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 2, "int")
             _TestResult = _TestResult and doc_print_test(c, [1.5], "real_vector", 0.05)
             _TestResult = _TestResult and (_spoil_scenario==-1)
         except (RuntimeError, ValueError):
@@ -7604,8 +8928,8 @@ try:
             state = xalglib.lsfitcreatefg(x, y, c, True)
             xalglib.lsfitsetcond(state, epsx, maxits)
             xalglib.lsfitfit_fg(state, function_cx_1_func, function_cx_1_grad)
-            info, c, rep = xalglib.lsfitresults(state)
-            _TestResult = _TestResult and doc_print_test(info, 2, "int")
+            c, rep = xalglib.lsfitresults(state)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 2, "int")
             _TestResult = _TestResult and doc_print_test(c, [1.5], "real_vector", 0.05)
 
             #
@@ -7626,8 +8950,8 @@ try:
             state = xalglib.lsfitcreatewfg(x, y, w, c, True)
             xalglib.lsfitsetcond(state, epsx, maxits)
             xalglib.lsfitfit_fg(state, function_cx_1_func, function_cx_1_grad)
-            info, c, rep = xalglib.lsfitresults(state)
-            _TestResult = _TestResult and doc_print_test(info, 2, "int")
+            c, rep = xalglib.lsfitresults(state)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 2, "int")
             _TestResult = _TestResult and doc_print_test(c, [1.5], "real_vector", 0.05)
             _TestResult = _TestResult and (_spoil_scenario==-1)
         except (RuntimeError, ValueError):
@@ -7696,8 +9020,8 @@ try:
             state = xalglib.lsfitcreatefgh(x, y, c)
             xalglib.lsfitsetcond(state, epsx, maxits)
             xalglib.lsfitfit_fgh(state, function_cx_1_func, function_cx_1_grad, function_cx_1_hess)
-            info, c, rep = xalglib.lsfitresults(state)
-            _TestResult = _TestResult and doc_print_test(info, 2, "int")
+            c, rep = xalglib.lsfitresults(state)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 2, "int")
             _TestResult = _TestResult and doc_print_test(c, [1.5], "real_vector", 0.05)
 
             #
@@ -7718,8 +9042,8 @@ try:
             state = xalglib.lsfitcreatewfgh(x, y, w, c)
             xalglib.lsfitsetcond(state, epsx, maxits)
             xalglib.lsfitfit_fgh(state, function_cx_1_func, function_cx_1_grad, function_cx_1_hess)
-            info, c, rep = xalglib.lsfitresults(state)
-            _TestResult = _TestResult and doc_print_test(info, 2, "int")
+            c, rep = xalglib.lsfitresults(state)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 2, "int")
             _TestResult = _TestResult and doc_print_test(c, [1.5], "real_vector", 0.05)
             _TestResult = _TestResult and (_spoil_scenario==-1)
         except (RuntimeError, ValueError):
@@ -7812,7 +9136,7 @@ try:
             xalglib.lsfitsetbc(state, bndl, bndu)
             xalglib.lsfitsetcond(state, epsx, maxits)
             xalglib.lsfitfit_f(state, function_cx_1_func)
-            info, c, rep = xalglib.lsfitresults(state)
+            c, rep = xalglib.lsfitresults(state)
             _TestResult = _TestResult and doc_print_test(c, [1.0], "real_vector", 0.05)
             _TestResult = _TestResult and (_spoil_scenario==-1)
         except (RuntimeError, ValueError):
@@ -7927,8 +9251,8 @@ try:
             xalglib.lsfitsetbc(state, bndl, bndu)
             xalglib.lsfitsetscale(state, s)
             xalglib.lsfitfit_f(state, function_debt_func)
-            info, c, rep = xalglib.lsfitresults(state)
-            _TestResult = _TestResult and doc_print_test(info, 2, "int")
+            c, rep = xalglib.lsfitresults(state)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 2, "int")
             _TestResult = _TestResult and doc_print_test(c, [4.142560e+12, 0.434240, 0.565376], "real_vector", -0.005)
             _TestResult = _TestResult and (_spoil_scenario==-1)
         except (RuntimeError, ValueError):
@@ -7978,8 +9302,7 @@ try:
             #
             # Linear fitting without weights
             #
-            info, c, rep = xalglib.lsfitlinear(y, fmatrix)
-            _TestResult = _TestResult and doc_print_test(info, 1, "int")
+            c, rep = xalglib.lsfitlinear(y, fmatrix)
             _TestResult = _TestResult and doc_print_test(c, [1.98650], "real_vector", 0.00005)
 
             #
@@ -7997,8 +9320,7 @@ try:
                 spoil_vec_by_adding_element(w)
             if _spoil_scenario==12:
                 spoil_vec_by_deleting_element(w)
-            info, c, rep = xalglib.lsfitlinearw(y, w, fmatrix)
-            _TestResult = _TestResult and doc_print_test(info, 1, "int")
+            c, rep = xalglib.lsfitlinearw(y, w, fmatrix)
             _TestResult = _TestResult and doc_print_test(c, [1.983354], "real_vector", 0.00005)
             _TestResult = _TestResult and (_spoil_scenario==-1)
         except (RuntimeError, ValueError):
@@ -8076,8 +9398,7 @@ try:
             #
             # Constrained fitting without weights
             #
-            info, c, rep = xalglib.lsfitlinearc(y, fmatrix, cmatrix)
-            _TestResult = _TestResult and doc_print_test(info, 1, "int")
+            c, rep = xalglib.lsfitlinearc(y, fmatrix, cmatrix)
             _TestResult = _TestResult and doc_print_test(c, [0,0.932933], "real_vector", 0.0005)
 
             #
@@ -8094,8 +9415,7 @@ try:
                 spoil_vec_by_adding_element(w)
             if _spoil_scenario==19:
                 spoil_vec_by_deleting_element(w)
-            info, c, rep = xalglib.lsfitlinearwc(y, w, fmatrix, cmatrix)
-            _TestResult = _TestResult and doc_print_test(info, 1, "int")
+            c, rep = xalglib.lsfitlinearwc(y, w, fmatrix, cmatrix)
             _TestResult = _TestResult and doc_print_test(c, [0,0.938322], "real_vector", 0.0005)
             _TestResult = _TestResult and (_spoil_scenario==-1)
         except (RuntimeError, ValueError):
@@ -8170,7 +9490,7 @@ try:
             #       from barycentric to power representation (see docs for 
             #       POLINT subpackage for more info).
             #
-            info, p, rep = xalglib.polynomialfit(x, y, m)
+            p, rep = xalglib.polynomialfit(x, y, m)
             v = xalglib.barycentriccalc(p, t)
             _TestResult = _TestResult and doc_print_test(v, 2.011, "real", 0.002)
 
@@ -8199,7 +9519,7 @@ try:
             dc = []
             if _spoil_scenario==19:
                 spoil_vec_by_adding_element(dc)
-            info, p, rep = xalglib.polynomialfitwc(x, y, w, xc, yc, dc, m)
+            p, rep = xalglib.polynomialfitwc(x, y, w, xc, yc, dc, m)
             v = xalglib.barycentriccalc(p, t)
             _TestResult = _TestResult and doc_print_test(v, 2.023, "real", 0.002)
             _TestResult = _TestResult and (_spoil_scenario==-1)
@@ -8217,7 +9537,6 @@ try:
     # TEST lsfit_d_polc
     #      Constrained polynomial fitting
     #
-    sys.stdout.write("100/151\n")
     _TestResult = True
     for _spoil_scenario in range(-1,29):
         try:
@@ -8308,7 +9627,7 @@ try:
                 t = float("-inf")
             m = 2
 
-            info, p, rep = xalglib.polynomialfitwc(x, y, w, xc, yc, dc, m)
+            p, rep = xalglib.polynomialfitwc(x, y, w, xc, yc, dc, m)
             v = xalglib.barycentriccalc(p, t)
             _TestResult = _TestResult and doc_print_test(v, 2.000, "real", 0.001)
             _TestResult = _TestResult and (_spoil_scenario==-1)
@@ -8327,7 +9646,7 @@ try:
     #      Unconstrained fitting by penalized regression spline
     #
     _TestResult = True
-    for _spoil_scenario in range(-1,19):
+    for _spoil_scenario in range(-1,10):
         try:
             #
             # In this example we demonstrate penalized spline fitting of noisy data
@@ -8360,55 +9679,34 @@ try:
                 spoil_vec_by_deleting_element(y)
 
             #
-            # Fit with VERY small amount of smoothing (rho = -5.0)
+            # Fit with VERY small amount of smoothing (eps = 1.0E-9)
             # and large number of basis functions (M=50).
             #
             # With such small regularization penalized spline almost fully reproduces function values
             #
-            rho = -5.0
-            if _spoil_scenario==10:
-                rho = float("nan")
-            if _spoil_scenario==11:
-                rho = float("+inf")
-            if _spoil_scenario==12:
-                rho = float("-inf")
-            info, s, rep = xalglib.spline1dfitpenalized(x, y, 50, rho)
-            _TestResult = _TestResult and doc_print_test(info, 1, "int")
+            s, rep = xalglib.spline1dfit(x, y, 50, 0.000000001)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
             v = xalglib.spline1dcalc(s, 0.0)
             _TestResult = _TestResult and doc_print_test(v, 0.10, "real", 0.01)
 
             #
-            # Fit with VERY large amount of smoothing (rho = 10.0)
+            # Fit with VERY large amount of smoothing eps=1000000
             # and large number of basis functions (M=50).
             #
             # With such regularization our spline should become close to the straight line fit.
             # We will compare its value in x=1.0 with results obtained from such fit.
             #
-            rho = +10.0
-            if _spoil_scenario==13:
-                rho = float("nan")
-            if _spoil_scenario==14:
-                rho = float("+inf")
-            if _spoil_scenario==15:
-                rho = float("-inf")
-            info, s, rep = xalglib.spline1dfitpenalized(x, y, 50, rho)
-            _TestResult = _TestResult and doc_print_test(info, 1, "int")
+            s, rep = xalglib.spline1dfit(x, y, 50, 1000000)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
             v = xalglib.spline1dcalc(s, 1.0)
             _TestResult = _TestResult and doc_print_test(v, 0.969, "real", 0.001)
 
             #
             # In real life applications you may need some moderate degree of fitting,
-            # so we try to fit once more with rho=3.0.
+            # so we try to fit once more with eps=0.1.
             #
-            rho = +3.0
-            if _spoil_scenario==16:
-                rho = float("nan")
-            if _spoil_scenario==17:
-                rho = float("+inf")
-            if _spoil_scenario==18:
-                rho = float("-inf")
-            info, s, rep = xalglib.spline1dfitpenalized(x, y, 50, rho)
-            _TestResult = _TestResult and doc_print_test(info, 1, "int")
+            s, rep = xalglib.spline1dfit(x, y, 50, 0.1)
+            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 1, "int")
             _TestResult = _TestResult and (_spoil_scenario==-1)
         except (RuntimeError, ValueError):
             _TestResult = _TestResult and (_spoil_scenario!=-1)
@@ -8451,7 +9749,7 @@ try:
                 t = float("+inf")
             if _spoil_scenario==9:
                 t = float("-inf")
-            info, p, rep = xalglib.polynomialfit(x, y, 11, m)
+            p, rep = xalglib.polynomialfit(x, y, 11, m)
             v = xalglib.barycentriccalc(p, t)
             _TestResult = _TestResult and doc_print_test(v, 2.011, "real", 0.002)
             _TestResult = _TestResult and (_spoil_scenario==-1)
@@ -8508,7 +9806,7 @@ try:
                 t = float("+inf")
             if _spoil_scenario==13:
                 t = float("-inf")
-            info, p, rep = xalglib.polynomialfitwc(x, y, w, 11, xc, yc, dc, 0, m)
+            p, rep = xalglib.polynomialfitwc(x, y, w, 11, xc, yc, dc, 0, m)
             v = xalglib.barycentriccalc(p, t)
             _TestResult = _TestResult and doc_print_test(v, 2.023, "real", 0.002)
             _TestResult = _TestResult and (_spoil_scenario==-1)
@@ -8583,7 +9881,7 @@ try:
                 t = float("+inf")
             if _spoil_scenario==22:
                 t = float("-inf")
-            info, p, rep = xalglib.polynomialfitwc(x, y, w, 2, xc, yc, dc, 1, m)
+            p, rep = xalglib.polynomialfitwc(x, y, w, 2, xc, yc, dc, 1, m)
             v = xalglib.barycentriccalc(p, t)
             _TestResult = _TestResult and doc_print_test(v, 2.000, "real", 0.001)
             _TestResult = _TestResult and (_spoil_scenario==-1)
@@ -8905,7 +10203,7 @@ try:
             _TestResult = _TestResult and doc_print_test(v, 1.0625, "real", 0.00005)
 
             # calculate derivatives
-            v, dx, dy, dxy = xalglib.spline2ddiff(s, vx, vy)
+            v, dx, dy = xalglib.spline2ddiff(s, vx, vy)
             _TestResult = _TestResult and doc_print_test(v, 1.0625, "real", 0.00005)
             _TestResult = _TestResult and doc_print_test(dx, 0.5000, "real", 0.00005)
             _TestResult = _TestResult and doc_print_test(dy, 2.0000, "real", 0.00005)
@@ -9793,14 +11091,14 @@ try:
                 spoil_vec_by_posinf(z)
             if _spoil_scenario==2:
                 spoil_vec_by_neginf(z)
-            z = xalglib.fftc1d(z)
+            xalglib.fftc1d(z)
             _TestResult = _TestResult and doc_print_test(z, [4j,0,0,0], "complex_vector", 0.0001)
 
             #
             # now we convert [4i, 0, 0, 0] back to [1i,1i,1i,1i]
             # with backward FFT
             #
-            z = xalglib.fftc1dinv(z)
+            xalglib.fftc1dinv(z)
             _TestResult = _TestResult and doc_print_test(z, [1j,1j,1j,1j], "complex_vector", 0.0001)
             _TestResult = _TestResult and (_spoil_scenario==-1)
         except (RuntimeError, ValueError):
@@ -9831,13 +11129,13 @@ try:
                 spoil_vec_by_posinf(z)
             if _spoil_scenario==2:
                 spoil_vec_by_neginf(z)
-            z = xalglib.fftc1d(z)
+            xalglib.fftc1d(z)
             _TestResult = _TestResult and doc_print_test(z, [1+1j, -1-1j, -1-1j, 1+1j], "complex_vector", 0.0001)
 
             #
             # now we convert result back with backward FFT
             #
-            z = xalglib.fftc1dinv(z)
+            xalglib.fftc1dinv(z)
             _TestResult = _TestResult and doc_print_test(z, [0,1,0,1j], "complex_vector", 0.0001)
             _TestResult = _TestResult and (_spoil_scenario==-1)
         except (RuntimeError, ValueError):
@@ -9958,7 +11256,7 @@ try:
                 spoil_vec_by_posinf(z)
             if _spoil_scenario==2:
                 spoil_vec_by_neginf(z)
-            z = xalglib.fftc1dinv(z)
+            xalglib.fftc1dinv(z)
             _TestResult = _TestResult and doc_print_test(z, [0,1j,0,-1j], "complex_vector", 0.0001)
             _TestResult = _TestResult and (_spoil_scenario==-1)
         except (RuntimeError, ValueError):
@@ -10535,8 +11833,7 @@ try:
         #
         xy = [[0.606531,1.133719],[0.670320,1.306522],[0.740818,1.504604],[0.818731,1.554663],[0.904837,1.884638],[1.000000,2.072436],[1.105171,2.257285],[1.221403,2.534068],[1.349859,2.622017],[1.491825,2.897713],[1.648721,3.219371]]
 
-        info, model, rep = xalglib.lrbuildz(xy, 11, 1)
-        _TestResult = _TestResult and doc_print_test(info, 1, "int")
+        model, rep = xalglib.lrbuildz(xy, 11, 1)
         c, nvars = xalglib.lrunpack(model)
         _TestResult = _TestResult and doc_print_test(c, [1.98650,0.00000], "real_vector", 0.00005)
     except (RuntimeError, ValueError):
@@ -10571,7 +11868,7 @@ try:
             # Apply filter.
             # We should get [5, 5.5, 6.5, 7.5] as result
             #
-            x = xalglib.filtersma(x, 2)
+            xalglib.filtersma(x, 2)
             _TestResult = _TestResult and doc_print_test(x, [5,5.5,6.5,7.5], "real_vector", 0.00005)
             _TestResult = _TestResult and (_spoil_scenario==-1)
         except (RuntimeError, ValueError):
@@ -10606,7 +11903,7 @@ try:
             # Apply filter.
             # We should get [5, 5.5, 6.25, 7.125] as result
             #
-            x = xalglib.filterema(x, 0.5)
+            xalglib.filterema(x, 0.5)
             _TestResult = _TestResult and doc_print_test(x, [5,5.5,6.25,7.125], "real_vector", 0.00005)
             _TestResult = _TestResult and (_spoil_scenario==-1)
         except (RuntimeError, ValueError):
@@ -10641,7 +11938,7 @@ try:
             # Apply filter.
             # We should get [7.0000, 8.0000, 8.1667, 8.8333, 11.6667, 12.5000] as result
             #    
-            x = xalglib.filterlrma(x, 3)
+            xalglib.filterlrma(x, 3)
             _TestResult = _TestResult and doc_print_test(x, [7.0000,8.0000,8.1667,8.8333,11.6667,12.5000], "real_vector", 0.00005)
             _TestResult = _TestResult and (_spoil_scenario==-1)
         except (RuntimeError, ValueError):
@@ -10904,6 +12201,7 @@ try:
     # TEST mcpd_simple1
     #      Simple unconstrained MCPD model (no entry/exit states)
     #
+    sys.stdout.write("150/162\n")
     _TestResult = True
     for _spoil_scenario in range(-1,6):
         try:
@@ -11837,7 +13135,6 @@ try:
     # TEST nn_parallel
     #      Parallel training
     #
-    sys.stdout.write("150/151\n")
     _TestResult = True
     for _spoil_scenario in range(-1,3):
         try:
@@ -11930,12 +13227,13 @@ try:
     _TotalResult = _TotalResult and _TestResult
 
 
-    sys.stdout.write("151/151\n")
+    sys.stdout.write("162/162\n")
 except Exception as e:
     sys.stdout.write("Unhandled exception was raised!\n")
     sys.stdout.write("MESSAGE: ")
     sys.stdout.write(str(e))
     sys.stdout.write("\n")
+    traceback.print_exc()
     sys.exit(1)
 if _TotalResult:
     sys.exit(0)
