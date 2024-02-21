@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -321,6 +321,71 @@ void scaleshiftmixedbrlcinplace(/* Real    */ const ae_vector* s,
 
 
 /*************************************************************************
+This function generates scaled (by S) and shifted (by XC) reformulation of
+two-sided "lower-bound/upper-bound" constraints stored in sparse format.
+
+INPUT PARAMETERS:
+    S               -   scale vector, array[N]:
+                        * I-th element contains scale of I-th variable,
+                        * SC[I]>0
+    XOrigin         -   origin term, array[N]. Can be zero.
+    N               -   number of variables.
+    SparseA         -   sparse M*N constraint matrix in CRS format;
+                        ignored if M=0.
+    M               -   sparse constraint count, M>=0
+    AL              -   lower bounds for constraints, array[M]
+    AU              -   upper bounds for constraints, array[M]
+
+OUTPUT PARAMETERS:
+    SparseA         -   replaced by scaled/shifted constraints
+    AL              -   replaced by scaled/shifted lower bounds
+    AU              -   replaced by scaled/shifted upper bounds
+
+  -- ALGLIB --
+     Copyright 01.11.2019 by Bochkanov Sergey
+*************************************************************************/
+void scaleshiftsparselcinplace(/* Real    */ const ae_vector* s,
+     /* Real    */ const ae_vector* xorigin,
+     ae_int_t n,
+     sparsematrix* sparsea,
+     ae_int_t m,
+     /* Real    */ ae_vector* al,
+     /* Real    */ ae_vector* au,
+     ae_state *_state)
+{
+    ae_int_t i;
+    ae_int_t j;
+    ae_int_t k;
+    ae_int_t k0;
+    ae_int_t k1;
+    double v;
+    double vv;
+
+
+    ae_assert(m==0||((sparsea->matrixtype==1&&sparsea->m==m)&&sparsea->n==n), "ScaleShiftSparseLCInplace: non-CRS sparse constraint matrix!", _state);
+    for(i=0; i<=m-1; i++)
+    {
+        
+        /*
+         * Scale/shift constraint; shift its lower and upper bounds
+         */
+        v = 0.0;
+        k0 = sparsea->ridx.ptr.p_int[i];
+        k1 = sparsea->ridx.ptr.p_int[i+1]-1;
+        for(k=k0; k<=k1; k++)
+        {
+            j = sparsea->idx.ptr.p_int[k];
+            vv = sparsea->vals.ptr.p_double[k];
+            v = v+vv*xorigin->ptr.p_double[j];
+            sparsea->vals.ptr.p_double[k] = vv*s->ptr.p_double[j];
+        }
+        al->ptr.p_double[i] = al->ptr.p_double[i]-v;
+        au->ptr.p_double[i] = au->ptr.p_double[i]-v;
+    }
+}
+
+
+/*************************************************************************
 This function generates scaled (by S) reformulation of dense quadratic and
 linear terms in QP problem.
 
@@ -544,12 +609,12 @@ INPUT PARAMETERS:
                           are always normalized
                         * if True, we do not increase individual row norms
                           during normalization - only decrease. However,
-                          we may apply one amplification rount to entire
-                          constraint matrix, i.e. amplify all rows by same
+                          we may apply one amplification round to the entire
+                          constraint matrix, i.e. amplify all rows by the same
                           coefficient. As result, we do not overamplify
-                          any single row, but still make sure than entire
+                          any single row, but still make sure than the entire
                           problem is well scaled.
-                        If True, only large rows are normalized.
+                        * large rows are always normalized
     NeedNorms       -   whether we need row norms or not
 
 OUTPUT PARAMETERS:
@@ -666,34 +731,324 @@ void normalizemixedbrlcinplace(sparsematrix* sparsea,
     /*
      * If amplification was limited, perform second round of normalization
      */
-    if( (limitedamplification&&ae_fp_less(maxnrm2,1.0))&&ae_fp_greater(maxnrm2,(double)(0)) )
+    if( limitedamplification )
     {
-        if( neednorms )
-        {
-            rmulv(mdense+msparse, maxnrm2, rownorms, _state);
-        }
-        vv = (double)1/maxnrm2;
+        
+        /*
+         * Recompute maximum norm
+         */
+        maxnrm2 = (double)(0);
         for(i=0; i<=msparse-1; i++)
         {
+            vv = 0.0;
             k0 = sparsea->ridx.ptr.p_int[i];
             k1 = sparsea->ridx.ptr.p_int[i+1]-1;
             for(k=k0; k<=k1; k++)
             {
-                sparsea->vals.ptr.p_double[k] = sparsea->vals.ptr.p_double[k]*vv;
+                v = sparsea->vals.ptr.p_double[k];
+                vv = vv+v*v;
             }
-            ab->ptr.p_double[i] = ab->ptr.p_double[i]*vv;
-            if( ae_isfinite(ar->ptr.p_double[i], _state) )
-            {
-                ar->ptr.p_double[i] = ar->ptr.p_double[i]*vv;
-            }
+            vv = ae_sqrt(vv, _state);
+            maxnrm2 = ae_maxreal(maxnrm2, vv, _state);
         }
         for(i=0; i<=mdense-1; i++)
         {
-            rmulr(n, vv, densea, i, _state);
-            ab->ptr.p_double[msparse+i] = ab->ptr.p_double[msparse+i]*vv;
-            if( ae_isfinite(ar->ptr.p_double[msparse+i], _state) )
+            maxnrm2 = ae_maxreal(maxnrm2, ae_sqrt(rdotrr(n, densea, i, densea, i, _state), _state), _state);
+        }
+        
+        /*
+         * Amplify, if needed 
+         */
+        if( ae_fp_less(maxnrm2,1.0)&&ae_fp_greater(maxnrm2,(double)(0)) )
+        {
+            if( neednorms )
             {
-                ar->ptr.p_double[msparse+i] = ar->ptr.p_double[msparse+i]*vv;
+                rmulv(mdense+msparse, maxnrm2, rownorms, _state);
+            }
+            vv = (double)1/maxnrm2;
+            for(i=0; i<=msparse-1; i++)
+            {
+                k0 = sparsea->ridx.ptr.p_int[i];
+                k1 = sparsea->ridx.ptr.p_int[i+1]-1;
+                for(k=k0; k<=k1; k++)
+                {
+                    sparsea->vals.ptr.p_double[k] = sparsea->vals.ptr.p_double[k]*vv;
+                }
+                ab->ptr.p_double[i] = ab->ptr.p_double[i]*vv;
+                if( ae_isfinite(ar->ptr.p_double[i], _state) )
+                {
+                    ar->ptr.p_double[i] = ar->ptr.p_double[i]*vv;
+                }
+            }
+            for(i=0; i<=mdense-1; i++)
+            {
+                rmulr(n, vv, densea, i, _state);
+                ab->ptr.p_double[msparse+i] = ab->ptr.p_double[msparse+i]*vv;
+                if( ae_isfinite(ar->ptr.p_double[msparse+i], _state) )
+                {
+                    ar->ptr.p_double[msparse+i] = ar->ptr.p_double[msparse+i]*vv;
+                }
+            }
+        }
+    }
+}
+
+
+/*************************************************************************
+This function normalizes two-sided  "lower-bound/upper-bound"  constraints
+stored in dense  format in such a way that L2 norms of  rows  (right  hand
+side NOT included) become equal to 1.0. 
+
+Exactly zero rows are handled correctly.
+
+INPUT PARAMETERS:
+    DenseA          -   dense M*N constraint matrix;
+                        ignored if M=0.
+    M               -   constraint count, M>=0
+    AL              -   lower bounds for constraints, array[M]
+    AU              -   upper bounds for constraints, array[M]
+    N               -   number of variables, N>=1.
+    LimitedAmplification-   whether row amplification is limited or not:
+                        * if False, rows with small norms (less than 1.0)
+                          are always normalized
+                        * if True, we do not increase individual row norms
+                          during normalization - only decrease. However,
+                          we may apply one amplification rount to entire
+                          constraint matrix, i.e. amplify all rows by same
+                          coefficient. As result, we do not overamplify
+                          any single row, but still make sure than entire
+                          problem is well scaled.
+                        * large rows are always normalized
+    NeedNorms       -   whether we need row norms or not
+
+OUTPUT PARAMETERS:
+    SparseA         -   replaced by normalized constraints
+    AL              -   replaced by normalized lower bounds
+    AU              -   replaced by normalized upper bounds
+    RowNorms        -   if NeedNorms is true, leading M elements (resized
+                        if length is less than M) are filled by row norms
+                        before normalization was performed.
+    
+
+  -- ALGLIB --
+     Copyright 01.11.2019 by Bochkanov Sergey
+*************************************************************************/
+void normalizedenselcinplace(/* Real    */ ae_matrix* densea,
+     ae_int_t m,
+     /* Real    */ ae_vector* al,
+     /* Real    */ ae_vector* au,
+     ae_int_t n,
+     ae_bool limitedamplification,
+     /* Real    */ ae_vector* rownorms,
+     ae_bool neednorms,
+     ae_state *_state)
+{
+    ae_int_t i;
+    double vv;
+    double maxnrm2;
+
+
+    ae_assert(m==0||(densea->rows>=m&&densea->cols>=n), "NormalizeDenseLCInplace: matrix size is too small", _state);
+    if( neednorms )
+    {
+        rallocv(m, rownorms, _state);
+    }
+    
+    /*
+     * First round of normalization - normalize row 2-norms subject to limited amplification status
+     */
+    for(i=0; i<=m-1; i++)
+    {
+        vv = ae_sqrt(rdotrr(n, densea, i, densea, i, _state), _state);
+        if( limitedamplification )
+        {
+            vv = ae_maxreal(vv, 1.0, _state);
+        }
+        if( neednorms )
+        {
+            rownorms->ptr.p_double[i] = vv;
+        }
+        if( ae_fp_greater(vv,(double)(0)) )
+        {
+            vv = (double)1/vv;
+            rmulr(n, vv, densea, i, _state);
+            al->ptr.p_double[i] = al->ptr.p_double[i]*vv;
+            au->ptr.p_double[i] = au->ptr.p_double[i]*vv;
+        }
+    }
+    
+    /*
+     * If amplification was limited, perform second round of normalization
+     */
+    if( limitedamplification )
+    {
+        maxnrm2 = (double)(0);
+        for(i=0; i<=m-1; i++)
+        {
+            maxnrm2 = ae_maxreal(maxnrm2, ae_sqrt(rdotrr(n, densea, i, densea, i, _state), _state), _state);
+        }
+        if( ae_fp_less(maxnrm2,1.0)&&ae_fp_greater(maxnrm2,(double)(0)) )
+        {
+            if( neednorms )
+            {
+                rmulv(m, maxnrm2, rownorms, _state);
+            }
+            vv = (double)1/maxnrm2;
+            for(i=0; i<=m-1; i++)
+            {
+                rmulr(n, vv, densea, i, _state);
+                al->ptr.p_double[i] = al->ptr.p_double[i]*vv;
+                au->ptr.p_double[i] = au->ptr.p_double[i]*vv;
+            }
+        }
+    }
+}
+
+
+/*************************************************************************
+This function normalizes two-sided  "lower-bound/upper-bound"  constraints
+stored in sparse format in such a way that L2 norms of  rows  (right  hand
+side NOT included) become equal to 1.0. 
+
+Exactly zero rows are handled correctly.
+
+INPUT PARAMETERS:
+    SparseA         -   sparse M*N constraint matrix in CRS format;
+                        ignored if M=0.
+    M               -   constraint count, M>=0
+    AL              -   lower bounds for constraints, array[M]
+    AU              -   upper bounds for constraints, array[M]
+    N               -   number of variables, N>=1.
+    LimitedAmplification-   whether row amplification is limited or not:
+                        * if False, rows with small norms (less than 1.0)
+                          are always normalized
+                        * if True, we do not increase individual row norms
+                          during normalization - only decrease. However,
+                          we may apply one amplification rount to entire
+                          constraint matrix, i.e. amplify all rows by same
+                          coefficient. As result, we do not overamplify
+                          any single row, but still make sure than entire
+                          problem is well scaled.
+                        * large rows are always normalized
+    NeedNorms       -   whether we need row norms or not
+
+OUTPUT PARAMETERS:
+    SparseA         -   replaced by normalized constraints
+    AL              -   replaced by normalized lower bounds
+    AU              -   replaced by normalized upper bounds
+    RowNorms        -   if NeedNorms is true, leading M elements (resized
+                        if length is less than M) are filled by row norms
+                        before normalization was performed.
+    
+
+  -- ALGLIB --
+     Copyright 01.11.2019 by Bochkanov Sergey
+*************************************************************************/
+void normalizesparselcinplace(sparsematrix* sparsea,
+     ae_int_t m,
+     /* Real    */ ae_vector* al,
+     /* Real    */ ae_vector* au,
+     ae_int_t n,
+     ae_bool limitedamplification,
+     /* Real    */ ae_vector* rownorms,
+     ae_bool neednorms,
+     ae_state *_state)
+{
+    ae_int_t i;
+    ae_int_t k;
+    ae_int_t k0;
+    ae_int_t k1;
+    double v;
+    double vv;
+    double maxnrm2;
+
+
+    ae_assert(m==0||((sparsea->matrixtype==1&&sparsea->m==m)&&sparsea->n==n), "ScaleShiftMixedBRLCInplace: non-CRS sparse constraint matrix!", _state);
+    if( neednorms )
+    {
+        rallocv(m, rownorms, _state);
+    }
+    
+    /*
+     * First round of normalization - normalize row 2-norms subject to limited amplification status
+     */
+    maxnrm2 = (double)(0);
+    for(i=0; i<=m-1; i++)
+    {
+        vv = 0.0;
+        k0 = sparsea->ridx.ptr.p_int[i];
+        k1 = sparsea->ridx.ptr.p_int[i+1]-1;
+        for(k=k0; k<=k1; k++)
+        {
+            v = sparsea->vals.ptr.p_double[k];
+            vv = vv+v*v;
+        }
+        vv = ae_sqrt(vv, _state);
+        maxnrm2 = ae_maxreal(maxnrm2, vv, _state);
+        if( limitedamplification )
+        {
+            vv = ae_maxreal(vv, 1.0, _state);
+        }
+        if( neednorms )
+        {
+            rownorms->ptr.p_double[i] = vv;
+        }
+        if( ae_fp_greater(vv,(double)(0)) )
+        {
+            vv = (double)1/vv;
+            for(k=k0; k<=k1; k++)
+            {
+                sparsea->vals.ptr.p_double[k] = sparsea->vals.ptr.p_double[k]*vv;
+            }
+            al->ptr.p_double[i] = al->ptr.p_double[i]*vv;
+            au->ptr.p_double[i] = au->ptr.p_double[i]*vv;
+        }
+    }
+    
+    /*
+     * If amplification was limited, perform second round of normalization
+     */
+    if( limitedamplification )
+    {
+        
+        /*
+         * Recompute maximum row norm
+         */
+        maxnrm2 = (double)(0);
+        for(i=0; i<=m-1; i++)
+        {
+            vv = 0.0;
+            k0 = sparsea->ridx.ptr.p_int[i];
+            k1 = sparsea->ridx.ptr.p_int[i+1]-1;
+            for(k=k0; k<=k1; k++)
+            {
+                v = sparsea->vals.ptr.p_double[k];
+                vv = vv+v*v;
+            }
+            vv = ae_sqrt(vv, _state);
+            maxnrm2 = ae_maxreal(maxnrm2, vv, _state);
+        }
+        
+        /*
+         * Perform limited amplification, if needed
+         */
+        if( ae_fp_less(maxnrm2,1.0)&&ae_fp_greater(maxnrm2,(double)(0)) )
+        {
+            if( neednorms )
+            {
+                rmulv(m, maxnrm2, rownorms, _state);
+            }
+            vv = (double)1/maxnrm2;
+            for(i=0; i<=m-1; i++)
+            {
+                k0 = sparsea->ridx.ptr.p_int[i];
+                k1 = sparsea->ridx.ptr.p_int[i+1]-1;
+                for(k=k0; k<=k1; k++)
+                {
+                    sparsea->vals.ptr.p_double[k] = sparsea->vals.ptr.p_double[k]*vv;
+                }
+                al->ptr.p_double[i] = al->ptr.p_double[i]*vv;
+                au->ptr.p_double[i] = au->ptr.p_double[i]*vv;
             }
         }
     }
@@ -837,7 +1192,7 @@ double normalizesparseqpinplace(sparsematrix* sparsea,
     double result;
 
 
-    ae_assert((sparsea->matrixtype==1&&sparsea->m==n)&&sparsea->n==n, "ScaleSparseQPInplace: SparseA in unexpected format", _state);
+    ae_assert((sparsea->matrixtype==1&&sparsea->m==n)&&sparsea->n==n, "NormalizeSparseQPInplace: SparseA in unexpected format", _state);
     mx = (double)(0);
     for(i=0; i<=n-1; i++)
     {
@@ -868,7 +1223,7 @@ double normalizesparseqpinplace(sparsematrix* sparsea,
     }
     for(k=0; k<=corrrank-1; k++)
     {
-        densecorrd->ptr.p_double[k] = densecorrd->ptr.p_double[k]*v;
+        rmulr(n, ae_sqrt(v, _state), densecorrc, k, _state);
     }
     return result;
 }

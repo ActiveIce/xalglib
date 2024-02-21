@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -3676,6 +3676,20 @@ INPUT PARAMETERS:
 OUTPUT PARAMETERS:
     State   -   structure which stores algorithm state
 
+IMPORTANT: the LSFIT optimizer  supports  parallel  model  evaluation  and
+           parallel numerical  differentiation  ('callback  parallelism').
+           This feature, which is present in commercial  ALGLIB  editions,
+           greatly accelerates fits with large datasets  and/or  expensive
+           target functions.
+           
+           Callback parallelism is usually beneficial when a  single  pass
+           over  the   entire   dataset   requires   more   than   several
+           milliseconds.
+           
+           See ALGLIB Reference Manual, 'Working with commercial  version'
+           section,  and  comments  on  lsfitfit()   function   for   more
+           information.
+
   -- ALGLIB --
      Copyright 18.10.2008 by Bochkanov Sergey
 *************************************************************************/
@@ -3708,6 +3722,7 @@ void lsfitcreatewf(/* Real    */ const ae_matrix* x,
     ae_assert(apservisfinitematrix(x, n, m, _state), "LSFitCreateWF: X contains infinite or NaN values!", _state);
     ae_assert(ae_isfinite(diffstep, _state), "LSFitCreateWF: DiffStep is not finite!", _state);
     ae_assert(ae_fp_greater(diffstep,(double)(0)), "LSFitCreateWF: DiffStep<=0!", _state);
+    state->protocolversion = 1;
     state->teststep = (double)(0);
     state->diffstep = diffstep;
     state->npoints = n;
@@ -3749,8 +3764,8 @@ void lsfitcreatewf(/* Real    */ const ae_matrix* x,
     state->nic = 0;
     minlmcreatev(k, n, &state->c0, diffstep, &state->optstate, _state);
     lsfit_lsfitclearrequestfields(state, _state);
-    ae_vector_set_length(&state->rstate.ia, 5+1, _state);
-    ae_vector_set_length(&state->rstate.ra, 8+1, _state);
+    ae_vector_set_length(&state->rstate.ia, 6+1, _state);
+    ae_vector_set_length(&state->rstate.ra, 10+1, _state);
     state->rstate.stage = -1;
 }
 
@@ -3789,6 +3804,20 @@ INPUT PARAMETERS:
 OUTPUT PARAMETERS:
     State   -   structure which stores algorithm state
 
+IMPORTANT: the LSFIT optimizer  supports  parallel  model  evaluation  and
+           parallel numerical  differentiation  ('callback  parallelism').
+           This feature, which is present in commercial  ALGLIB  editions,
+           greatly accelerates fits with large datasets  and/or  expensive
+           target functions.
+           
+           Callback parallelism is usually beneficial when a  single  pass
+           over  the   entire   dataset   requires   more   than   several
+           milliseconds.
+           
+           See ALGLIB Reference Manual, 'Working with commercial  version'
+           section,  and  comments  on  lsfitfit()   function   for   more
+           information.
+           
   -- ALGLIB --
      Copyright 18.10.2008 by Bochkanov Sergey
 *************************************************************************/
@@ -3821,6 +3850,7 @@ void lsfitcreatef(/* Real    */ const ae_matrix* x,
     ae_assert(apservisfinitematrix(x, n, m, _state), "LSFitCreateF: X contains infinite or NaN values!", _state);
     ae_assert(ae_isfinite(diffstep, _state), "LSFitCreateF: DiffStep is not finite!", _state);
     ae_assert(ae_fp_greater(diffstep,(double)(0)), "LSFitCreateF: DiffStep<=0!", _state);
+    state->protocolversion = 1;
     state->teststep = (double)(0);
     state->diffstep = diffstep;
     state->npoints = n;
@@ -3859,8 +3889,8 @@ void lsfitcreatef(/* Real    */ const ae_matrix* x,
     state->nic = 0;
     minlmcreatev(k, n, &state->c0, diffstep, &state->optstate, _state);
     lsfit_lsfitclearrequestfields(state, _state);
-    ae_vector_set_length(&state->rstate.ia, 5+1, _state);
-    ae_vector_set_length(&state->rstate.ra, 8+1, _state);
+    ae_vector_set_length(&state->rstate.ia, 6+1, _state);
+    ae_vector_set_length(&state->rstate.ra, 10+1, _state);
     state->rstate.stage = -1;
 }
 
@@ -3889,14 +3919,6 @@ INPUT PARAMETERS:
     N       -   number of points, N>1
     M       -   dimension of space
     K       -   number of parameters being fitted
-    CheapFG -   boolean flag, which is:
-                * True  if both function and gradient calculation complexity
-                        are less than O(M^2).  An improved  algorithm  can
-                        be  used  which corresponds  to  FGJ  scheme  from
-                        MINLM unit.
-                * False otherwise.
-                        Standard Jacibian-bases  Levenberg-Marquardt  algo
-                        will be used (FJ scheme).
 
 OUTPUT PARAMETERS:
     State   -   structure which stores algorithm state
@@ -3905,8 +3927,21 @@ See also:
     LSFitResults
     LSFitCreateFG (fitting without weights)
     LSFitCreateWFGH (fitting using Hessian)
-    LSFitCreateFGH (fitting using Hessian, without weights)
 
+IMPORTANT: the LSFIT optimizer  supports  parallel  model  evaluation  and
+           parallel numerical  differentiation  ('callback  parallelism').
+           This feature, which is present in commercial  ALGLIB  editions,
+           greatly accelerates fits with large datasets  and/or  expensive
+           target functions.
+           
+           Callback parallelism is usually beneficial when a  single  pass
+           over  the   entire   dataset   requires   more   than   several
+           milliseconds.
+           
+           See ALGLIB Reference Manual, 'Working with commercial  version'
+           section,  and  comments  on  lsfitfit()   function   for   more
+           information.
+           
   -- ALGLIB --
      Copyright 17.08.2009 by Bochkanov Sergey
 *************************************************************************/
@@ -3917,7 +3952,6 @@ void lsfitcreatewfg(/* Real    */ const ae_matrix* x,
      ae_int_t n,
      ae_int_t m,
      ae_int_t k,
-     ae_bool cheapfg,
      lsfitstate* state,
      ae_state *_state)
 {
@@ -3937,6 +3971,7 @@ void lsfitcreatewfg(/* Real    */ const ae_matrix* x,
     ae_assert(x->rows>=n, "LSFitCreateWFG: rows(X)<N!", _state);
     ae_assert(x->cols>=m, "LSFitCreateWFG: cols(X)<M!", _state);
     ae_assert(apservisfinitematrix(x, n, m, _state), "LSFitCreateWFG: X contains infinite or NaN values!", _state);
+    state->protocolversion = 1;
     state->teststep = (double)(0);
     state->diffstep = (double)(0);
     state->npoints = n;
@@ -3977,17 +4012,10 @@ void lsfitcreatewfg(/* Real    */ const ae_matrix* x,
     state->prevalgo = -1;
     state->nec = 0;
     state->nic = 0;
-    if( cheapfg )
-    {
-        minlmcreatevgj(k, n, &state->c0, &state->optstate, _state);
-    }
-    else
-    {
-        minlmcreatevj(k, n, &state->c0, &state->optstate, _state);
-    }
+    minlmcreatevj(k, n, &state->c0, &state->optstate, _state);
     lsfit_lsfitclearrequestfields(state, _state);
-    ae_vector_set_length(&state->rstate.ia, 5+1, _state);
-    ae_vector_set_length(&state->rstate.ra, 8+1, _state);
+    ae_vector_set_length(&state->rstate.ia, 6+1, _state);
+    ae_vector_set_length(&state->rstate.ra, 10+1, _state);
     state->rstate.stage = -1;
 }
 
@@ -4015,18 +4043,24 @@ INPUT PARAMETERS:
     N       -   number of points, N>1
     M       -   dimension of space
     K       -   number of parameters being fitted
-    CheapFG -   boolean flag, which is:
-                * True  if both function and gradient calculation complexity
-                        are less than O(M^2).  An improved  algorithm  can
-                        be  used  which corresponds  to  FGJ  scheme  from
-                        MINLM unit.
-                * False otherwise.
-                        Standard Jacibian-bases  Levenberg-Marquardt  algo
-                        will be used (FJ scheme).
 
 OUTPUT PARAMETERS:
     State   -   structure which stores algorithm state
 
+IMPORTANT: the LSFIT optimizer  supports  parallel  model  evaluation  and
+           parallel numerical  differentiation  ('callback  parallelism').
+           This feature, which is present in commercial  ALGLIB  editions,
+           greatly accelerates fits with large datasets  and/or  expensive
+           target functions.
+           
+           Callback parallelism is usually beneficial when a  single  pass
+           over  the   entire   dataset   requires   more   than   several
+           milliseconds.
+           
+           See ALGLIB Reference Manual, 'Working with commercial  version'
+           section,  and  comments  on  lsfitfit()   function   for   more
+           information.
+           
   -- ALGLIB --
      Copyright 17.08.2009 by Bochkanov Sergey
 *************************************************************************/
@@ -4036,7 +4070,6 @@ void lsfitcreatefg(/* Real    */ const ae_matrix* x,
      ae_int_t n,
      ae_int_t m,
      ae_int_t k,
-     ae_bool cheapfg,
      lsfitstate* state,
      ae_state *_state)
 {
@@ -4057,6 +4090,7 @@ void lsfitcreatefg(/* Real    */ const ae_matrix* x,
     ae_assert(x->rows>=n, "LSFitCreateFG: rows(X)<N!", _state);
     ae_assert(x->cols>=m, "LSFitCreateFG: cols(X)<M!", _state);
     ae_assert(apservisfinitematrix(x, n, m, _state), "LSFitCreateFG: X contains infinite or NaN values!", _state);
+    state->protocolversion = 1;
     state->teststep = (double)(0);
     state->diffstep = (double)(0);
     state->npoints = n;
@@ -4094,223 +4128,10 @@ void lsfitcreatefg(/* Real    */ const ae_matrix* x,
     state->prevalgo = -1;
     state->nec = 0;
     state->nic = 0;
-    if( cheapfg )
-    {
-        minlmcreatevgj(k, n, &state->c0, &state->optstate, _state);
-    }
-    else
-    {
-        minlmcreatevj(k, n, &state->c0, &state->optstate, _state);
-    }
+    minlmcreatevj(k, n, &state->c0, &state->optstate, _state);
     lsfit_lsfitclearrequestfields(state, _state);
-    ae_vector_set_length(&state->rstate.ia, 5+1, _state);
-    ae_vector_set_length(&state->rstate.ra, 8+1, _state);
-    state->rstate.stage = -1;
-}
-
-
-/*************************************************************************
-Weighted nonlinear least squares fitting using gradient/Hessian.
-
-Nonlinear task min(F(c)) is solved, where
-
-    F(c) = (w[0]*(f(c,x[0])-y[0]))^2 + ... + (w[n-1]*(f(c,x[n-1])-y[n-1]))^2,
-
-    * N is a number of points,
-    * M is a dimension of a space points belong to,
-    * K is a dimension of a space of parameters being fitted,
-    * w is an N-dimensional vector of weight coefficients,
-    * x is a set of N points, each of them is an M-dimensional vector,
-    * c is a K-dimensional vector of parameters being fitted
-
-This subroutine uses f(c,x[i]), its gradient and its Hessian.
-
-INPUT PARAMETERS:
-    X       -   array[0..N-1,0..M-1], points (one row = one point)
-    Y       -   array[0..N-1], function values.
-    W       -   weights, array[0..N-1]
-    C       -   array[0..K-1], initial approximation to the solution,
-    N       -   number of points, N>1
-    M       -   dimension of space
-    K       -   number of parameters being fitted
-
-OUTPUT PARAMETERS:
-    State   -   structure which stores algorithm state
-
-  -- ALGLIB --
-     Copyright 17.08.2009 by Bochkanov Sergey
-*************************************************************************/
-void lsfitcreatewfgh(/* Real    */ const ae_matrix* x,
-     /* Real    */ const ae_vector* y,
-     /* Real    */ const ae_vector* w,
-     /* Real    */ const ae_vector* c,
-     ae_int_t n,
-     ae_int_t m,
-     ae_int_t k,
-     lsfitstate* state,
-     ae_state *_state)
-{
-    ae_int_t i;
-
-    _lsfitstate_clear(state);
-
-    ae_assert(n>=1, "LSFitCreateWFGH: N<1!", _state);
-    ae_assert(m>=1, "LSFitCreateWFGH: M<1!", _state);
-    ae_assert(k>=1, "LSFitCreateWFGH: K<1!", _state);
-    ae_assert(c->cnt>=k, "LSFitCreateWFGH: length(C)<K!", _state);
-    ae_assert(isfinitevector(c, k, _state), "LSFitCreateWFGH: C contains infinite or NaN values!", _state);
-    ae_assert(y->cnt>=n, "LSFitCreateWFGH: length(Y)<N!", _state);
-    ae_assert(isfinitevector(y, n, _state), "LSFitCreateWFGH: Y contains infinite or NaN values!", _state);
-    ae_assert(w->cnt>=n, "LSFitCreateWFGH: length(W)<N!", _state);
-    ae_assert(isfinitevector(w, n, _state), "LSFitCreateWFGH: W contains infinite or NaN values!", _state);
-    ae_assert(x->rows>=n, "LSFitCreateWFGH: rows(X)<N!", _state);
-    ae_assert(x->cols>=m, "LSFitCreateWFGH: cols(X)<M!", _state);
-    ae_assert(apservisfinitematrix(x, n, m, _state), "LSFitCreateWFGH: X contains infinite or NaN values!", _state);
-    state->teststep = (double)(0);
-    state->diffstep = (double)(0);
-    state->npoints = n;
-    state->nweights = n;
-    state->wkind = 1;
-    state->m = m;
-    state->k = k;
-    lsfitsetcond(state, 0.0, 0, _state);
-    lsfitsetstpmax(state, 0.0, _state);
-    lsfitsetxrep(state, ae_false, _state);
-    ae_matrix_set_length(&state->taskx, n, m, _state);
-    ae_vector_set_length(&state->tasky, n, _state);
-    ae_vector_set_length(&state->taskw, n, _state);
-    ae_vector_set_length(&state->c, k, _state);
-    ae_vector_set_length(&state->c0, k, _state);
-    ae_vector_set_length(&state->c1, k, _state);
-    ae_v_move(&state->c0.ptr.p_double[0], 1, &c->ptr.p_double[0], 1, ae_v_len(0,k-1));
-    ae_v_move(&state->c1.ptr.p_double[0], 1, &c->ptr.p_double[0], 1, ae_v_len(0,k-1));
-    ae_matrix_set_length(&state->h, k, k, _state);
-    ae_vector_set_length(&state->x, m, _state);
-    ae_vector_set_length(&state->g, k, _state);
-    ae_v_move(&state->taskw.ptr.p_double[0], 1, &w->ptr.p_double[0], 1, ae_v_len(0,n-1));
-    for(i=0; i<=n-1; i++)
-    {
-        ae_v_move(&state->taskx.ptr.pp_double[i][0], 1, &x->ptr.pp_double[i][0], 1, ae_v_len(0,m-1));
-        state->tasky.ptr.p_double[i] = y->ptr.p_double[i];
-    }
-    ae_vector_set_length(&state->s, k, _state);
-    ae_vector_set_length(&state->bndl, k, _state);
-    ae_vector_set_length(&state->bndu, k, _state);
-    for(i=0; i<=k-1; i++)
-    {
-        state->s.ptr.p_double[i] = 1.0;
-        state->bndl.ptr.p_double[i] = _state->v_neginf;
-        state->bndu.ptr.p_double[i] = _state->v_posinf;
-    }
-    state->optalgo = 2;
-    state->prevnpt = -1;
-    state->prevalgo = -1;
-    state->nec = 0;
-    state->nic = 0;
-    minlmcreatefgh(k, &state->c0, &state->optstate, _state);
-    lsfit_lsfitclearrequestfields(state, _state);
-    ae_vector_set_length(&state->rstate.ia, 5+1, _state);
-    ae_vector_set_length(&state->rstate.ra, 8+1, _state);
-    state->rstate.stage = -1;
-}
-
-
-/*************************************************************************
-Nonlinear least squares fitting using gradient/Hessian, without individial
-weights.
-
-Nonlinear task min(F(c)) is solved, where
-
-    F(c) = ((f(c,x[0])-y[0]))^2 + ... + ((f(c,x[n-1])-y[n-1]))^2,
-
-    * N is a number of points,
-    * M is a dimension of a space points belong to,
-    * K is a dimension of a space of parameters being fitted,
-    * x is a set of N points, each of them is an M-dimensional vector,
-    * c is a K-dimensional vector of parameters being fitted
-
-This subroutine uses f(c,x[i]), its gradient and its Hessian.
-
-INPUT PARAMETERS:
-    X       -   array[0..N-1,0..M-1], points (one row = one point)
-    Y       -   array[0..N-1], function values.
-    C       -   array[0..K-1], initial approximation to the solution,
-    N       -   number of points, N>1
-    M       -   dimension of space
-    K       -   number of parameters being fitted
-
-OUTPUT PARAMETERS:
-    State   -   structure which stores algorithm state
-
-
-  -- ALGLIB --
-     Copyright 17.08.2009 by Bochkanov Sergey
-*************************************************************************/
-void lsfitcreatefgh(/* Real    */ const ae_matrix* x,
-     /* Real    */ const ae_vector* y,
-     /* Real    */ const ae_vector* c,
-     ae_int_t n,
-     ae_int_t m,
-     ae_int_t k,
-     lsfitstate* state,
-     ae_state *_state)
-{
-    ae_int_t i;
-
-    _lsfitstate_clear(state);
-
-    ae_assert(n>=1, "LSFitCreateFGH: N<1!", _state);
-    ae_assert(m>=1, "LSFitCreateFGH: M<1!", _state);
-    ae_assert(k>=1, "LSFitCreateFGH: K<1!", _state);
-    ae_assert(c->cnt>=k, "LSFitCreateFGH: length(C)<K!", _state);
-    ae_assert(isfinitevector(c, k, _state), "LSFitCreateFGH: C contains infinite or NaN values!", _state);
-    ae_assert(y->cnt>=n, "LSFitCreateFGH: length(Y)<N!", _state);
-    ae_assert(isfinitevector(y, n, _state), "LSFitCreateFGH: Y contains infinite or NaN values!", _state);
-    ae_assert(x->rows>=n, "LSFitCreateFGH: rows(X)<N!", _state);
-    ae_assert(x->cols>=m, "LSFitCreateFGH: cols(X)<M!", _state);
-    ae_assert(apservisfinitematrix(x, n, m, _state), "LSFitCreateFGH: X contains infinite or NaN values!", _state);
-    state->teststep = (double)(0);
-    state->diffstep = (double)(0);
-    state->npoints = n;
-    state->wkind = 0;
-    state->m = m;
-    state->k = k;
-    lsfitsetcond(state, 0.0, 0, _state);
-    lsfitsetstpmax(state, 0.0, _state);
-    lsfitsetxrep(state, ae_false, _state);
-    ae_matrix_set_length(&state->taskx, n, m, _state);
-    ae_vector_set_length(&state->tasky, n, _state);
-    ae_vector_set_length(&state->c, k, _state);
-    ae_vector_set_length(&state->c0, k, _state);
-    ae_vector_set_length(&state->c1, k, _state);
-    ae_v_move(&state->c0.ptr.p_double[0], 1, &c->ptr.p_double[0], 1, ae_v_len(0,k-1));
-    ae_v_move(&state->c1.ptr.p_double[0], 1, &c->ptr.p_double[0], 1, ae_v_len(0,k-1));
-    ae_matrix_set_length(&state->h, k, k, _state);
-    ae_vector_set_length(&state->x, m, _state);
-    ae_vector_set_length(&state->g, k, _state);
-    for(i=0; i<=n-1; i++)
-    {
-        ae_v_move(&state->taskx.ptr.pp_double[i][0], 1, &x->ptr.pp_double[i][0], 1, ae_v_len(0,m-1));
-        state->tasky.ptr.p_double[i] = y->ptr.p_double[i];
-    }
-    ae_vector_set_length(&state->s, k, _state);
-    ae_vector_set_length(&state->bndl, k, _state);
-    ae_vector_set_length(&state->bndu, k, _state);
-    for(i=0; i<=k-1; i++)
-    {
-        state->s.ptr.p_double[i] = 1.0;
-        state->bndl.ptr.p_double[i] = _state->v_neginf;
-        state->bndu.ptr.p_double[i] = _state->v_posinf;
-    }
-    state->optalgo = 2;
-    state->prevnpt = -1;
-    state->prevalgo = -1;
-    state->nec = 0;
-    state->nic = 0;
-    minlmcreatefgh(k, &state->c0, &state->optstate, _state);
-    lsfit_lsfitclearrequestfields(state, _state);
-    ae_vector_set_length(&state->rstate.ia, 5+1, _state);
-    ae_vector_set_length(&state->rstate.ra, 8+1, _state);
+    ae_vector_set_length(&state->rstate.ia, 6+1, _state);
+    ae_vector_set_length(&state->rstate.ra, 10+1, _state);
     state->rstate.stage = -1;
 }
 
@@ -4618,42 +4439,46 @@ void lsfitsetlc(lsfitstate* state,
 
 
 /*************************************************************************
-NOTES:
 
-1. this algorithm is somewhat unusual because it works with  parameterized
-   function f(C,X), where X is a function argument (we  have  many  points
-   which are characterized by different  argument  values),  and  C  is  a
-   parameter to fit.
+CALLBACK PARALLELISM:
 
-   For example, if we want to do linear fit by f(c0,c1,x) = c0*x+c1,  then
-   x will be argument, and {c0,c1} will be parameters.
-   
-   It is important to understand that this algorithm finds minimum in  the
-   space of function PARAMETERS (not arguments), so it  needs  derivatives
-   of f() with respect to C, not X.
-   
-   In the example above it will need f=c0*x+c1 and {df/dc0,df/dc1} = {x,1}
-   instead of {df/dx} = {c0}.
+The  LSFIT  optimizer  supports  parallel  model  evaluation  and parallel
+numerical differentiation ('callback parallelism'). This feature, which is
+present in commercial ALGLIB editions, greatly accelerates fits with large
+datasets and/or expensive target functions.
 
-2. Callback functions accept C as the first parameter, and X as the second
+Callback parallelism is usually beneficial when a  single  pass  over  the
+entire dataset requires more than several milliseconds. In this  case  the
+job of computing model values at  dataset  points  can  be  split  between
+multiple threads.
 
-3. If  state  was  created  with  LSFitCreateFG(),  algorithm  needs  just
-   function   and   its   gradient,   but   if   state   was  created with
-   LSFitCreateFGH(), algorithm will need function, gradient and Hessian.
-   
-   According  to  the  said  above,  there  ase  several  versions of this
-   function, which accept different sets of callbacks.
-   
-   This flexibility opens way to subtle errors - you may create state with
-   LSFitCreateFGH() (optimization using Hessian), but call function  which
-   does not accept Hessian. So when algorithm will request Hessian,  there
-   will be no callback to call. In this case exception will be thrown.
-   
-   Be careful to avoid such errors because there is no way to find them at
-   compile time - you can see them at runtime only.
+If you employ a numerical differentiation scheme, you can also parallelize
+computation of different components of a numerical gradient. Generally, the
+mode computationally demanding your problem is (many points, numerical differentiation,
+expensive model), the more you can get for multithreading.
+
+ALGLIB Reference Manual, 'Working with commercial  version' section,
+describes how to activate callback parallelism for your programming language.
+
+CALLBACK ARGUMENTS
+
+This algorithm is somewhat unusual because  it  works  with  parameterized
+function f(C,X), where X is  a  function  argument (we  have  many  points
+which  are  characterized  by different  argument  values),  and  C  is  a
+parameter to fit.
+
+For example, if we want to do linear  fit  by  f(c0,c1,x) = c0*x+c1,  then
+x will be argument, and {c0,c1} will be parameters.
+
+It is important to understand that this algorithm finds   minimum  in  the
+space of function PARAMETERS (not  arguments),  so  it  needs  derivatives
+of f() with respect to C, not X.
+
+In the example above it will need f=c0*x+c1 and {df/dc0,df/dc1} = {x,1}
+instead of {df/dx} = {c0}.
 
   -- ALGLIB --
-     Copyright 17.08.2009 by Bochkanov Sergey
+     Copyright 17.12.2023 by Bochkanov Sergey
 *************************************************************************/
 ae_bool lsfititeration(lsfitstate* state, ae_state *_state)
 {
@@ -4668,10 +4493,13 @@ ae_bool lsfititeration(lsfitstate* state, ae_state *_state)
     ae_int_t k;
     double v;
     double vv;
+    double v1;
+    double v2;
     double relcnt;
     ae_int_t i;
     ae_int_t j;
     ae_int_t j1;
+    ae_int_t offs;
     ae_bool result;
 
 
@@ -4694,6 +4522,7 @@ ae_bool lsfititeration(lsfitstate* state, ae_state *_state)
         i = state->rstate.ia.ptr.p_int[3];
         j = state->rstate.ia.ptr.p_int[4];
         j1 = state->rstate.ia.ptr.p_int[5];
+        offs = state->rstate.ia.ptr.p_int[6];
         lx = state->rstate.ra.ptr.p_double[0];
         lf = state->rstate.ra.ptr.p_double[1];
         ld = state->rstate.ra.ptr.p_double[2];
@@ -4702,7 +4531,9 @@ ae_bool lsfititeration(lsfitstate* state, ae_state *_state)
         rd = state->rstate.ra.ptr.p_double[5];
         v = state->rstate.ra.ptr.p_double[6];
         vv = state->rstate.ra.ptr.p_double[7];
-        relcnt = state->rstate.ra.ptr.p_double[8];
+        v1 = state->rstate.ra.ptr.p_double[8];
+        v2 = state->rstate.ra.ptr.p_double[9];
+        relcnt = state->rstate.ra.ptr.p_double[10];
     }
     else
     {
@@ -4712,15 +4543,18 @@ ae_bool lsfititeration(lsfitstate* state, ae_state *_state)
         i = -909;
         j = 81;
         j1 = 255;
-        lx = 74.0;
-        lf = -788.0;
-        ld = 809.0;
-        rx = 205.0;
-        rf = -838.0;
-        rd = 939.0;
-        v = -526.0;
-        vv = 763.0;
-        relcnt = -541.0;
+        offs = 74;
+        lx = -788.0;
+        lf = 809.0;
+        ld = 205.0;
+        rx = -838.0;
+        rf = 939.0;
+        rd = -526.0;
+        v = 763.0;
+        vv = -541.0;
+        v1 = -698.0;
+        v2 = -900.0;
+        relcnt = -318.0;
     }
     if( state->rstate.stage==0 )
     {
@@ -4778,6 +4612,42 @@ ae_bool lsfititeration(lsfitstate* state, ae_state *_state)
     {
         goto lbl_13;
     }
+    if( state->rstate.stage==14 )
+    {
+        goto lbl_14;
+    }
+    if( state->rstate.stage==15 )
+    {
+        goto lbl_15;
+    }
+    if( state->rstate.stage==16 )
+    {
+        goto lbl_16;
+    }
+    if( state->rstate.stage==17 )
+    {
+        goto lbl_17;
+    }
+    if( state->rstate.stage==18 )
+    {
+        goto lbl_18;
+    }
+    if( state->rstate.stage==19 )
+    {
+        goto lbl_19;
+    }
+    if( state->rstate.stage==20 )
+    {
+        goto lbl_20;
+    }
+    if( state->rstate.stage==21 )
+    {
+        goto lbl_21;
+    }
+    if( state->rstate.stage==22 )
+    {
+        goto lbl_22;
+    }
     
     /*
      * Routine body
@@ -4809,14 +4679,30 @@ ae_bool lsfititeration(lsfitstate* state, ae_state *_state)
     minlmsetscale(&state->optstate, &state->s, _state);
     minlmsetbc(&state->optstate, &state->bndl, &state->bndu, _state);
     minlmsetlc(&state->optstate, &state->cleic, &state->tmpct, state->nec+state->nic, _state);
+    state->requesttype = 0;
+    
+    /*
+     * Allocate temporaries, as mandated by the V2 protocol
+     */
+    if( state->protocolversion==2 )
+    {
+        rallocm(1, k, &state->tmpj1, _state);
+        rallocv(1, &state->tmpf1, _state);
+        rallocv(k, &state->tmpg1, _state);
+        rallocv(k, &state->tmpx1, _state);
+        rallocv(m, &state->tmpc1, _state);
+    }
     
     /*
      *  Check that user-supplied gradient is correct
      */
-    lsfit_lsfitclearrequestfields(state, _state);
+    if( state->protocolversion==1 )
+    {
+        lsfit_lsfitclearrequestfields(state, _state);
+    }
     if( !(ae_fp_greater(state->teststep,(double)(0))&&state->optalgo==1) )
     {
-        goto lbl_14;
+        goto lbl_23;
     }
     for(i=0; i<=k-1; i++)
     {
@@ -4830,20 +4716,118 @@ ae_bool lsfititeration(lsfitstate* state, ae_state *_state)
             state->c.ptr.p_double[i] = ae_minreal(state->c.ptr.p_double[i], state->bndu.ptr.p_double[i], _state);
         }
     }
-    state->needfg = ae_true;
     i = 0;
-lbl_16:
+lbl_25:
     if( i>k-1 )
     {
-        goto lbl_18;
+        goto lbl_27;
     }
     ae_assert(ae_fp_less_eq(state->bndl.ptr.p_double[i],state->c.ptr.p_double[i])&&ae_fp_less_eq(state->c.ptr.p_double[i],state->bndu.ptr.p_double[i]), "LSFitIteration: internal error(State.C is out of bounds)", _state);
-    v = state->c.ptr.p_double[i];
+    if( state->protocolversion!=2 )
+    {
+        goto lbl_28;
+    }
+    
+    /*
+     * Test using V2 protocol
+     */
+    rallocv(k+m, &state->querydata, _state);
     j = 0;
-lbl_19:
+lbl_30:
     if( j>n-1 )
     {
-        goto lbl_21;
+        goto lbl_32;
+    }
+    
+    /*
+     * Query value at the left point
+     */
+    state->requesttype = 2;
+    state->querysize = 1;
+    state->queryfuncs = 1;
+    state->queryvars = k;
+    state->querydim = m;
+    rcopyv(k, &state->c, &state->querydata, _state);
+    state->querydata.ptr.p_double[i] = state->c.ptr.p_double[i]-state->teststep*state->s.ptr.p_double[i];
+    if( ae_isfinite(state->bndl.ptr.p_double[i], _state)&&state->querydata.ptr.p_double[i]<state->bndl.ptr.p_double[i] )
+    {
+        state->querydata.ptr.p_double[i] = state->bndl.ptr.p_double[i];
+    }
+    lx = state->querydata.ptr.p_double[i];
+    for(j1=0; j1<=m-1; j1++)
+    {
+        state->querydata.ptr.p_double[k+j1] = state->taskx.ptr.pp_double[j][j1];
+    }
+    rallocv(1, &state->replyfi, _state);
+    rallocv(k, &state->replydj, _state);
+    state->rstate.stage = 0;
+    goto lbl_rcomm;
+lbl_0:
+    lf = state->replyfi.ptr.p_double[0];
+    ld = state->replydj.ptr.p_double[i];
+    
+    /*
+     * Query value at the right point
+     */
+    state->requesttype = 2;
+    state->querysize = 1;
+    state->queryfuncs = 1;
+    state->queryvars = k;
+    state->querydim = m;
+    rcopyv(k, &state->c, &state->querydata, _state);
+    state->querydata.ptr.p_double[i] = state->c.ptr.p_double[i]+state->teststep*state->s.ptr.p_double[i];
+    if( ae_isfinite(state->bndu.ptr.p_double[i], _state)&&state->querydata.ptr.p_double[i]>state->bndu.ptr.p_double[i] )
+    {
+        state->querydata.ptr.p_double[i] = state->bndu.ptr.p_double[i];
+    }
+    rx = state->querydata.ptr.p_double[i];
+    state->rstate.stage = 1;
+    goto lbl_rcomm;
+lbl_1:
+    rf = state->replyfi.ptr.p_double[0];
+    rd = state->replydj.ptr.p_double[i];
+    
+    /*
+     * Query value at the middle, perform derivative check
+     */
+    state->requesttype = 2;
+    state->querysize = 1;
+    state->queryfuncs = 1;
+    state->queryvars = k;
+    state->querydim = m;
+    rcopyv(k, &state->c, &state->querydata, _state);
+    state->querydata.ptr.p_double[i] = (lx+rx)/(double)2;
+    if( ae_isfinite(state->bndl.ptr.p_double[i], _state)&&state->querydata.ptr.p_double[i]<state->bndl.ptr.p_double[i] )
+    {
+        state->querydata.ptr.p_double[i] = state->bndl.ptr.p_double[i];
+    }
+    if( ae_isfinite(state->bndu.ptr.p_double[i], _state)&&state->querydata.ptr.p_double[i]>state->bndu.ptr.p_double[i] )
+    {
+        state->querydata.ptr.p_double[i] = state->bndu.ptr.p_double[i];
+    }
+    state->rstate.stage = 2;
+    goto lbl_rcomm;
+lbl_2:
+    state->needfg = ae_false;
+    if( !derivativecheck(lf, ld, rf, rd, state->replyfi.ptr.p_double[0], state->replydj.ptr.p_double[i], rx-lx, _state) )
+    {
+        state->repvaridx = i;
+        state->repterminationtype = -7;
+        result = ae_false;
+        return result;
+    }
+    j = j+1;
+    goto lbl_30;
+lbl_32:
+    goto lbl_29;
+lbl_28:
+    ae_assert(state->protocolversion==1, "LSFIT: integrity check 8428 failed", _state);
+    v = state->c.ptr.p_double[i];
+    j = 0;
+lbl_33:
+    if( j>n-1 )
+    {
+        goto lbl_35;
     }
     ae_v_move(&state->x.ptr.p_double[0], 1, &state->taskx.ptr.pp_double[j][0], 1, ae_v_len(0,m-1));
     state->c.ptr.p_double[i] = v-state->teststep*state->s.ptr.p_double[i];
@@ -4852,9 +4836,11 @@ lbl_19:
         state->c.ptr.p_double[i] = ae_maxreal(state->c.ptr.p_double[i], state->bndl.ptr.p_double[i], _state);
     }
     lx = state->c.ptr.p_double[i];
-    state->rstate.stage = 0;
+    state->needfg = ae_true;
+    state->rstate.stage = 3;
     goto lbl_rcomm;
-lbl_0:
+lbl_3:
+    state->needfg = ae_false;
     lf = state->f;
     ld = state->g.ptr.p_double[i];
     state->c.ptr.p_double[i] = v+state->teststep*state->s.ptr.p_double[i];
@@ -4863,9 +4849,11 @@ lbl_0:
         state->c.ptr.p_double[i] = ae_minreal(state->c.ptr.p_double[i], state->bndu.ptr.p_double[i], _state);
     }
     rx = state->c.ptr.p_double[i];
-    state->rstate.stage = 1;
+    state->needfg = ae_true;
+    state->rstate.stage = 4;
     goto lbl_rcomm;
-lbl_1:
+lbl_4:
+    state->needfg = ae_false;
     rf = state->f;
     rd = state->g.ptr.p_double[i];
     state->c.ptr.p_double[i] = (lx+rx)/(double)2;
@@ -4877,9 +4865,11 @@ lbl_1:
     {
         state->c.ptr.p_double[i] = ae_minreal(state->c.ptr.p_double[i], state->bndu.ptr.p_double[i], _state);
     }
-    state->rstate.stage = 2;
+    state->needfg = ae_true;
+    state->rstate.stage = 5;
     goto lbl_rcomm;
-lbl_2:
+lbl_5:
+    state->needfg = ae_false;
     state->c.ptr.p_double[i] = v;
     if( !derivativecheck(lf, ld, rf, rd, state->f, state->g.ptr.p_double[i], rx-lx, _state) )
     {
@@ -4889,13 +4879,13 @@ lbl_2:
         return result;
     }
     j = j+1;
-    goto lbl_19;
-lbl_21:
+    goto lbl_33;
+lbl_35:
+lbl_29:
     i = i+1;
-    goto lbl_16;
-lbl_18:
-    state->needfg = ae_false;
-lbl_14:
+    goto lbl_25;
+lbl_27:
+lbl_23:
     
     /*
      * Fill WCur by weights:
@@ -4903,6 +4893,7 @@ lbl_14:
      * * for WKind=1 we use user-supplied weights stored in State.TaskW
      */
     rvectorsetlengthatleast(&state->wcur, n, _state);
+    rallocv(n*k, &state->tmpwk, _state);
     for(i=0; i<=n-1; i++)
     {
         state->wcur.ptr.p_double[i] = 1.0;
@@ -4910,49 +4901,66 @@ lbl_14:
         {
             state->wcur.ptr.p_double[i] = state->taskw.ptr.p_double[i];
         }
+        for(j=0; j<=k-1; j++)
+        {
+            state->tmpwk.ptr.p_double[i*k+j] = state->wcur.ptr.p_double[i];
+        }
     }
     
     /*
      * Optimize
      */
-lbl_22:
+    if( state->protocolversion==1 )
+    {
+        minlmsetprotocolv1(&state->optstate, _state);
+    }
+    else
+    {
+        ae_assert(state->protocolversion==2, "LSFIT: integrity check 2839 failed", _state);
+        minlmsetprotocolv2(&state->optstate, _state);
+    }
+lbl_36:
     if( !minlmiteration(&state->optstate, _state) )
     {
-        goto lbl_23;
+        goto lbl_37;
+    }
+    if( state->protocolversion!=1 )
+    {
+        goto lbl_38;
     }
     if( !state->optstate.needfi )
     {
-        goto lbl_24;
+        goto lbl_40;
     }
     
     /*
      * calculate f[] = wi*(f(xi,c)-yi)
      */
     i = 0;
-lbl_26:
+lbl_42:
     if( i>n-1 )
     {
-        goto lbl_28;
+        goto lbl_44;
     }
     ae_v_move(&state->c.ptr.p_double[0], 1, &state->optstate.x.ptr.p_double[0], 1, ae_v_len(0,k-1));
     ae_v_move(&state->x.ptr.p_double[0], 1, &state->taskx.ptr.pp_double[i][0], 1, ae_v_len(0,m-1));
     state->pointindex = i;
     lsfit_lsfitclearrequestfields(state, _state);
     state->needf = ae_true;
-    state->rstate.stage = 3;
+    state->rstate.stage = 6;
     goto lbl_rcomm;
-lbl_3:
+lbl_6:
     state->needf = ae_false;
     vv = state->wcur.ptr.p_double[i];
     state->optstate.fi.ptr.p_double[i] = vv*(state->f-state->tasky.ptr.p_double[i]);
     i = i+1;
-    goto lbl_26;
-lbl_28:
-    goto lbl_22;
-lbl_24:
+    goto lbl_42;
+lbl_44:
+    goto lbl_36;
+lbl_40:
     if( !state->optstate.needf )
     {
-        goto lbl_29;
+        goto lbl_45;
     }
     
     /*
@@ -4960,30 +4968,30 @@ lbl_24:
      */
     state->optstate.f = (double)(0);
     i = 0;
-lbl_31:
+lbl_47:
     if( i>n-1 )
     {
-        goto lbl_33;
+        goto lbl_49;
     }
     ae_v_move(&state->c.ptr.p_double[0], 1, &state->optstate.x.ptr.p_double[0], 1, ae_v_len(0,k-1));
     ae_v_move(&state->x.ptr.p_double[0], 1, &state->taskx.ptr.pp_double[i][0], 1, ae_v_len(0,m-1));
     state->pointindex = i;
     lsfit_lsfitclearrequestfields(state, _state);
     state->needf = ae_true;
-    state->rstate.stage = 4;
+    state->rstate.stage = 7;
     goto lbl_rcomm;
-lbl_4:
+lbl_7:
     state->needf = ae_false;
     vv = state->wcur.ptr.p_double[i];
     state->optstate.f = state->optstate.f+ae_sqr(vv*(state->f-state->tasky.ptr.p_double[i]), _state);
     i = i+1;
-    goto lbl_31;
-lbl_33:
-    goto lbl_22;
-lbl_29:
+    goto lbl_47;
+lbl_49:
+    goto lbl_36;
+lbl_45:
     if( !state->optstate.needfg )
     {
-        goto lbl_34;
+        goto lbl_50;
     }
     
     /*
@@ -4995,114 +5003,63 @@ lbl_29:
         state->optstate.g.ptr.p_double[i] = (double)(0);
     }
     i = 0;
-lbl_36:
+lbl_52:
     if( i>n-1 )
     {
-        goto lbl_38;
+        goto lbl_54;
     }
     ae_v_move(&state->c.ptr.p_double[0], 1, &state->optstate.x.ptr.p_double[0], 1, ae_v_len(0,k-1));
     ae_v_move(&state->x.ptr.p_double[0], 1, &state->taskx.ptr.pp_double[i][0], 1, ae_v_len(0,m-1));
     state->pointindex = i;
     lsfit_lsfitclearrequestfields(state, _state);
     state->needfg = ae_true;
-    state->rstate.stage = 5;
+    state->rstate.stage = 8;
     goto lbl_rcomm;
-lbl_5:
+lbl_8:
     state->needfg = ae_false;
     vv = state->wcur.ptr.p_double[i];
     state->optstate.f = state->optstate.f+ae_sqr(vv*(state->f-state->tasky.ptr.p_double[i]), _state);
     v = ae_sqr(vv, _state)*(double)2*(state->f-state->tasky.ptr.p_double[i]);
     ae_v_addd(&state->optstate.g.ptr.p_double[0], 1, &state->g.ptr.p_double[0], 1, ae_v_len(0,k-1), v);
     i = i+1;
+    goto lbl_52;
+lbl_54:
     goto lbl_36;
-lbl_38:
-    goto lbl_22;
-lbl_34:
+lbl_50:
     if( !state->optstate.needfij )
     {
-        goto lbl_39;
+        goto lbl_55;
     }
     
     /*
      * calculate Fi/jac(Fi)
      */
     i = 0;
-lbl_41:
+lbl_57:
     if( i>n-1 )
     {
-        goto lbl_43;
+        goto lbl_59;
     }
     ae_v_move(&state->c.ptr.p_double[0], 1, &state->optstate.x.ptr.p_double[0], 1, ae_v_len(0,k-1));
     ae_v_move(&state->x.ptr.p_double[0], 1, &state->taskx.ptr.pp_double[i][0], 1, ae_v_len(0,m-1));
     state->pointindex = i;
     lsfit_lsfitclearrequestfields(state, _state);
     state->needfg = ae_true;
-    state->rstate.stage = 6;
+    state->rstate.stage = 9;
     goto lbl_rcomm;
-lbl_6:
+lbl_9:
     state->needfg = ae_false;
     vv = state->wcur.ptr.p_double[i];
     state->optstate.fi.ptr.p_double[i] = vv*(state->f-state->tasky.ptr.p_double[i]);
     ae_v_moved(&state->optstate.j.ptr.pp_double[i][0], 1, &state->g.ptr.p_double[0], 1, ae_v_len(0,k-1), vv);
     i = i+1;
-    goto lbl_41;
-lbl_43:
-    goto lbl_22;
-lbl_39:
-    if( !state->optstate.needfgh )
-    {
-        goto lbl_44;
-    }
-    
-    /*
-     * calculate F/grad(F)/hess(F)
-     */
-    state->optstate.f = (double)(0);
-    for(i=0; i<=k-1; i++)
-    {
-        state->optstate.g.ptr.p_double[i] = (double)(0);
-    }
-    for(i=0; i<=k-1; i++)
-    {
-        for(j=0; j<=k-1; j++)
-        {
-            state->optstate.h.ptr.pp_double[i][j] = (double)(0);
-        }
-    }
-    i = 0;
-lbl_46:
-    if( i>n-1 )
-    {
-        goto lbl_48;
-    }
-    ae_v_move(&state->c.ptr.p_double[0], 1, &state->optstate.x.ptr.p_double[0], 1, ae_v_len(0,k-1));
-    ae_v_move(&state->x.ptr.p_double[0], 1, &state->taskx.ptr.pp_double[i][0], 1, ae_v_len(0,m-1));
-    state->pointindex = i;
-    lsfit_lsfitclearrequestfields(state, _state);
-    state->needfgh = ae_true;
-    state->rstate.stage = 7;
-    goto lbl_rcomm;
-lbl_7:
-    state->needfgh = ae_false;
-    vv = state->wcur.ptr.p_double[i];
-    state->optstate.f = state->optstate.f+ae_sqr(vv*(state->f-state->tasky.ptr.p_double[i]), _state);
-    v = ae_sqr(vv, _state)*(double)2*(state->f-state->tasky.ptr.p_double[i]);
-    ae_v_addd(&state->optstate.g.ptr.p_double[0], 1, &state->g.ptr.p_double[0], 1, ae_v_len(0,k-1), v);
-    for(j=0; j<=k-1; j++)
-    {
-        v = (double)2*ae_sqr(vv, _state)*state->g.ptr.p_double[j];
-        ae_v_addd(&state->optstate.h.ptr.pp_double[j][0], 1, &state->g.ptr.p_double[0], 1, ae_v_len(0,k-1), v);
-        v = (double)2*ae_sqr(vv, _state)*(state->f-state->tasky.ptr.p_double[i]);
-        ae_v_addd(&state->optstate.h.ptr.pp_double[j][0], 1, &state->h.ptr.pp_double[j][0], 1, ae_v_len(0,k-1), v);
-    }
-    i = i+1;
-    goto lbl_46;
-lbl_48:
-    goto lbl_22;
-lbl_44:
+    goto lbl_57;
+lbl_59:
+    goto lbl_36;
+lbl_55:
     if( !state->optstate.xupdated )
     {
-        goto lbl_49;
+        goto lbl_60;
     }
     
     /*
@@ -5112,14 +5069,188 @@ lbl_44:
     state->f = state->optstate.f;
     lsfit_lsfitclearrequestfields(state, _state);
     state->xupdated = ae_true;
-    state->rstate.stage = 8;
+    state->rstate.stage = 10;
     goto lbl_rcomm;
-lbl_8:
+lbl_10:
     state->xupdated = ae_false;
-    goto lbl_22;
-lbl_49:
-    goto lbl_22;
-lbl_23:
+    goto lbl_36;
+lbl_60:
+lbl_38:
+    if( state->protocolversion!=2 )
+    {
+        goto lbl_62;
+    }
+    if( state->optstate.requesttype!=-1 )
+    {
+        goto lbl_64;
+    }
+    
+    /*
+     * Report current point
+     */
+    state->requesttype = -1;
+    state->queryvars = k;
+    state->reportf = state->optstate.reportf;
+    rcopyallocv(k, &state->optstate.reportx, &state->reportx, _state);
+    state->rstate.stage = 11;
+    goto lbl_rcomm;
+lbl_11:
+    goto lbl_36;
+lbl_64:
+    if( state->optstate.requesttype!=2 )
+    {
+        goto lbl_66;
+    }
+    
+    /*
+     * Request a batch of dense derivatives, repack request by MinLM (one query for N
+     * functions) to the format used by LSFit (N single-function queries)
+     */
+    ae_assert(state->optstate.querysize==1, "LSFIT: integrity check 5248 failed", _state);
+    ae_assert(state->optstate.queryfuncs==n, "LSFIT: integrity check 5249 failed", _state);
+    ae_assert(state->optstate.queryvars==k, "LSFIT: integrity check 5250 failed", _state);
+    ae_assert(state->optstate.querydim==0, "LSFIT: integrity check 5251 failed", _state);
+    state->requesttype = 2;
+    state->querysize = n;
+    state->queryfuncs = 1;
+    state->queryvars = k;
+    state->querydim = m;
+    rallocv(n*(k+m), &state->querydata, _state);
+    offs = 0;
+    for(i=0; i<=n-1; i++)
+    {
+        for(j=0; j<=k-1; j++)
+        {
+            state->querydata.ptr.p_double[offs] = state->optstate.querydata.ptr.p_double[j];
+            offs = offs+1;
+        }
+        for(j=0; j<=m-1; j++)
+        {
+            state->querydata.ptr.p_double[offs] = state->taskx.ptr.pp_double[i][j];
+            offs = offs+1;
+        }
+    }
+    rallocv(n, &state->replyfi, _state);
+    rallocv(n*k, &state->replydj, _state);
+    state->rstate.stage = 12;
+    goto lbl_rcomm;
+lbl_12:
+    
+    /*
+     * Handle reply: replace f by weight*(f-y), scale gradient
+     */
+    state->optstate.requesttype = 0;
+    rcopyv(n, &state->replyfi, &state->optstate.replyfi, _state);
+    raddv(n, -1.0, &state->tasky, &state->optstate.replyfi, _state);
+    rmergemulv(n, &state->wcur, &state->optstate.replyfi, _state);
+    rcopyv(n*k, &state->replydj, &state->optstate.replydj, _state);
+    rmergemulv(n*k, &state->tmpwk, &state->optstate.replydj, _state);
+    goto lbl_36;
+lbl_66:
+    if( state->optstate.requesttype!=3 )
+    {
+        goto lbl_68;
+    }
+    
+    /*
+     * Numerical differentiation request: repack request by MinLM (one query for N
+     * functions) to the format used by LSFit (N single-function queries)
+     */
+    ae_assert(state->optstate.querysize==1, "LSFIT: integrity check 3348 failed", _state);
+    ae_assert(state->optstate.queryfuncs==n, "LSFIT: integrity check 3349 failed", _state);
+    ae_assert(state->optstate.queryvars==k, "LSFIT: integrity check 3350 failed", _state);
+    ae_assert(state->optstate.querydim==0, "LSFIT: integrity check 3351 failed", _state);
+    ae_assert(state->optstate.queryformulasize>=2, "LSFIT: integrity check 3352 failed", _state);
+    state->requesttype = 3;
+    state->querysize = n;
+    state->queryfuncs = 1;
+    state->queryvars = k;
+    state->querydim = m;
+    state->queryformulasize = state->optstate.queryformulasize;
+    rallocv(n*(k+m+k*2*state->queryformulasize), &state->querydata, _state);
+    offs = 0;
+    for(i=0; i<=n-1; i++)
+    {
+        for(j=0; j<=k-1; j++)
+        {
+            state->querydata.ptr.p_double[offs] = state->optstate.querydata.ptr.p_double[j];
+            offs = offs+1;
+        }
+        for(j=0; j<=m-1; j++)
+        {
+            state->querydata.ptr.p_double[offs] = state->taskx.ptr.pp_double[i][j];
+            offs = offs+1;
+        }
+        for(j=0; j<=k*2*state->queryformulasize-1; j++)
+        {
+            state->querydata.ptr.p_double[offs] = state->optstate.querydata.ptr.p_double[k+j];
+            offs = offs+1;
+        }
+    }
+    rallocv(n, &state->replyfi, _state);
+    rallocv(n*k, &state->replydj, _state);
+    state->rstate.stage = 13;
+    goto lbl_rcomm;
+lbl_13:
+    
+    /*
+     * Handle reply: replace f by weight*(f-y), scale gradient
+     */
+    state->optstate.requesttype = 0;
+    rcopyv(n, &state->replyfi, &state->optstate.replyfi, _state);
+    raddv(n, -1.0, &state->tasky, &state->optstate.replyfi, _state);
+    rmergemulv(n, &state->wcur, &state->optstate.replyfi, _state);
+    rcopyv(n*k, &state->replydj, &state->optstate.replydj, _state);
+    rmergemulv(n*k, &state->tmpwk, &state->optstate.replydj, _state);
+    goto lbl_36;
+lbl_68:
+    if( state->optstate.requesttype!=4 )
+    {
+        goto lbl_70;
+    }
+    
+    /*
+     * Request a batch of target values, repack request by MinLM (one query for N
+     * functions) to the format used by LSFit (N single-function queries)
+     */
+    ae_assert(state->optstate.querysize==1, "LSFIT: integrity check 5248 failed", _state);
+    ae_assert(state->optstate.queryfuncs==n, "LSFIT: integrity check 5249 failed", _state);
+    ae_assert(state->optstate.queryvars==k, "LSFIT: integrity check 5250 failed", _state);
+    ae_assert(state->optstate.querydim==0, "LSFIT: integrity check 5251 failed", _state);
+    state->requesttype = 4;
+    state->querysize = n;
+    state->queryfuncs = 1;
+    state->queryvars = k;
+    state->querydim = m;
+    rallocv(n*(k+m), &state->querydata, _state);
+    offs = 0;
+    for(i=0; i<=n-1; i++)
+    {
+        for(j=0; j<=k-1; j++)
+        {
+            state->querydata.ptr.p_double[offs] = state->optstate.querydata.ptr.p_double[j];
+            offs = offs+1;
+        }
+        for(j=0; j<=m-1; j++)
+        {
+            state->querydata.ptr.p_double[offs] = state->taskx.ptr.pp_double[i][j];
+            offs = offs+1;
+        }
+    }
+    rallocv(n, &state->replyfi, _state);
+    state->rstate.stage = 14;
+    goto lbl_rcomm;
+lbl_14:
+    state->optstate.requesttype = 0;
+    rcopyv(n, &state->replyfi, &state->optstate.replyfi, _state);
+    raddv(n, -1.0, &state->tasky, &state->optstate.replyfi, _state);
+    rmergemulv(n, &state->wcur, &state->optstate.replyfi, _state);
+    goto lbl_36;
+lbl_70:
+lbl_62:
+    ae_assert(ae_false, "LSFIT: integrity check 2012 failed (unexpected request)", _state);
+    goto lbl_36;
+lbl_37:
     
     /*
      * Extract results
@@ -5138,7 +5269,7 @@ lbl_23:
      */
     if( state->repterminationtype<=0 )
     {
-        goto lbl_51;
+        goto lbl_72;
     }
     
     /*
@@ -5149,36 +5280,81 @@ lbl_23:
     state->repavgerror = (double)(0);
     state->repavgrelerror = (double)(0);
     state->repmaxerror = (double)(0);
-    relcnt = (double)(0);
+    if( state->protocolversion!=1 )
+    {
+        goto lbl_74;
+    }
+    
+    /*
+     * Get target values using V1 protocol, load them to ReplyFi (it is not used anyway)
+     */
+    rallocv(n, &state->replyfi, _state);
     i = 0;
-lbl_53:
+lbl_76:
     if( i>n-1 )
     {
-        goto lbl_55;
+        goto lbl_78;
     }
     ae_v_move(&state->c.ptr.p_double[0], 1, &state->c1.ptr.p_double[0], 1, ae_v_len(0,k-1));
     ae_v_move(&state->x.ptr.p_double[0], 1, &state->taskx.ptr.pp_double[i][0], 1, ae_v_len(0,m-1));
     state->pointindex = i;
     lsfit_lsfitclearrequestfields(state, _state);
     state->needf = ae_true;
-    state->rstate.stage = 9;
+    state->rstate.stage = 15;
     goto lbl_rcomm;
-lbl_9:
+lbl_15:
     state->needf = ae_false;
-    v = state->f;
-    vv = state->wcur.ptr.p_double[i];
-    state->reprmserror = state->reprmserror+ae_sqr(v-state->tasky.ptr.p_double[i], _state);
-    state->repwrmserror = state->repwrmserror+ae_sqr(vv*(v-state->tasky.ptr.p_double[i]), _state);
-    state->repavgerror = state->repavgerror+ae_fabs(v-state->tasky.ptr.p_double[i], _state);
-    if( ae_fp_neq(state->tasky.ptr.p_double[i],(double)(0)) )
-    {
-        state->repavgrelerror = state->repavgrelerror+ae_fabs(v-state->tasky.ptr.p_double[i], _state)/ae_fabs(state->tasky.ptr.p_double[i], _state);
-        relcnt = relcnt+(double)1;
-    }
-    state->repmaxerror = ae_maxreal(state->repmaxerror, ae_fabs(v-state->tasky.ptr.p_double[i], _state), _state);
+    state->replyfi.ptr.p_double[i] = state->f;
     i = i+1;
-    goto lbl_53;
-lbl_55:
+    goto lbl_76;
+lbl_78:
+    goto lbl_75;
+lbl_74:
+    
+    /*
+     * Get target values using V2 protocol
+     */
+    ae_assert(state->protocolversion==2, "LSFIT: integrity check 7320 failed", _state);
+    state->requesttype = 4;
+    state->querysize = n;
+    state->queryfuncs = 1;
+    state->queryvars = k;
+    state->querydim = m;
+    rallocv(n*(k+m), &state->querydata, _state);
+    offs = 0;
+    for(i=0; i<=n-1; i++)
+    {
+        for(j=0; j<=k-1; j++)
+        {
+            state->querydata.ptr.p_double[offs] = state->c1.ptr.p_double[j];
+            offs = offs+1;
+        }
+        for(j=0; j<=m-1; j++)
+        {
+            state->querydata.ptr.p_double[offs] = state->taskx.ptr.pp_double[i][j];
+            offs = offs+1;
+        }
+    }
+    rallocv(n, &state->replyfi, _state);
+    state->rstate.stage = 16;
+    goto lbl_rcomm;
+lbl_16:
+lbl_75:
+    relcnt = (double)(0);
+    for(i=0; i<=n-1; i++)
+    {
+        v = state->replyfi.ptr.p_double[i];
+        vv = state->wcur.ptr.p_double[i];
+        state->reprmserror = state->reprmserror+ae_sqr(v-state->tasky.ptr.p_double[i], _state);
+        state->repwrmserror = state->repwrmserror+ae_sqr(vv*(v-state->tasky.ptr.p_double[i]), _state);
+        state->repavgerror = state->repavgerror+ae_fabs(v-state->tasky.ptr.p_double[i], _state);
+        if( ae_fp_neq(state->tasky.ptr.p_double[i],(double)(0)) )
+        {
+            state->repavgrelerror = state->repavgrelerror+ae_fabs(v-state->tasky.ptr.p_double[i], _state)/ae_fabs(state->tasky.ptr.p_double[i], _state);
+            relcnt = relcnt+(double)1;
+        }
+        state->repmaxerror = ae_maxreal(state->repmaxerror, ae_fabs(v-state->tasky.ptr.p_double[i], _state), _state);
+    }
     state->reprmserror = ae_sqrt(state->reprmserror/(double)n, _state);
     state->repwrmserror = ae_sqrt(state->repwrmserror/(double)n, _state);
     state->repavgerror = state->repavgerror/(double)n;
@@ -5195,31 +5371,39 @@ lbl_55:
     rvectorsetlengthatleast(&state->tmp, k, _state);
     if( ae_fp_less_eq(state->diffstep,(double)(0)) )
     {
-        goto lbl_56;
+        goto lbl_79;
     }
     
     /*
      * Compute Jacobian by means of numerical differentiation
      */
+    if( state->protocolversion!=1 )
+    {
+        goto lbl_81;
+    }
+    
+    /*
+     * Use V1 protocol
+     */
     lsfit_lsfitclearrequestfields(state, _state);
     state->needf = ae_true;
     i = 0;
-lbl_58:
+lbl_83:
     if( i>n-1 )
     {
-        goto lbl_60;
+        goto lbl_85;
     }
     ae_v_move(&state->x.ptr.p_double[0], 1, &state->taskx.ptr.pp_double[i][0], 1, ae_v_len(0,m-1));
     state->pointindex = i;
-    state->rstate.stage = 10;
+    state->rstate.stage = 17;
     goto lbl_rcomm;
-lbl_10:
+lbl_17:
     state->tmpf.ptr.p_double[i] = state->f;
     j = 0;
-lbl_61:
+lbl_86:
     if( j>k-1 )
     {
-        goto lbl_63;
+        goto lbl_88;
     }
     v = state->c.ptr.p_double[j];
     lx = v-state->diffstep*state->s.ptr.p_double[j];
@@ -5228,9 +5412,9 @@ lbl_61:
     {
         state->c.ptr.p_double[j] = ae_maxreal(state->c.ptr.p_double[j], state->bndl.ptr.p_double[j], _state);
     }
-    state->rstate.stage = 11;
+    state->rstate.stage = 18;
     goto lbl_rcomm;
-lbl_11:
+lbl_18:
     lf = state->f;
     rx = v+state->diffstep*state->s.ptr.p_double[j];
     state->c.ptr.p_double[j] = rx;
@@ -5238,9 +5422,9 @@ lbl_11:
     {
         state->c.ptr.p_double[j] = ae_minreal(state->c.ptr.p_double[j], state->bndu.ptr.p_double[j], _state);
     }
-    state->rstate.stage = 12;
+    state->rstate.stage = 19;
     goto lbl_rcomm;
-lbl_12:
+lbl_19:
     rf = state->f;
     state->c.ptr.p_double[j] = v;
     if( ae_fp_neq(rx,lx) )
@@ -5252,47 +5436,166 @@ lbl_12:
         state->tmpjac.ptr.pp_double[i][j] = (double)(0);
     }
     j = j+1;
-    goto lbl_61;
-lbl_63:
+    goto lbl_86;
+lbl_88:
     i = i+1;
-    goto lbl_58;
-lbl_60:
+    goto lbl_83;
+lbl_85:
     state->needf = ae_false;
-    goto lbl_57;
-lbl_56:
+    goto lbl_82;
+lbl_81:
+    
+    /*
+     * Use V2 protocol
+     */
+    state->requesttype = 3;
+    state->querysize = n;
+    state->queryfuncs = 1;
+    state->queryvars = k;
+    state->querydim = m;
+    state->queryformulasize = 2;
+    rallocv(n*(k+m+k*2*state->queryformulasize), &state->querydata, _state);
+    offs = 0;
+    for(i=0; i<=n-1; i++)
+    {
+        for(j=0; j<=k-1; j++)
+        {
+            state->querydata.ptr.p_double[offs] = state->c1.ptr.p_double[j];
+            offs = offs+1;
+        }
+        for(j=0; j<=m-1; j++)
+        {
+            state->querydata.ptr.p_double[offs] = state->taskx.ptr.pp_double[i][j];
+            offs = offs+1;
+        }
+        for(j=0; j<=k-1; j++)
+        {
+            
+            /*
+             * We guard X[J] from leaving [BndL,BndU].
+             * In case BndL=BndU, we assume that derivative in this direction is zero.
+             */
+            v = state->diffstep*state->s.ptr.p_double[j];
+            v1 = state->c1.ptr.p_double[j]-v;
+            if( ae_isfinite(state->bndl.ptr.p_double[j], _state)&&v1<state->bndl.ptr.p_double[j] )
+            {
+                v1 = state->bndl.ptr.p_double[j];
+            }
+            v2 = state->c1.ptr.p_double[j]+v;
+            if( ae_isfinite(state->bndu.ptr.p_double[j], _state)&&v2>state->bndu.ptr.p_double[j] )
+            {
+                v2 = state->bndu.ptr.p_double[j];
+            }
+            v = (double)(0);
+            if( v1<v2 )
+            {
+                v = (double)1/(v2-v1);
+            }
+            state->querydata.ptr.p_double[offs+0*2+0] = v1;
+            state->querydata.ptr.p_double[offs+0*2+1] = -v;
+            state->querydata.ptr.p_double[offs+1*2+0] = v2;
+            state->querydata.ptr.p_double[offs+1*2+1] = v;
+            offs = offs+2*state->queryformulasize;
+        }
+    }
+    rallocv(n, &state->replyfi, _state);
+    rallocv(n*k, &state->replydj, _state);
+    state->rstate.stage = 20;
+    goto lbl_rcomm;
+lbl_20:
+    rcopyv(n, &state->replyfi, &state->tmpf, _state);
+    for(i=0; i<=n-1; i++)
+    {
+        for(j=0; j<=k-1; j++)
+        {
+            state->tmpjac.ptr.pp_double[i][j] = state->replydj.ptr.p_double[i*k+j];
+        }
+    }
+lbl_82:
+    goto lbl_80;
+lbl_79:
     
     /*
      * Jacobian is calculated with user-provided analytic gradient
      */
+    if( state->protocolversion!=1 )
+    {
+        goto lbl_89;
+    }
+    
+    /*
+     * Use V1 protocol
+     */
     lsfit_lsfitclearrequestfields(state, _state);
     state->needfg = ae_true;
     i = 0;
-lbl_64:
+lbl_91:
     if( i>n-1 )
     {
-        goto lbl_66;
+        goto lbl_93;
     }
     ae_v_move(&state->x.ptr.p_double[0], 1, &state->taskx.ptr.pp_double[i][0], 1, ae_v_len(0,m-1));
     state->pointindex = i;
-    state->rstate.stage = 13;
+    state->rstate.stage = 21;
     goto lbl_rcomm;
-lbl_13:
+lbl_21:
     state->tmpf.ptr.p_double[i] = state->f;
     for(j=0; j<=k-1; j++)
     {
         state->tmpjac.ptr.pp_double[i][j] = state->g.ptr.p_double[j];
     }
     i = i+1;
-    goto lbl_64;
-lbl_66:
+    goto lbl_91;
+lbl_93:
     state->needfg = ae_false;
-lbl_57:
+    goto lbl_90;
+lbl_89:
+    
+    /*
+     * Use V2 protocol
+     */
+    ae_assert(state->protocolversion==2, "LSFIT: integrity check 7321 failed", _state);
+    state->requesttype = 2;
+    state->querysize = n;
+    state->queryfuncs = 1;
+    state->queryvars = k;
+    state->querydim = m;
+    rallocv(n*(k+m), &state->querydata, _state);
+    offs = 0;
+    for(i=0; i<=n-1; i++)
+    {
+        for(j=0; j<=k-1; j++)
+        {
+            state->querydata.ptr.p_double[offs] = state->c1.ptr.p_double[j];
+            offs = offs+1;
+        }
+        for(j=0; j<=m-1; j++)
+        {
+            state->querydata.ptr.p_double[offs] = state->taskx.ptr.pp_double[i][j];
+            offs = offs+1;
+        }
+    }
+    rallocv(n, &state->replyfi, _state);
+    rallocv(n*k, &state->replydj, _state);
+    state->rstate.stage = 22;
+    goto lbl_rcomm;
+lbl_22:
+    rcopyv(n, &state->replyfi, &state->tmpf, _state);
+    for(i=0; i<=n-1; i++)
+    {
+        for(j=0; j<=k-1; j++)
+        {
+            state->tmpjac.ptr.pp_double[i][j] = state->replydj.ptr.p_double[i*k+j];
+        }
+    }
+lbl_90:
+lbl_80:
     for(i=0; i<=k-1; i++)
     {
         state->tmp.ptr.p_double[i] = 0.0;
     }
     lsfit_estimateerrors(&state->tmpjac, &state->tmpf, &state->tasky, &state->wcur, &state->tmp, &state->s, n, k, &state->rep, &state->tmpjacw, 0, _state);
-lbl_51:
+lbl_72:
     result = ae_false;
     return result;
     
@@ -5307,6 +5610,7 @@ lbl_rcomm:
     state->rstate.ia.ptr.p_int[3] = i;
     state->rstate.ia.ptr.p_int[4] = j;
     state->rstate.ia.ptr.p_int[5] = j1;
+    state->rstate.ia.ptr.p_int[6] = offs;
     state->rstate.ra.ptr.p_double[0] = lx;
     state->rstate.ra.ptr.p_double[1] = lf;
     state->rstate.ra.ptr.p_double[2] = ld;
@@ -5315,7 +5619,9 @@ lbl_rcomm:
     state->rstate.ra.ptr.p_double[5] = rd;
     state->rstate.ra.ptr.p_double[6] = v;
     state->rstate.ra.ptr.p_double[7] = vv;
-    state->rstate.ra.ptr.p_double[8] = relcnt;
+    state->rstate.ra.ptr.p_double[8] = v1;
+    state->rstate.ra.ptr.p_double[9] = v2;
+    state->rstate.ra.ptr.p_double[10] = relcnt;
     return result;
 }
 
@@ -5500,6 +5806,28 @@ void lsfitsetgradientcheck(lsfitstate* state,
     ae_assert(ae_isfinite(teststep, _state), "LSFitSetGradientCheck: TestStep contains NaN or Infinite", _state);
     ae_assert(ae_fp_greater_eq(teststep,(double)(0)), "LSFitSetGradientCheck: invalid argument TestStep(TestStep<0)", _state);
     state->teststep = teststep;
+}
+
+
+/*************************************************************************
+Set V1 reverse communication protocol
+*************************************************************************/
+void lsfitsetprotocolv1(lsfitstate* state, ae_state *_state)
+{
+
+
+    state->protocolversion = 1;
+}
+
+
+/*************************************************************************
+Set V2 reverse communication protocol
+*************************************************************************/
+void lsfitsetprotocolv2(lsfitstate* state, ae_state *_state)
+{
+
+
+    state->protocolversion = 2;
 }
 
 
@@ -6594,9 +6922,9 @@ static void lsfit_lsfitclearrequestfields(lsfitstate* state,
 {
 
 
+    ae_assert(state->protocolversion==1, "LSFIT: unexpected protocol", _state);
     state->needf = ae_false;
     state->needfg = ae_false;
-    state->needfgh = ae_false;
     state->xupdated = ae_false;
 }
 
@@ -7767,8 +8095,18 @@ void _lsfitstate_init(void* _p, ae_state *_state, ae_bool make_automatic)
     ae_vector_init(&p->x, 0, DT_REAL, _state, make_automatic);
     ae_vector_init(&p->c, 0, DT_REAL, _state, make_automatic);
     ae_vector_init(&p->g, 0, DT_REAL, _state, make_automatic);
-    ae_matrix_init(&p->h, 0, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->reportx, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->querydata, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->replyfi, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->replydj, 0, DT_REAL, _state, make_automatic);
+    _sparsematrix_init(&p->replysj, _state, make_automatic);
+    ae_vector_init(&p->tmpx1, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->tmpc1, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->tmpf1, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->tmpg1, 0, DT_REAL, _state, make_automatic);
+    ae_matrix_init(&p->tmpj1, 0, 0, DT_REAL, _state, make_automatic);
     ae_vector_init(&p->wcur, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->tmpwk, 0, DT_REAL, _state, make_automatic);
     ae_vector_init(&p->tmpct, 0, DT_INT, _state, make_automatic);
     ae_vector_init(&p->tmp, 0, DT_REAL, _state, make_automatic);
     ae_vector_init(&p->tmpf, 0, DT_REAL, _state, make_automatic);
@@ -7785,6 +8123,7 @@ void _lsfitstate_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bo
 {
     lsfitstate       *dst = (lsfitstate*)_dst;
     const lsfitstate *src = (const lsfitstate*)_src;
+    dst->protocolversion = src->protocolversion;
     dst->optalgo = src->optalgo;
     dst->m = src->m;
     dst->k = src->k;
@@ -7812,14 +8151,30 @@ void _lsfitstate_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bo
     dst->xupdated = src->xupdated;
     dst->needf = src->needf;
     dst->needfg = src->needfg;
-    dst->needfgh = src->needfgh;
     dst->pointindex = src->pointindex;
     ae_vector_init_copy(&dst->x, &src->x, _state, make_automatic);
     ae_vector_init_copy(&dst->c, &src->c, _state, make_automatic);
     dst->f = src->f;
     ae_vector_init_copy(&dst->g, &src->g, _state, make_automatic);
-    ae_matrix_init_copy(&dst->h, &src->h, _state, make_automatic);
+    dst->requesttype = src->requesttype;
+    ae_vector_init_copy(&dst->reportx, &src->reportx, _state, make_automatic);
+    dst->reportf = src->reportf;
+    dst->querysize = src->querysize;
+    dst->queryfuncs = src->queryfuncs;
+    dst->queryvars = src->queryvars;
+    dst->querydim = src->querydim;
+    dst->queryformulasize = src->queryformulasize;
+    ae_vector_init_copy(&dst->querydata, &src->querydata, _state, make_automatic);
+    ae_vector_init_copy(&dst->replyfi, &src->replyfi, _state, make_automatic);
+    ae_vector_init_copy(&dst->replydj, &src->replydj, _state, make_automatic);
+    _sparsematrix_init_copy(&dst->replysj, &src->replysj, _state, make_automatic);
+    ae_vector_init_copy(&dst->tmpx1, &src->tmpx1, _state, make_automatic);
+    ae_vector_init_copy(&dst->tmpc1, &src->tmpc1, _state, make_automatic);
+    ae_vector_init_copy(&dst->tmpf1, &src->tmpf1, _state, make_automatic);
+    ae_vector_init_copy(&dst->tmpg1, &src->tmpg1, _state, make_automatic);
+    ae_matrix_init_copy(&dst->tmpj1, &src->tmpj1, _state, make_automatic);
     ae_vector_init_copy(&dst->wcur, &src->wcur, _state, make_automatic);
+    ae_vector_init_copy(&dst->tmpwk, &src->tmpwk, _state, make_automatic);
     ae_vector_init_copy(&dst->tmpct, &src->tmpct, _state, make_automatic);
     ae_vector_init_copy(&dst->tmp, &src->tmp, _state, make_automatic);
     ae_vector_init_copy(&dst->tmpf, &src->tmpf, _state, make_automatic);
@@ -7859,8 +8214,18 @@ void _lsfitstate_clear(void* _p)
     ae_vector_clear(&p->x);
     ae_vector_clear(&p->c);
     ae_vector_clear(&p->g);
-    ae_matrix_clear(&p->h);
+    ae_vector_clear(&p->reportx);
+    ae_vector_clear(&p->querydata);
+    ae_vector_clear(&p->replyfi);
+    ae_vector_clear(&p->replydj);
+    _sparsematrix_clear(&p->replysj);
+    ae_vector_clear(&p->tmpx1);
+    ae_vector_clear(&p->tmpc1);
+    ae_vector_clear(&p->tmpf1);
+    ae_vector_clear(&p->tmpg1);
+    ae_matrix_clear(&p->tmpj1);
     ae_vector_clear(&p->wcur);
+    ae_vector_clear(&p->tmpwk);
     ae_vector_clear(&p->tmpct);
     ae_vector_clear(&p->tmp);
     ae_vector_clear(&p->tmpf);
@@ -7889,8 +8254,18 @@ void _lsfitstate_destroy(void* _p)
     ae_vector_destroy(&p->x);
     ae_vector_destroy(&p->c);
     ae_vector_destroy(&p->g);
-    ae_matrix_destroy(&p->h);
+    ae_vector_destroy(&p->reportx);
+    ae_vector_destroy(&p->querydata);
+    ae_vector_destroy(&p->replyfi);
+    ae_vector_destroy(&p->replydj);
+    _sparsematrix_destroy(&p->replysj);
+    ae_vector_destroy(&p->tmpx1);
+    ae_vector_destroy(&p->tmpc1);
+    ae_vector_destroy(&p->tmpf1);
+    ae_vector_destroy(&p->tmpg1);
+    ae_matrix_destroy(&p->tmpj1);
     ae_vector_destroy(&p->wcur);
+    ae_vector_destroy(&p->tmpwk);
     ae_vector_destroy(&p->tmpct);
     ae_vector_destroy(&p->tmp);
     ae_vector_destroy(&p->tmpf);

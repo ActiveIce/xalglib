@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -44,12 +44,12 @@
 #include "rcond.h"
 #include "xblas.h"
 #include "directdensesolvers.h"
-#include "directsparsesolvers.h"
 #include "fbls.h"
 #include "iterativesparse.h"
 #include "lincg.h"
 #include "normestimator.h"
 #include "linlsqr.h"
+#include "directsparsesolvers.h"
 #include "linmin.h"
 #include "nleq.h"
 #include "optguardapi.h"
@@ -65,13 +65,21 @@
 #include "minbleic.h"
 #include "qpbleicsolver.h"
 #include "vipmsolver.h"
+#include "ipm2solver.h"
 #include "minqp.h"
+#include "nlcfsqp.h"
 #include "minlm.h"
+#include "nlcaul.h"
 #include "mincg.h"
+#include "dfgenmod.h"
 #include "nlcsqp.h"
+#include "ssgd.h"
+#include "diffevo.h"
+#include "mindf.h"
 #include "lpqppresolve.h"
 #include "reviseddualsimplex.h"
 #include "minlp.h"
+#include "nls.h"
 #include "nlcslp.h"
 #include "minnlc.h"
 #include "monbi.h"

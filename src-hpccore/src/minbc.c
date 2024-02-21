@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -2358,6 +2358,17 @@ void minbcrequesttermination(minbcstate* state, ae_state *_state)
 
 
 /*************************************************************************
+Set V1 reverse communication protocol
+*************************************************************************/
+void minbcsetprotocolv1(minbcstate* state, ae_state *_state)
+{
+
+
+    state->protocolversion = 1;
+}
+
+
+/*************************************************************************
 Clears request fileds (to be sure that we don't forget to clear something)
 *************************************************************************/
 static void minbc_clearrequestfields(minbcstate* state, ae_state *_state)
@@ -2394,6 +2405,7 @@ static void minbc_minbcinitinternal(ae_int_t n,
     /*
      * Initialize
      */
+    state->protocolversion = 1;
     state->teststep = (double)(0);
     state->smoothnessguardlevel = 0;
     smoothnessmonitorinit(&state->smonitor, &state->s, 0, 0, ae_false, _state);
@@ -2527,6 +2539,7 @@ void _minbcstate_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bo
     ae_vector_init_copy(&dst->s, &src->s, _state, make_automatic);
     dst->prectype = src->prectype;
     ae_vector_init_copy(&dst->diagh, &src->diagh, _state, make_automatic);
+    dst->protocolversion = src->protocolversion;
     ae_vector_init_copy(&dst->x, &src->x, _state, make_automatic);
     dst->f = src->f;
     ae_vector_init_copy(&dst->g, &src->g, _state, make_automatic);

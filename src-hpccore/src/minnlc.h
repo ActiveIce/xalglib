@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -67,7 +67,10 @@
 #include "directdensesolvers.h"
 #include "lpqpserv.h"
 #include "vipmsolver.h"
+#include "ipm2solver.h"
 #include "nlcsqp.h"
+#include "nlcfsqp.h"
+#include "nlcaul.h"
 
 
 /*$ Declarations $*/
@@ -83,12 +86,8 @@ typedef struct
     double stabilizingpoint;
     double initialinequalitymultiplier;
     ae_int_t solvertype;
-    ae_int_t prectype;
-    ae_int_t updatefreq;
-    double rho;
     ae_int_t n;
-    double epsx;
-    ae_int_t maxits;
+    nlpstoppingcriteria criteria;
     ae_int_t aulitscnt;
     ae_bool xrep;
     double stpmax;
@@ -103,8 +102,10 @@ typedef struct
     ae_int_t nic;
     ae_matrix cleic;
     ae_vector lcsrcidx;
-    ae_int_t ng;
-    ae_int_t nh;
+    ae_int_t nnlc;
+    ae_vector nl;
+    ae_vector nu;
+    ae_int_t protocolversion;
     ae_vector x;
     double f;
     ae_vector fi;
@@ -112,6 +113,23 @@ typedef struct
     ae_bool needfij;
     ae_bool needfi;
     ae_bool xupdated;
+    ae_int_t requesttype;
+    ae_vector reportx;
+    double reportf;
+    ae_int_t querysize;
+    ae_int_t queryfuncs;
+    ae_int_t queryvars;
+    ae_int_t querydim;
+    ae_int_t queryformulasize;
+    ae_vector querydata;
+    ae_vector replyfi;
+    ae_vector replydj;
+    sparsematrix replysj;
+    ae_vector tmpx1;
+    ae_vector tmpc1;
+    ae_vector tmpf1;
+    ae_vector tmpg1;
+    ae_matrix tmpj1;
     rcommstate rstate;
     rcommstate rstateaul;
     rcommstate rstateslp;
@@ -140,14 +158,16 @@ typedef struct
     ae_vector gk1;
     double gammak;
     ae_bool xkpresent;
-    minlbfgsstate auloptimizer;
-    minlbfgsreport aulreport;
-    ae_vector nubc;
-    ae_vector nulc;
-    ae_vector nunlc;
+    ae_vector tmpspaf;
+    ae_vector tmpsptolj;
+    minaulstate aulsolverstate;
+    sparsematrix sparsea;
+    ae_vector al;
+    ae_vector au;
     ae_bool userterminationneeded;
     minslpstate slpsolverstate;
     minsqpstate sqpsolverstate;
+    minfsqpstate fsqpsolverstate;
     ae_int_t smoothnessguardlevel;
     smoothnessmonitor smonitor;
     ae_vector lastscaleused;
@@ -162,6 +182,11 @@ typedef struct
     double repnlcerr;
     ae_int_t repnlcidx;
     ae_int_t repdbgphase0its;
+    ae_vector nlcidx;
+    ae_vector nlcmul;
+    ae_vector nlcadd;
+    ae_int_t nlcnlec;
+    ae_int_t nlcnlic;
 } minnlcstate;
 
 
@@ -198,7 +223,8 @@ TerminationType field contains completion code, which can be either:
 
 === FAILURE CODE ===
   -8    internal integrity control detected  infinite  or  NAN  values  in
-        function/gradient. Abnormal termination signaled.
+        function/gradient, recovery was impossible.  Abnormal  termination
+        signaled.
   -3    box  constraints  are  infeasible.  Note: infeasibility of non-box
         constraints does NOT trigger emergency  completion;  you  have  to
         examine  bcerr/lcerr/nlcerr   to  detect   possibly   inconsistent
@@ -212,6 +238,12 @@ TerminationType field contains completion code, which can be either:
         X contains best point found so far.
    8    user requested algorithm termination via minnlcrequesttermination(),
         last accepted point is returned
+                       
+=== ADDITIONAL CODES ===
+* +800      if   during   algorithm   execution   the   solver encountered
+            NAN/INF values in the target or  constraints  but  managed  to
+            recover by reducing trust region radius,  the  solver  returns
+            one of SUCCESS codes but adds +800 to the code.
         
 Other fields of this structure are not documented and should not be used!
 *************************************************************************/
@@ -237,8 +269,8 @@ typedef struct
                   NONLINEARLY  CONSTRAINED  OPTIMIZATION
 
 DESCRIPTION:
-The  subroutine  minimizes  function   F(x)  of N arguments subject to any
-combination of:
+The  subroutine  minimizes a function  F(x)  of N arguments subject to the
+any combination of the:
 * bound constraints
 * linear inequality constraints
 * linear equality constraints
@@ -246,52 +278,36 @@ combination of:
 * nonlinear inequality constraints Hi(x)<=0
 
 REQUIREMENTS:
-* user must provide function value and gradient for F(), H(), G()
-* starting point X0 must be feasible or not too far away from the feasible
-  set
+* the user must provide callback calculating F(), H(), G()  -  either both
+  value and gradient, or merely a value (numerical differentiation will be
+  used)
 * F(), G(), H() are continuously differentiable on the  feasible  set  and
   its neighborhood
-* nonlinear constraints G() and H() must have non-zero gradient at  G(x)=0
-  and at H(x)=0. Say, constraint like x^2>=1 is supported, but x^2>=0   is
-  NOT supported.
+* starting point X0, which can be infeasible
 
 USAGE:
 
-Constrained optimization if far more complex than the  unconstrained  one.
-Nonlinearly constrained optimization is one of the most esoteric numerical
-procedures.
-
-Here we give very brief outline  of  the  MinNLC  optimizer.  We  strongly
+Here we give the very brief outline  of  the MinNLC optimizer. We strongly
 recommend you to study examples in the ALGLIB Reference Manual and to read
-ALGLIB User Guide on optimization, which is available at
-http://www.alglib.net/optimization/
+ALGLIB User Guide: https://www.alglib.net/nonlinear-programming/
 
-1. User initializes algorithm state with MinNLCCreate() call  and  chooses
-   what NLC solver to use. There is some solver which is used by  default,
-   with default settings, but you should NOT rely on  default  choice.  It
-   may change in future releases of ALGLIB without notice, and no one  can
-   guarantee that new solver will be  able  to  solve  your  problem  with
-   default settings.
+1. The user initializes the solver with minnlccreate() or  minnlccreates()
+   (the latter is used for numerical  differentiation)  call  and  chooses
+   which NLC solver to use.
    
-   From the other side, if you choose solver explicitly, you can be pretty
-   sure that it will work with new ALGLIB releases.
+   In the current release the following solvers can be used:
    
-   In the current release following solvers can be used:
-   * SQP solver, recommended for medium-scale problems (less than thousand
-     of variables) with hard-to-evaluate target functions.  Requires  less
-     function  evaluations  than  other  solvers  but  each  step involves
-     solution of QP subproblem, so running time may be higher than that of
-     AUL (another recommended option). Activated  with  minnlcsetalgosqp()
-     function.
-   * AUL solver with dense  preconditioner,  recommended  for  large-scale
-     problems or for problems  with  cheap  target  function.  Needs  more
-     function evaluations that SQP (about  5x-10x  times  more),  but  its
-     iterations  are  much  cheaper  that  that  of  SQP.  Activated  with
-     minnlcsetalgoaul() function.
-   * SLP solver, successive linear programming. The slowest one,  requires
-     more target function evaluations that SQP and  AUL.  However,  it  is
-     somewhat more robust in tricky cases, so it can be used  as  a backup
-     plan. Activated with minnlcsetalgoslp() function.
+   * sparse large-scale filter-based SQP solver, recommended  for problems
+     of any size (from several variables to thousands  of  variables).
+     Activated with minnlcsetalgosqp() function.
+     
+   * dense SQP-BFGS solver, recommended  for small-scale problems  (up  to
+     several hundreds of variables) with a very expensive target function.
+     Requires less function  evaluations than any other  solver,  but  has
+     very expensive iteration.
+     Activated with minnlcsetalgosqpbfgs() function.
+     
+   * several other solvers, including legacy ones
 
 2. [optional] user activates OptGuard  integrity checker  which  tries  to
    detect possible errors in the user-supplied callbacks:
@@ -308,16 +324,16 @@ http://www.alglib.net/optimization/
    of calling one of the following functions:
    a) minnlcsetbc() for boundary constraints
    b) minnlcsetlc() for linear constraints
-   c) minnlcsetnlc() for nonlinear constraints
+   c) minnlcsetnlc2() for nonlinear constraints
    You may combine (a), (b) and (c) in one optimization problem.
    
 4. User sets scale of the variables with minnlcsetscale() function. It  is
    VERY important to set  scale  of  the  variables,  because  nonlinearly
    constrained problems are hard to solve when variables are badly scaled.
 
-5. User sets  stopping  conditions  with  minnlcsetcond(). If  NLC  solver
-   uses  inner/outer  iteration  layout,  this  function   sets   stopping
-   conditions for INNER iterations.
+5. User sets stopping conditions with minnlcsetcond3() or minnlcsetcond().
+   If NLC solver uses inner/outer  iteration  layout,  this  function sets
+   stopping conditions for INNER iterations.
    
 6. Finally, user calls minnlcoptimize()  function  which  takes  algorithm
    state and pointer (delegate, etc.) to callback function which calculates
@@ -363,6 +379,22 @@ finite differences in order to differentiate target function.
 Description below contains information which is specific to this  function
 only. We recommend to read comments on MinNLCCreate() in order to get more
 information about creation of NLC optimizer.
+
+CALLBACK PARALLELISM
+
+The MINNLC optimizer supports parallel parallel  numerical differentiation
+('callback parallelism'). This feature, which  is  present  in  commercial
+ALGLIB  editions,  greatly   accelerates   optimization   with   numerical
+differentiation of an expensive target functions.
+
+Callback parallelism is usually  beneficial  when  computing  a  numerical
+gradient requires more than several  milliseconds.  In this case  the  job
+of computing individual gradient components can be split between  multiple
+threads. Even inexpensive targets can benefit  from  parallelism,  if  you
+have many variables.
+
+ALGLIB Reference Manual, 'Working with commercial  version' section, tells
+how to activate callback parallelism for your programming language.
 
 INPUT PARAMETERS:
     N       -   problem dimension, N>0:
@@ -490,48 +522,13 @@ void minnlcsetlc(minnlcstate* state,
 /*************************************************************************
 This function sets nonlinear constraints for MinNLC optimizer.
 
-In fact, this function sets NUMBER of nonlinear  constraints.  Constraints
-itself (constraint functions) are passed to MinNLCOptimize() method.  This
-method requires user-defined vector function F[]  and  its  Jacobian  J[],
-where:
-* first component of F[] and first row  of  Jacobian  J[]  corresponds  to
-  function being minimized
-* next NLEC components of F[] (and rows  of  J)  correspond  to  nonlinear
-  equality constraints G_i(x)=0
-* next NLIC components of F[] (and rows  of  J)  correspond  to  nonlinear
-  inequality constraints H_i(x)<=0
+It sets constraints of the form
 
-NOTE: you may combine nonlinear constraints with linear/boundary ones.  If
-      your problem has mixed constraints, you  may explicitly specify some
-      of them as linear ones. It may help optimizer to  handle  them  more
-      efficiently.
+    Ci(x)=0 for i=0..NLEC-1
+    Ci(x)<=0 for i=NLEC..NLEC+NLIC-1
 
-INPUT PARAMETERS:
-    State   -   structure previously allocated with MinNLCCreate call.
-    NLEC    -   number of Non-Linear Equality Constraints (NLEC), >=0
-    NLIC    -   number of Non-Linear Inquality Constraints (NLIC), >=0
-
-NOTE 1: when you solve your problem  with  augmented  Lagrangian   solver,
-        nonlinear constraints are satisfied only  approximately!   It   is
-        possible   that  algorithm  will  evaluate  function  outside   of
-        feasible area!
-        
-NOTE 2: algorithm scales variables  according  to   scale   specified   by
-        MinNLCSetScale()  function,  so  it can handle problems with badly
-        scaled variables (as long as we KNOW their scales).
-           
-        However,  there  is  no  way  to  automatically  scale   nonlinear
-        constraints Gi(x) and Hi(x). Inappropriate scaling  of  Gi/Hi  may
-        ruin convergence. Solving problem with  constraint  "1000*G0(x)=0"
-        is NOT same as solving it with constraint "0.001*G0(x)=0".
-           
-        It  means  that  YOU  are  the  one who is responsible for correct
-        scaling of nonlinear constraints Gi(x) and Hi(x). We recommend you
-        to scale nonlinear constraints in such way that I-th component  of
-        dG/dX (or dH/dx) has approximately unit  magnitude  (for  problems
-        with unit scale)  or  has  magnitude approximately equal to 1/S[i]
-        (where S is a scale set by MinNLCSetScale() function).
-
+See MinNLCSetNLC2() for a modern function which allows greater flexibility
+in the constraint specification.
 
   -- ALGLIB --
      Copyright 06.06.2014 by Bochkanov Sergey
@@ -543,7 +540,70 @@ void minnlcsetnlc(minnlcstate* state,
 
 
 /*************************************************************************
-This function sets stopping conditions for inner iterations of  optimizer.
+This function sets two-sided nonlinear constraints for MinNLC optimizer.
+
+In fact, this function sets  only  constraints  COUNT  and  their  BOUNDS.
+Constraints  themselves  (constraint  functions)   are   passed   to   the
+MinNLCOptimize() method as callbacks.
+
+MinNLCOptimize() method accepts a user-defined vector function F[] and its
+Jacobian J[], where:
+* first element of F[] and first row of J[] correspond to the target
+* subsequent NNLC components of F[] (and rows of J[]) correspond  to  two-
+  sided nonlinear constraints NL<=C(x)<=NU, where
+  * NL[i]=NU[i] => I-th row is an equality constraint Ci(x)=NL
+  * NL[i]<NU[i] => I-th tow is a  two-sided constraint NL[i]<=Ci(x)<=NU[i]
+  * NL[i]=-INF  => I-th row is an one-sided constraint Ci(x)<=NU[i]
+  * NU[i]=+INF  => I-th row is an one-sided constraint NL[i]<=Ci(x)
+  * NL[i]=-INF, NU[i]=+INF => constraint is ignored
+
+NOTE: you may combine nonlinear constraints with linear/boundary ones.  If
+      your problem has mixed constraints, you  may explicitly specify some
+      of them as linear or box ones.
+      It helps optimizer to handle them more efficiently.
+
+INPUT PARAMETERS:
+    State   -   structure previously allocated with MinNLCCreate call.
+    NL      -   array[NNLC], lower bounds, can contain -INF
+    NU      -   array[NNLC], lower bounds, can contain +INF
+    NNLC    -   constraints count, NNLC>=0
+
+NOTE 1: nonlinear constraints are satisfied only  approximately!   It   is
+        possible that the algorithm will evaluate the function  outside of
+        the feasible area!
+        
+NOTE 2: algorithm scales variables  according  to the scale  specified by
+        MinNLCSetScale()  function,  so it can handle problems with badly
+        scaled variables (as long as we KNOW their scales).
+           
+        However,  there  is  no  way  to  automatically  scale   nonlinear
+        constraints. Inappropriate scaling  of nonlinear  constraints  may
+        ruin convergence. Solving problem with  constraint  "1000*G0(x)=0"
+        is NOT the same as solving it with constraint "0.001*G0(x)=0".
+           
+        It means that YOU are  the  one who is responsible for the correct
+        scaling of the nonlinear constraints Gi(x) and Hi(x). We recommend
+        you to scale nonlinear constraints in such a way that the Jacobian
+        rows have approximately unit magnitude  (for  problems  with  unit
+        scale) or have magnitude approximately equal to 1/S[i] (where S is
+        a scale set by MinNLCSetScale() function).
+
+  -- ALGLIB --
+     Copyright 23.09.2023 by Bochkanov Sergey
+*************************************************************************/
+void minnlcsetnlc2(minnlcstate* state,
+     /* Real    */ const ae_vector* nl,
+     /* Real    */ const ae_vector* nu,
+     ae_int_t nnlc,
+     ae_state *_state);
+
+
+/*************************************************************************
+This function sets stopping conditions for the optimizer.
+
+This  function allows to set  iterations  limit  and  step-based  stopping
+conditions. If you want the solver to stop upon having a small  change  in
+the target, use minnlcsetcond3() function.
 
 INPUT PARAMETERS:
     State   -   structure which stores algorithm state
@@ -564,6 +624,53 @@ selection of the stopping condition.
      Copyright 06.06.2014 by Bochkanov Sergey
 *************************************************************************/
 void minnlcsetcond(minnlcstate* state,
+     double epsx,
+     ae_int_t maxits,
+     ae_state *_state);
+
+
+/*************************************************************************
+This function sets stopping conditions for the optimizer.
+
+This function allows to set three types of stopping conditions:
+* iterations limit
+* stopping upon performing a short step (depending on the specific  solver
+  being used  it may stop as soon as the first short step was made, or
+  only after performing several sequential short steps)
+* stopping upon having a small change in  the  target  (depending  on  the
+  specific solver being used it may stop as soon as the  first  step  with
+  small change in the target was made, or only  after  performing  several
+  sequential steps)
+
+INPUT PARAMETERS:
+    State   -   structure which stores algorithm state
+    EpsF    -   >=0
+                The optimizer will stop as soon as the following condition
+                is met:
+                    
+                    |f_scl(k+1)-f_scl(k)| <= max(|f_scl(k+1)|,|f_scl(k)|,1)
+                    
+                where f_scl is an internally used by the optimizer rescaled
+                target (ALGLIB optimizers usually apply rescaling in order
+                to normalize target and constraints).
+    EpsX    -   >=0
+                The subroutine finishes its work if  on  k+1-th  iteration
+                the condition |v|<=EpsX is fulfilled, where:
+                * |.| means Euclidian norm
+                * v - scaled step vector, v[i]=dx[i]/s[i]
+                * dx - step vector, dx=X(k+1)-X(k)
+                * s - scaling coefficients set by MinNLCSetScale()
+    MaxIts  -   maximum number of iterations. If MaxIts=0, the  number  of
+                iterations is unlimited.
+
+Passing EpsF, EpsX=0 and MaxIts=0 (simultaneously) will lead to the
+automatic selection of the stopping condition.
+
+  -- ALGLIB --
+     Copyright 21.09.2023 by Bochkanov Sergey
+*************************************************************************/
+void minnlcsetcond3(minnlcstate* state,
+     double epsf,
      double epsx,
      ae_int_t maxits,
      ae_state *_state);
@@ -595,171 +702,6 @@ void minnlcsetscale(minnlcstate* state,
 
 
 /*************************************************************************
-This function sets preconditioner to "inexact LBFGS-based" mode.
-
-Preconditioning is very important for convergence of  Augmented Lagrangian
-algorithm because presence of penalty term makes problem  ill-conditioned.
-Difference between  performance  of  preconditioned  and  unpreconditioned
-methods can be as large as 100x!
-
-MinNLC optimizer may use following preconditioners,  each  with   its  own
-benefits and drawbacks:
-    a) inexact LBFGS-based, with O(N*K) evaluation time
-    b) exact low rank one,  with O(N*K^2) evaluation time
-    c) exact robust one,    with O(N^3+K*N^2) evaluation time
-where K is a total number of general linear and nonlinear constraints (box
-ones are not counted).
-
-Inexact  LBFGS-based  preconditioner  uses L-BFGS  formula  combined  with
-orthogonality assumption to perform very fast updates. For a N-dimensional
-problem with K general linear or nonlinear constraints (boundary ones  are
-not counted) it has O(N*K) cost per iteration.  This   preconditioner  has
-best  quality  (less  iterations)  when   general   linear  and  nonlinear
-constraints are orthogonal to each other (orthogonality  with  respect  to
-boundary constraints is not required). Number of iterations increases when
-constraints  are  non-orthogonal, because algorithm assumes orthogonality,
-but still it is better than no preconditioner at all.
-
-INPUT PARAMETERS:
-    State   -   structure stores algorithm state
-
-  -- ALGLIB --
-     Copyright 26.09.2014 by Bochkanov Sergey
-*************************************************************************/
-void minnlcsetprecinexact(minnlcstate* state, ae_state *_state);
-
-
-/*************************************************************************
-This function sets preconditioner to "exact low rank" mode.
-
-Preconditioning is very important for convergence of  Augmented Lagrangian
-algorithm because presence of penalty term makes problem  ill-conditioned.
-Difference between  performance  of  preconditioned  and  unpreconditioned
-methods can be as large as 100x!
-
-MinNLC optimizer may use following preconditioners,  each  with   its  own
-benefits and drawbacks:
-    a) inexact LBFGS-based, with O(N*K) evaluation time
-    b) exact low rank one,  with O(N*K^2) evaluation time
-    c) exact robust one,    with O(N^3+K*N^2) evaluation time
-where K is a total number of general linear and nonlinear constraints (box
-ones are not counted).
-
-It also provides special unpreconditioned mode of operation which  can  be
-used for test purposes. Comments below discuss low rank preconditioner.
-
-Exact low-rank preconditioner  uses  Woodbury  matrix  identity  to  build
-quadratic model of the penalized function. It has following features:
-* no special assumptions about orthogonality of constraints
-* preconditioner evaluation is optimized for K<<N. Its cost  is  O(N*K^2),
-  so it may become prohibitively slow for K>=N.
-* finally, stability of the process is guaranteed only for K<<N.  Woodbury
-  update often fail for K>=N due to degeneracy of  intermediate  matrices.
-  That's why we recommend to use "exact robust"  preconditioner  for  such
-  cases.
-
-RECOMMENDATIONS
-
-We  recommend  to  choose  between  "exact  low  rank"  and "exact robust"
-preconditioners, with "low rank" version being chosen  when  you  know  in
-advance that total count of non-box constraints won't exceed N, and "robust"
-version being chosen when you need bulletproof solution.
-
-INPUT PARAMETERS:
-    State   -   structure stores algorithm state
-    UpdateFreq- update frequency. Preconditioner is  rebuilt  after  every
-                UpdateFreq iterations. Recommended value: 10 or higher.
-                Zero value means that good default value will be used.
-
-  -- ALGLIB --
-     Copyright 26.09.2014 by Bochkanov Sergey
-*************************************************************************/
-void minnlcsetprecexactlowrank(minnlcstate* state,
-     ae_int_t updatefreq,
-     ae_state *_state);
-
-
-/*************************************************************************
-This function sets preconditioner to "exact robust" mode.
-
-Preconditioning is very important for convergence of  Augmented Lagrangian
-algorithm because presence of penalty term makes problem  ill-conditioned.
-Difference between  performance  of  preconditioned  and  unpreconditioned
-methods can be as large as 100x!
-
-MinNLC optimizer may use following preconditioners,  each  with   its  own
-benefits and drawbacks:
-    a) inexact LBFGS-based, with O(N*K) evaluation time
-    b) exact low rank one,  with O(N*K^2) evaluation time
-    c) exact robust one,    with O(N^3+K*N^2) evaluation time
-where K is a total number of general linear and nonlinear constraints (box
-ones are not counted).
-
-It also provides special unpreconditioned mode of operation which  can  be
-used for test purposes. Comments below discuss robust preconditioner.
-
-Exact  robust  preconditioner   uses   Cholesky  decomposition  to  invert
-approximate Hessian matrix H=D+W'*C*W (where D stands for  diagonal  terms
-of Hessian, combined result of initial scaling matrix and penalty from box
-constraints; W stands for general linear constraints and linearization  of
-nonlinear ones; C stands for diagonal matrix of penalty coefficients).
-
-This preconditioner has following features:
-* no special assumptions about constraint structure
-* preconditioner is optimized  for  stability;  unlike  "exact  low  rank"
-  version which fails for K>=N, this one works well for any value of K.
-* the only drawback is that is takes O(N^3+K*N^2) time  to  build  it.  No
-  economical  Woodbury update is applied even when it  makes  sense,  thus
-  there  are  exist situations (K<<N) when "exact low rank" preconditioner
-  outperforms this one.
-  
-RECOMMENDATIONS
-
-We  recommend  to  choose  between  "exact  low  rank"  and "exact robust"
-preconditioners, with "low rank" version being chosen  when  you  know  in
-advance that total count of non-box constraints won't exceed N, and "robust"
-version being chosen when you need bulletproof solution.
-  
-INPUT PARAMETERS:
-    State   -   structure stores algorithm state
-    UpdateFreq- update frequency. Preconditioner is  rebuilt  after  every
-                UpdateFreq iterations. Recommended value: 10 or higher.
-                Zero value means that good default value will be used.
-
-  -- ALGLIB --
-     Copyright 26.09.2014 by Bochkanov Sergey
-*************************************************************************/
-void minnlcsetprecexactrobust(minnlcstate* state,
-     ae_int_t updatefreq,
-     ae_state *_state);
-
-
-/*************************************************************************
-This function sets preconditioner to "turned off" mode.
-
-Preconditioning is very important for convergence of  Augmented Lagrangian
-algorithm because presence of penalty term makes problem  ill-conditioned.
-Difference between  performance  of  preconditioned  and  unpreconditioned
-methods can be as large as 100x!
-
-MinNLC optimizer may  utilize  two  preconditioners,  each  with  its  own
-benefits and drawbacks: a) inexact LBFGS-based, and b) exact low rank one.
-It also provides special unpreconditioned mode of operation which  can  be
-used for test purposes.
-
-This function activates this test mode. Do not use it in  production  code
-to solve real-life problems.
-
-INPUT PARAMETERS:
-    State   -   structure stores algorithm state
-
-  -- ALGLIB --
-     Copyright 26.09.2014 by Bochkanov Sergey
-*************************************************************************/
-void minnlcsetprecnone(minnlcstate* state, ae_state *_state);
-
-
-/*************************************************************************
 This function sets maximum step length (after scaling of step vector  with
 respect to variable scales specified by minnlcsetscale() call).
 
@@ -784,204 +726,41 @@ void minnlcsetstpmax(minnlcstate* state, double stpmax, ae_state *_state);
 
 
 /*************************************************************************
-This  function  tells MinNLC unit to use  Augmented  Lagrangian  algorithm
-for nonlinearly constrained  optimization.  This  algorithm  is  a  slight
-modification of one described in "A Modified Barrier-Augmented  Lagrangian
-Method for  Constrained  Minimization  (1999)"  by  D.GOLDFARB,  R.POLYAK,
-K. SCHEINBERG, I.YUZEFOVICH.
+This function tells MinNLC unit to use the large-scale augmented Lagrangian
+algorithm for nonlinearly constrained optimization.
+
+This  algorithm  is  a  significant  refactoring  of  one  described in "A
+Modified Barrier-Augmented  Lagrangian Method for Constrained Minimization
+(1999)" by D.GOLDFARB,  R.POLYAK,  K. SCHEINBERG,  I.YUZEFOVICH  with  the
+following additions:
+* improved sparsity support
+* improved handling of large-scale problems with the low rank  LBFGS-based
+  sparse preconditioner
+* automatic selection of the penalty parameter Rho
 
 AUL solver can be significantly faster than SQP on easy  problems  due  to
-cheaper iterations, although it needs more function evaluations.
+cheaper iterations, although it needs more function evaluations. On large-
+scale sparse problems one iteration of the AUL solver usually  costs  tens
+times less than one iteration of the SQP solver.
 
-Augmented Lagrangian algorithm works by converting problem  of  minimizing
-F(x) subject to equality/inequality constraints   to unconstrained problem
-of the form
-
-    min[ f(x) + 
-        + Rho*PENALTY_EQ(x)   + SHIFT_EQ(x,Nu1) + 
-        + Rho*PENALTY_INEQ(x) + SHIFT_INEQ(x,Nu2) ]
-    
-where:
-* Rho is a fixed penalization coefficient
-* PENALTY_EQ(x) is a penalty term, which is used to APPROXIMATELY  enforce
-  equality constraints
-* SHIFT_EQ(x) is a special "shift"  term  which  is  used  to  "fine-tune"
-  equality constraints, greatly increasing precision
-* PENALTY_INEQ(x) is a penalty term which is used to approximately enforce
-  inequality constraints
-* SHIFT_INEQ(x) is a special "shift"  term  which  is  used to "fine-tune"
-  inequality constraints, greatly increasing precision
-* Nu1/Nu2 are vectors of Lagrange coefficients which are fine-tuned during
-  outer iterations of algorithm
-
-This  version  of  AUL  algorithm  uses   preconditioner,  which   greatly
-accelerates convergence. Because this  algorithm  is  similar  to  penalty
-methods,  it  may  perform  steps  into  infeasible  area.  All  kinds  of
-constraints (boundary, linear and nonlinear ones) may   be   violated   in
-intermediate points - and in the solution.  However,  properly  configured
-AUL method is significantly better at handling  constraints  than  barrier
-and/or penalty methods.
-
-The very basic outline of algorithm is given below:
-1) first outer iteration is performed with "default"  values  of  Lagrange
-   multipliers Nu1/Nu2. Solution quality is low (candidate  point  can  be
-   too  far  away  from  true  solution; large violation of constraints is
-   possible) and is comparable with that of penalty methods.
-2) subsequent outer iterations  refine  Lagrange  multipliers  and improve
-   quality of the solution.
+However, the SQP solver is more robust than the AUL. In particular, it  is
+much better at constraint enforcement and will  never escape feasible area
+after constraints were successfully enforced.  It  also  needs  much  less
+target function evaluations.
 
 INPUT PARAMETERS:
     State   -   structure which stores algorithm state
-    Rho     -   penalty coefficient, Rho>0:
-                * large enough  that  algorithm  converges  with   desired
-                  precision. Minimum value is 10*max(S'*diag(H)*S),  where
-                  S is a scale matrix (set by MinNLCSetScale) and H  is  a
-                  Hessian of the function being minimized. If you can  not
-                  easily estimate Hessian norm,  see  our  recommendations
-                  below.
-                * not TOO large to prevent ill-conditioning
-                * for unit-scale problems (variables and Hessian have unit
-                  magnitude), Rho=100 or Rho=1000 can be used.
-                * it is important to note that Rho is internally multiplied
-                  by scaling matrix, i.e. optimum value of Rho depends  on
-                  scale of variables specified  by  MinNLCSetScale().
-    ItsCnt  -   number of outer iterations:
-                * ItsCnt=0 means that small number of outer iterations  is
-                  automatically chosen (10 iterations in current version).
-                * ItsCnt=1 means that AUL algorithm performs just as usual
-                  barrier method.
-                * ItsCnt>1 means that  AUL  algorithm  performs  specified
-                  number of outer iterations
-                
-HOW TO CHOOSE PARAMETERS
-
-Nonlinear optimization is a tricky area and Augmented Lagrangian algorithm
-is sometimes hard to tune. Good values of  Rho  and  ItsCnt  are  problem-
-specific.  In  order  to  help  you   we   prepared   following   set   of
-recommendations:
-
-* for  unit-scale  problems  (variables  and Hessian have unit magnitude),
-  Rho=100 or Rho=1000 can be used.
-
-* start from  some  small  value of Rho and solve problem  with  just  one
-  outer iteration (ItcCnt=1). In this case algorithm behaves like  penalty
-  method. Increase Rho in 2x or 10x steps until you  see  that  one  outer
-  iteration returns point which is "rough approximation to solution".
-  
-  It is very important to have Rho so  large  that  penalty  term  becomes
-  constraining i.e. modified function becomes highly convex in constrained
-  directions.
-  
-  From the other side, too large Rho may prevent you  from  converging  to
-  the solution. You can diagnose it by studying number of inner iterations
-  performed by algorithm: too few (5-10 on  1000-dimensional  problem)  or
-  too many (orders of magnitude more than  dimensionality)  usually  means
-  that Rho is too large.
-
-* with just one outer iteration you  usually  have  low-quality  solution.
-  Some constraints can be violated with very  large  margin,  while  other
-  ones (which are NOT violated in the true solution) can push final  point
-  too far in the inner area of the feasible set.
-  
-  For example, if you have constraint x0>=0 and true solution  x0=1,  then
-  merely a presence of "x0>=0" will introduce a bias towards larger values
-  of x0. Say, algorithm may stop at x0=1.5 instead of 1.0.
-  
-* after you found good Rho, you may increase number of  outer  iterations.
-  ItsCnt=10 is a good value. Subsequent outer iteration will refine values
-  of  Lagrange  multipliers.  Constraints  which  were  violated  will  be
-  enforced, inactive constraints will be dropped (corresponding multipliers
-  will be decreased). Ideally, you  should  see  10-1000x  improvement  in
-  constraint handling (constraint violation is reduced).
-  
-* if  you  see  that  algorithm  converges  to  vicinity  of solution, but
-  additional outer iterations do not refine solution,  it  may  mean  that
-  algorithm is unstable - it wanders around true  solution,  but  can  not
-  approach it. Sometimes algorithm may be stabilized by increasing Rho one
-  more time, making it 5x or 10x larger.
-
-SCALING OF CONSTRAINTS [IMPORTANT]
-
-AUL optimizer scales   variables   according   to   scale   specified   by
-MinNLCSetScale() function, so it can handle  problems  with  badly  scaled
-variables (as long as we KNOW their scales).   However,  because  function
-being optimized is a mix  of  original  function and  constraint-dependent
-penalty  functions, it  is   important  to   rescale  both  variables  AND
-constraints.
-
-Say,  if  you  minimize f(x)=x^2 subject to 1000000*x>=0,  then  you  have
-constraint whose scale is different from that of target  function (another
-example is 0.000001*x>=0). It is also possible to have constraints   whose
-scales  are   misaligned:   1000000*x0>=0, 0.000001*x1<=0.   Inappropriate
-scaling may ruin convergence because minimizing x^2 subject to x>=0 is NOT
-same as minimizing it subject to 1000000*x>=0.
-
-Because we  know  coefficients  of  boundary/linear  constraints,  we  can
-automatically rescale and normalize them. However,  there  is  no  way  to
-automatically rescale nonlinear constraints Gi(x) and  Hi(x)  -  they  are
-black boxes.
-
-It means that YOU are the one who is  responsible  for  correct scaling of
-nonlinear constraints  Gi(x)  and  Hi(x).  We  recommend  you  to  rescale
-nonlinear constraints in such way that I-th component of dG/dX (or  dH/dx)
-has magnitude approximately equal to 1/S[i] (where S  is  a  scale  set by
-MinNLCSetScale() function).
-
-WHAT IF IT DOES NOT CONVERGE?
-
-It is possible that AUL algorithm fails to converge to precise  values  of
-Lagrange multipliers. It stops somewhere around true solution, but candidate
-point is still too far from solution, and some constraints  are  violated.
-Such kind of failure is specific for Lagrangian algorithms -  technically,
-they stop at some point, but this point is not constrained solution.
-
-There are exist several reasons why algorithm may fail to converge:
-a) too loose stopping criteria for inner iteration
-b) degenerate, redundant constraints
-c) target function has unconstrained extremum exactly at the  boundary  of
-   some constraint
-d) numerical noise in the target function
-
-In all these cases algorithm is unstable - each outer iteration results in
-large and almost random step which improves handling of some  constraints,
-but violates other ones (ideally  outer iterations should form a  sequence
-of progressively decreasing steps towards solution).
-   
-First reason possible is  that  too  loose  stopping  criteria  for  inner
-iteration were specified. Augmented Lagrangian algorithm solves a sequence
-of intermediate problems, and requries each of them to be solved with high
-precision. Insufficient precision results in incorrect update of  Lagrange
-multipliers.
-
-Another reason is that you may have specified degenerate constraints: say,
-some constraint was repeated twice. In most cases AUL algorithm gracefully
-handles such situations, but sometimes it may spend too much time figuring
-out subtle degeneracies in constraint matrix.
-
-Third reason is tricky and hard to diagnose. Consider situation  when  you
-minimize  f=x^2  subject to constraint x>=0.  Unconstrained   extremum  is
-located  exactly  at  the  boundary  of  constrained  area.  In  this case
-algorithm will tend to oscillate between negative  and  positive  x.  Each
-time it stops at x<0 it "reinforces" constraint x>=0, and each time it  is
-bounced to x>0 it "relaxes" constraint (and is  attracted  to  x<0).
-
-Such situation  sometimes  happens  in  problems  with  hidden  symetries.
-Algorithm  is  got  caught  in  a  loop with  Lagrange  multipliers  being
-continuously increased/decreased. Luckily, such loop forms after at  least
-three iterations, so this problem can be solved by  DECREASING  number  of
-outer iterations down to 1-2 and increasing  penalty  coefficient  Rho  as
-much as possible.
-
-Final reason is numerical noise. AUL algorithm is robust against  moderate
-noise (more robust than, say, active set methods),  but  large  noise  may
-destabilize algorithm.
+    MaxOuterIts-upper limit on outer iterations count:
+                * MaxOuterIts=0 means that the solver  will  automatically
+                  choose an upper limit. Recommended value.
+                * MaxOuterIts>1 means that the AUL solver will performs at
+                  most specified number of outer iterations
 
   -- ALGLIB --
-     Copyright 06.06.2014 by Bochkanov Sergey
+     Copyright 22.09.2023 by Bochkanov Sergey
 *************************************************************************/
-void minnlcsetalgoaul(minnlcstate* state,
-     double rho,
-     ae_int_t itscnt,
+void minnlcsetalgoaul2(minnlcstate* state,
+     ae_int_t maxouterits,
      ae_state *_state);
 
 
@@ -992,12 +771,14 @@ algorithm  is  a  slight  modification  of  one  described  in  "A  Linear
 programming-based optimization algorithm for solving nonlinear programming
 problems" (2010) by Claus Still and Tapio Westerlund.
 
-This solver is the slowest one in ALGLIB, it requires more target function
-evaluations that SQP and AUL. However it is somewhat more robust in tricky
-cases, so it can be used as a backup plan. We recommend to use  this  algo
-when SQP/AUL do not work (does not return  the  solution  you  expect). If
-trying different approach gives same  results,  then  MAYBE  something  is
-wrong with your optimization problem.
+This solver is one of the slowest  in  ALGLIB,  it  requires  more  target
+function evaluations that SQP and AUL. However it is somewhat more  robust
+in tricky cases, so it can be used as a backup  plan  for low  dimensional
+problems.
+
+We recommend to use this algo when SQP/AUL solvers do not work. If  trying
+different approach gives the same results, then MAYBE something  is  wrong
+with your optimization problem.
 
 Despite its name ("linear" = "first order method") this algorithm performs
 steps similar to that of conjugate gradients method;  internally  it  uses
@@ -1081,56 +862,59 @@ void minnlcsetalgoslp(minnlcstate* state, ae_state *_state);
 
 
 /*************************************************************************
-This   function  tells  MinNLC  optimizer to use SQP (Successive Quadratic
-Programming) algorithm for nonlinearly constrained optimization.
+This function selects a legacy solver: an L1 merit function based SQP with
+the sparse l-BFGS update.
 
-This algorithm needs order of magnitude (5x-10x) less function evaluations
-than AUL solver, but has higher overhead because each  iteration  involves
-solution of quadratic programming problem.
+It is recommended to use either SQP or SQP-BFGS solvers  instead  of  this
+one.  These  solvers  use  filters  to  provide  much  faster  and  robust
+convergence.
+> 
 
-Convergence is proved for the following case:
+  -- ALGLIB --
+     Copyright 02.12.2019 by Bochkanov Sergey
+*************************************************************************/
+void minnlcsetalgosl1qp(minnlcstate* state, ae_state *_state);
+
+
+/*************************************************************************
+This function selects a legacy solver: an L1 merit function based SQP with
+the dense BFGS update.
+
+It is recommended to use either SQP or SQP-BFGS solvers  instead  of  this
+one.  These  solvers  use  filters  to  provide  much  faster  and  robust
+convergence.
+
+  -- ALGLIB --
+     Copyright 02.12.2019 by Bochkanov Sergey
+*************************************************************************/
+void minnlcsetalgosl1qpbfgs(minnlcstate* state, ae_state *_state);
+
+
+/*************************************************************************
+This function selects large-scale  sparse  filter-based  SQP  solver,  the
+most robust solver in ALGLIB, a recommended option.
+
+This algorithm is scalable to problems with tens of thousands of variables
+and can efficiently handle sparsity of constraints.
+
+The convergence is proved for the following case:
 * function and constraints are continuously differentiable (C1 class)
 
-This algorithm has following nice properties:
+This algorithm has the following nice properties:
 * no parameters to tune
 * no convexity requirements for target function or constraints
-* initial point can be infeasible
-* algorithm respects box constraints in all intermediate points  (it  does
-  not even evaluate function outside of box constrained area)
-* once linear constraints are enforced, algorithm will not violate them
+* the initial point can be infeasible
+* the algorithm respects box constraints in all  intermediate  points  (it
+  does not even evaluate the target outside of the box constrained area)
+* once linear constraints are enforced, the algorithm will not violate them
 * no such guarantees can be provided for nonlinear constraints,  but  once
-  nonlinear constraints are enforced, algorithm will try  to  respect them
-  as much as possible
-* numerical differentiation does not  violate  box  constraints  (although
+  nonlinear  constraints  are  enforced,  the algorithm will try to respect
+  them as much as possible
+* numerical differentiation does  not  violate  box  constraints  (although
   general linear and nonlinear ones can be violated during differentiation)
-
-We recommend this algorithm as a default option for medium-scale  problems
-(less than thousand of variables) or problems with target  function  being
-hard to evaluate.
-
-For   large-scale  problems  or  ones  with very  cheap  target   function
-AUL solver can be better option.
 
 INPUT PARAMETERS:
     State   -   structure which stores algorithm state
-    
-===== INTERACTION WITH OPTGUARD ==========================================
-
-OptGuard integrity  checker  allows us to catch problems  like  errors  in
-gradients   and  discontinuity/nonsmoothness  of  the  target/constraints.
-The latter kind of problems can be detected  by looking upon line searches
-performed during optimization and searching for signs of nonsmoothness.
-
-The problem with SQP is that it is too good for OptGuard to work - it does
-not perform line searches. It typically  needs  1-2  function  evaluations
-per step, and it is not enough for OptGuard to detect nonsmoothness.
-
-So, if you suspect that your problem is  nonsmooth  and  if  you  want  to
-confirm or deny it, we recommend you to either:
-* use AUL or SLP solvers, which can detect nonsmoothness of the problem
-* or, alternatively, activate 'SQP.PROBING' trace  tag  that  will  insert
-  additional  function  evaluations (~40  per  line  step) that will  help
-  OptGuard integrity checker to study properties of your problem
 
 ===== TRACING SQP SOLVER =================================================
 
@@ -1169,9 +953,80 @@ You may specify multiple symbols by separating them with commas:
 > 
 
   -- ALGLIB --
-     Copyright 02.12.2019 by Bochkanov Sergey
+     Copyright 02.12.2023 by Bochkanov Sergey
 *************************************************************************/
 void minnlcsetalgosqp(minnlcstate* state, ae_state *_state);
+
+
+/*************************************************************************
+This function selects a special solver for low-dimensional  problems  with
+expensive target function - the dense filer-based SQP-BFGS solver.
+
+This algorithm uses a dense quadratic model of the  target  and  solves  a
+dense QP subproblem at each step. Thus, it has difficulties scaling beyond
+several hundreds of variables.  However,  it  usually  needs  the smallest
+number of the target evaluations - sometimes  up  to  30%  less  than  the
+sparse large-scale filter-based SQP.
+
+The convergence is proved for the following case:
+* function and constraints are continuously differentiable (C1 class)
+
+This algorithm has the following nice properties:
+* no parameters to tune
+* no convexity requirements for target function or constraints
+* the initial point can be infeasible
+* the algorithm respects box constraints in all  intermediate  points  (it
+  does not even evaluate the target outside of the box constrained area)
+* once linear constraints are enforced, the algorithm will not violate them
+* no such guarantees can be provided for nonlinear constraints,  but  once
+  nonlinear  constraints  are  enforced,  the algorithm will try to respect
+  them as much as possible
+* numerical differentiation does  not  violate  box  constraints  (although
+  general linear and nonlinear ones can be violated during differentiation)
+
+INPUT PARAMETERS:
+    State   -   structure which stores algorithm state
+    
+===== TRACING SQP SOLVER =================================================
+
+SQP solver supports advanced tracing capabilities. You can trace algorithm
+output by specifying following trace symbols (case-insensitive)  by  means
+of trace_file() call:
+* 'SQP'         - for basic trace of algorithm  steps and decisions.  Only
+                  short scalars (function values and deltas) are  printed.
+                  N-dimensional quantities like search directions are  NOT
+                  printed.
+                  It also prints OptGuard  integrity  checker  report when
+                  nonsmoothness of target/constraints is suspected.
+* 'SQP.DETAILED'- for output of points being visited and search directions
+                  This  symbol  also  implicitly  defines  'SQP'. You  can
+                  control output format by additionally specifying:
+                  * nothing     to output in  6-digit exponential format
+                  * 'PREC.E15'  to output in 15-digit exponential format
+                  * 'PREC.F6'   to output in  6-digit fixed-point format
+* 'SQP.PROBING' - to let algorithm insert additional function  evaluations
+                  before line search  in  order  to  build  human-readable
+                  chart of the raw  Lagrangian  (~40  additional  function
+                  evaluations is performed for  each  line  search).  This
+                  symbol  also  implicitly  defines  'SQP'  and  activates
+                  OptGuard integrity checker which detects continuity  and
+                  smoothness violations. An OptGuard log is printed at the
+                  end of the file.
+
+By default trace is disabled and adds  no  overhead  to  the  optimization
+process. However, specifying any of the symbols adds some  formatting  and
+output-related   overhead.  Specifying  'SQP.PROBING'  adds   even  larger
+overhead due to additional function evaluations being performed.
+
+You may specify multiple symbols by separating them with commas:
+>
+> alglib::trace_file("SQP,SQP.PROBING,PREC.F6", "path/to/trace.log")
+> 
+
+  -- ALGLIB --
+     Copyright 02.12.2023 by Bochkanov Sergey
+*************************************************************************/
+void minnlcsetalgosqpbfgs(minnlcstate* state, ae_state *_state);
 
 
 /*************************************************************************
@@ -1196,6 +1051,22 @@ void minnlcsetxrep(minnlcstate* state, ae_bool needxrep, ae_state *_state);
 
 
 /*************************************************************************
+
+CALLBACK PARALLELISM
+
+The MINNLC optimizer supports parallel parallel  numerical differentiation
+('callback parallelism'). This feature, which  is  present  in  commercial
+ALGLIB  editions,  greatly   accelerates   optimization   with   numerical
+differentiation of an expensive target functions.
+
+Callback parallelism is usually  beneficial  when  computing  a  numerical
+gradient requires more than several  milliseconds.  In this case  the  job
+of computing individual gradient components can be split between  multiple
+threads. Even inexpensive targets can benefit  from  parallelism,  if  you
+have many variables.
+
+ALGLIB Reference Manual, 'Working with commercial  version' section, tells
+how to activate callback parallelism for your programming language.
 
 NOTES:
 
@@ -1581,8 +1452,8 @@ OUTPUT PARAMETERS:
                 
                 === FAILURE CODES ===
                 * -8    internal  integrity control  detected  infinite or
-                        NAN   values    in   function/gradient.   Abnormal
-                        termination signalled.
+                        NAN  values  in  function/gradient,  recovery  was
+                        impossible. Abnormal termination signalled.
                 * -3    box  constraints are infeasible.
                         Note: infeasibility of  non-box  constraints  does
                               NOT trigger emergency completion;  you  have
@@ -1595,6 +1466,13 @@ OUTPUT PARAMETERS:
                 *  8   user   requested    algorithm    termination    via
                        minnlcrequesttermination(), last accepted point  is
                        returned.
+                       
+                === ADDITIONAL CODES ===
+                * +800      if   during  algorithm  execution  the  solver
+                            encountered NAN/INF values in  the  target  or
+                            constraints but managed to recover by reducing
+                            trust region radius, the  solver  returns  one
+                            of SUCCESS codes but adds +800 to the code.
                 
                 More information about fields of this  structure  can  be
                 found in the comments on minnlcreport datatype.
@@ -1672,116 +1550,15 @@ void minnlcrestartfrom(minnlcstate* state,
 
 
 /*************************************************************************
-Penalty function for equality constraints.
-INPUT PARAMETERS:
-    Alpha   -   function argument. Penalty function becomes large when
-                Alpha approaches -1 or +1. It is defined for Alpha<=-1 or
-                Alpha>=+1 - in this case infinite value is returned.
-                
-OUTPUT PARAMETERS:
-    F       -   depending on Alpha:
-                * for Alpha in (-1+eps,+1-eps), F=F(Alpha)
-                * for Alpha outside of interval, F is some very large number
-    DF      -   depending on Alpha:
-                * for Alpha in (-1+eps,+1-eps), DF=dF(Alpha)/dAlpha, exact
-                  numerical derivative.
-                * otherwise, it is zero
-    D2F     -   second derivative
-
-  -- ALGLIB --
-     Copyright 06.06.2014 by Bochkanov Sergey
+Set V1 reverse communication protocol
 *************************************************************************/
-void minnlcequalitypenaltyfunction(double alpha,
-     double* f,
-     double* df,
-     double* d2f,
-     ae_state *_state);
+void minnlcsetprotocolv1(minnlcstate* state, ae_state *_state);
 
 
 /*************************************************************************
-"Penalty" function  for  inequality  constraints,  which  is multiplied by
-penalty coefficient Rho.
-
-"Penalty" function plays only supplementary role - it helps  to  stabilize
-algorithm when solving non-convex problems. Because it  is  multiplied  by
-fixed and large  Rho  -  not  Lagrange  multiplier  Nu  which  may  become
-arbitrarily small! - it enforces  convexity  of  the  problem  behind  the
-boundary of the feasible area.
-
-This function is zero at the feasible area and in the close  neighborhood,
-it becomes non-zero only at some distance (scaling is essential!) and grows
-quadratically.
-
-Penalty function must enter augmented Lagrangian as
-    Rho*PENALTY(x-lowerbound)
-with corresponding changes being made for upper bound or  other  kinds  of
-constraints.
-
-INPUT PARAMETERS:
-    Alpha   -   function argument. Typically, if we have active constraint
-                with precise Lagrange multiplier, we have Alpha  around 1.
-                Large positive Alpha's correspond to  inner  area  of  the
-                feasible set. Alpha<1 corresponds to  outer  area  of  the
-                feasible set.
-    StabilizingPoint- point where F becomes  non-zero.  Must  be  negative
-                value, at least -1, large values (hundreds) are possible.
-                
-OUTPUT PARAMETERS:
-    F       -   F(Alpha)
-    DF      -   DF=dF(Alpha)/dAlpha, exact derivative
-    D2F     -   second derivative
-    
-NOTE: it is important to  have  significantly  non-zero  StabilizingPoint,
-      because when it  is  large,  shift  term  does  not  interfere  with
-      Lagrange  multipliers  converging  to  their  final  values.   Thus,
-      convergence of such modified AUL algorithm is  still  guaranteed  by
-      same set of theorems.
-
-  -- ALGLIB --
-     Copyright 06.06.2014 by Bochkanov Sergey
+Set V1 reverse communication protocol
 *************************************************************************/
-void minnlcinequalitypenaltyfunction(double alpha,
-     double stabilizingpoint,
-     double* f,
-     double* df,
-     double* d2f,
-     ae_state *_state);
-
-
-/*************************************************************************
-"Shift" function  for  inequality  constraints,  which  is  multiplied  by
-corresponding Lagrange multiplier.
-
-"Shift" function is a main factor which enforces  inequality  constraints.
-Inequality penalty function plays only supplementary role  -  it  prevents
-accidental step deep into infeasible area  when  working  with  non-convex
-problems (read comments on corresponding function for more information).
-
-Shift function must enter augmented Lagrangian as
-    Nu/Rho*SHIFT((x-lowerbound)*Rho+1)
-with corresponding changes being made for upper bound or  other  kinds  of
-constraints.
-
-INPUT PARAMETERS:
-    Alpha   -   function argument. Typically, if we have active constraint
-                with precise Lagrange multiplier, we have Alpha  around 1.
-                Large positive Alpha's correspond to  inner  area  of  the
-                feasible set. Alpha<1 corresponds to  outer  area  of  the
-                feasible set.
-                
-OUTPUT PARAMETERS:
-    F       -   F(Alpha)
-    DF      -   DF=dF(Alpha)/dAlpha, exact derivative
-    D2F     -   second derivative
-
-  -- ALGLIB --
-     Copyright 06.06.2014 by Bochkanov Sergey
-*************************************************************************/
-void minnlcinequalityshiftfunction(double alpha,
-     double* f,
-     double* df,
-     double* d2f,
-     ae_state *_state);
+void minnlcsetprotocolv2(minnlcstate* state, ae_state *_state);
 void _minnlcstate_init(void* _p, ae_state *_state, ae_bool make_automatic);
 void _minnlcstate_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
 void _minnlcstate_clear(void* _p);

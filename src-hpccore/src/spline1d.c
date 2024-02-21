@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -36,19 +36,11 @@ static double spline1d_basisdiff2(const spline1dbbasis* basis,
      ae_int_t k,
      double x,
      ae_state *_state);
-static void spline1d_spline1dgriddiffcubicinternal(/* Real    */ const ae_vector* x,
-     /* Real    */ ae_vector* y,
+static void spline1d_buildakimax(/* Real    */ const ae_vector* _x,
+     /* Real    */ const ae_vector* _y,
      ae_int_t n,
-     ae_int_t boundltype,
-     double boundl,
-     ae_int_t boundrtype,
-     double boundr,
-     /* Real    */ ae_vector* d,
-     /* Real    */ ae_vector* a1,
-     /* Real    */ ae_vector* a2,
-     /* Real    */ ae_vector* a3,
-     /* Real    */ ae_vector* b,
-     /* Real    */ ae_vector* dt,
+     ae_bool modakima,
+     spline1dinterpolant* c,
      ae_state *_state);
 static void spline1d_heapsortpoints(/* Real    */ ae_vector* x,
      /* Real    */ ae_vector* y,
@@ -341,7 +333,7 @@ void spline1dbuildcubic(/* Real    */ const ae_vector* _x,
     {
         y.ptr.p_double[n-1] = y.ptr.p_double[0];
     }
-    spline1d_spline1dgriddiffcubicinternal(&x, &y, n, boundltype, boundl, boundrtype, boundr, &d, &a1, &a2, &a3, &b, &dt, _state);
+    spline1dgriddiffcubicinternal(&x, &y, n, boundltype, boundl, boundrtype, boundr, &d, &a1, &a2, &a3, &b, &dt, _state);
     spline1dbuildhermite(&x, &y, &d, n, c, _state);
     c->periodic = boundltype==-1||boundrtype==-1;
     c->continuity = 2;
@@ -491,7 +483,7 @@ void spline1dgriddiffcubic(/* Real    */ const ae_vector* _x,
      * Now we've checked and preordered everything,
      * so we can call internal function.
      */
-    spline1d_spline1dgriddiffcubicinternal(&x, &y, n, boundltype, boundl, boundrtype, boundr, d, &a1, &a2, &a3, &b, &dt, _state);
+    spline1dgriddiffcubicinternal(&x, &y, n, boundltype, boundl, boundrtype, boundr, d, &a1, &a2, &a3, &b, &dt, _state);
     
     /*
      * Remember that HeapSortPPoints() call?
@@ -663,7 +655,7 @@ void spline1dgriddiff2cubic(/* Real    */ const ae_vector* _x,
      * After this call we will calculate second derivatives
      * (manually, by converting to the power basis)
      */
-    spline1d_spline1dgriddiffcubicinternal(&x, &y, n, boundltype, boundl, boundrtype, boundr, d1, &a1, &a2, &a3, &b, &dt, _state);
+    spline1dgriddiffcubicinternal(&x, &y, n, boundltype, boundl, boundrtype, boundr, d1, &a1, &a2, &a3, &b, &dt, _state);
     ae_vector_set_length(d2, n, _state);
     delta = (double)(0);
     s2 = (double)(0);
@@ -905,7 +897,7 @@ void spline1dconvcubic(/* Real    */ const ae_vector* _x,
      * * convert using internal Conv() function
      * * convert Y2 back to original order
      */
-    spline1d_spline1dgriddiffcubicinternal(&x, &y, n, boundltype, boundl, boundrtype, boundr, &d, &a1, &a2, &a3, &b, &dt, _state);
+    spline1dgriddiffcubicinternal(&x, &y, n, boundltype, boundl, boundrtype, boundr, &d, &a1, &a2, &a3, &b, &dt, _state);
     spline1dconvdiffinternal(&x, &y, &d, n, &x2, n2, y2, ae_true, &d1, ae_false, &d2, ae_false, _state);
     ae_assert(dt.cnt>=n2, "Spline1DConvCubic: internal error!", _state);
     for(i=0; i<=n2-1; i++)
@@ -1110,7 +1102,7 @@ void spline1dconvdiffcubic(/* Real    */ const ae_vector* _x,
      * * convert using internal Conv() function
      * * convert Y2 back to original order
      */
-    spline1d_spline1dgriddiffcubicinternal(&x, &y, n, boundltype, boundl, boundrtype, boundr, &d, &a1, &a2, &a3, &b, &dt, _state);
+    spline1dgriddiffcubicinternal(&x, &y, n, boundltype, boundl, boundrtype, boundr, &d, &a1, &a2, &a3, &b, &dt, _state);
     spline1dconvdiffinternal(&x, &y, &d, n, &x2, n2, y2, ae_true, d2, ae_true, &rt1, ae_false, _state);
     ae_assert(dt.cnt>=n2, "Spline1DConvDiffCubic: internal error!", _state);
     for(i=0; i<=n2-1; i++)
@@ -1321,7 +1313,7 @@ void spline1dconvdiff2cubic(/* Real    */ const ae_vector* _x,
      * * convert using internal Conv() function
      * * convert Y2 back to original order
      */
-    spline1d_spline1dgriddiffcubicinternal(&x, &y, n, boundltype, boundl, boundrtype, boundr, &d, &a1, &a2, &a3, &b, &dt, _state);
+    spline1dgriddiffcubicinternal(&x, &y, n, boundltype, boundl, boundrtype, boundr, &d, &a1, &a2, &a3, &b, &dt, _state);
     spline1dconvdiffinternal(&x, &y, &d, n, &x2, n2, y2, ae_true, d2, ae_true, dd2, ae_true, _state);
     ae_assert(dt.cnt>=n2, "Spline1DConvDiff2Cubic: internal error!", _state);
     for(i=0; i<=n2-1; i++)
@@ -1631,94 +1623,58 @@ Subroutine automatically sorts points, so caller may pass unsorted array.
   -- ALGLIB PROJECT --
      Copyright 24.06.2007 by Bochkanov Sergey
 *************************************************************************/
-void spline1dbuildakima(/* Real    */ const ae_vector* _x,
-     /* Real    */ const ae_vector* _y,
+void spline1dbuildakima(/* Real    */ const ae_vector* x,
+     /* Real    */ const ae_vector* y,
      ae_int_t n,
      spline1dinterpolant* c,
      ae_state *_state)
 {
-    ae_frame _frame_block;
-    ae_vector x;
-    ae_vector y;
-    ae_int_t i;
-    ae_vector d;
-    ae_vector w;
-    ae_vector diff;
 
-    ae_frame_make(_state, &_frame_block);
-    memset(&x, 0, sizeof(x));
-    memset(&y, 0, sizeof(y));
-    memset(&d, 0, sizeof(d));
-    memset(&w, 0, sizeof(w));
-    memset(&diff, 0, sizeof(diff));
-    ae_vector_init_copy(&x, _x, _state, ae_true);
-    ae_vector_init_copy(&y, _y, _state, ae_true);
     _spline1dinterpolant_clear(c);
-    ae_vector_init(&d, 0, DT_REAL, _state, ae_true);
-    ae_vector_init(&w, 0, DT_REAL, _state, ae_true);
-    ae_vector_init(&diff, 0, DT_REAL, _state, ae_true);
 
-    ae_assert(n>=2, "Spline1DBuildAkima: N<2!", _state);
-    ae_assert(x.cnt>=n, "Spline1DBuildAkima: Length(X)<N!", _state);
-    ae_assert(y.cnt>=n, "Spline1DBuildAkima: Length(Y)<N!", _state);
-    
-    /*
-     * check and sort points
-     */
-    ae_assert(isfinitevector(&x, n, _state), "Spline1DBuildAkima: X contains infinite or NAN values!", _state);
-    ae_assert(isfinitevector(&y, n, _state), "Spline1DBuildAkima: Y contains infinite or NAN values!", _state);
-    spline1d_heapsortpoints(&x, &y, n, _state);
-    ae_assert(aredistinct(&x, n, _state), "Spline1DBuildAkima: at least two consequent points are too close!", _state);
-    
-    /*
-     * Handle special cases: N=2, N=3, N=4
-     */
-    if( n<=4 )
-    {
-        spline1dbuildcubic(&x, &y, n, 0, 0.0, 0, 0.0, c, _state);
-        ae_frame_leave(_state);
-        return;
-    }
-    
-    /*
-     * Prepare W (weights), Diff (divided differences)
-     */
-    ae_vector_set_length(&w, n-1, _state);
-    ae_vector_set_length(&diff, n-1, _state);
-    for(i=0; i<=n-2; i++)
-    {
-        diff.ptr.p_double[i] = (y.ptr.p_double[i+1]-y.ptr.p_double[i])/(x.ptr.p_double[i+1]-x.ptr.p_double[i]);
-    }
-    for(i=1; i<=n-2; i++)
-    {
-        w.ptr.p_double[i] = ae_fabs(diff.ptr.p_double[i]-diff.ptr.p_double[i-1], _state);
-    }
-    
-    /*
-     * Prepare Hermite interpolation scheme
-     */
-    ae_vector_set_length(&d, n, _state);
-    for(i=2; i<=n-3; i++)
-    {
-        if( ae_fp_neq(ae_fabs(w.ptr.p_double[i-1], _state)+ae_fabs(w.ptr.p_double[i+1], _state),(double)(0)) )
-        {
-            d.ptr.p_double[i] = (w.ptr.p_double[i+1]*diff.ptr.p_double[i-1]+w.ptr.p_double[i-1]*diff.ptr.p_double[i])/(w.ptr.p_double[i+1]+w.ptr.p_double[i-1]);
-        }
-        else
-        {
-            d.ptr.p_double[i] = ((x.ptr.p_double[i+1]-x.ptr.p_double[i])*diff.ptr.p_double[i-1]+(x.ptr.p_double[i]-x.ptr.p_double[i-1])*diff.ptr.p_double[i])/(x.ptr.p_double[i+1]-x.ptr.p_double[i-1]);
-        }
-    }
-    d.ptr.p_double[0] = spline1d_diffthreepoint(x.ptr.p_double[0], x.ptr.p_double[0], y.ptr.p_double[0], x.ptr.p_double[1], y.ptr.p_double[1], x.ptr.p_double[2], y.ptr.p_double[2], _state);
-    d.ptr.p_double[1] = spline1d_diffthreepoint(x.ptr.p_double[1], x.ptr.p_double[0], y.ptr.p_double[0], x.ptr.p_double[1], y.ptr.p_double[1], x.ptr.p_double[2], y.ptr.p_double[2], _state);
-    d.ptr.p_double[n-2] = spline1d_diffthreepoint(x.ptr.p_double[n-2], x.ptr.p_double[n-3], y.ptr.p_double[n-3], x.ptr.p_double[n-2], y.ptr.p_double[n-2], x.ptr.p_double[n-1], y.ptr.p_double[n-1], _state);
-    d.ptr.p_double[n-1] = spline1d_diffthreepoint(x.ptr.p_double[n-1], x.ptr.p_double[n-3], y.ptr.p_double[n-3], x.ptr.p_double[n-2], y.ptr.p_double[n-2], x.ptr.p_double[n-1], y.ptr.p_double[n-1], _state);
-    
-    /*
-     * Build Akima spline using Hermite interpolation scheme
-     */
-    spline1dbuildhermite(&x, &y, &d, n, c, _state);
-    ae_frame_leave(_state);
+    spline1d_buildakimax(x, y, n, ae_false, c, _state);
+}
+
+
+/*************************************************************************
+This subroutine builds modified Akima spline interpolant, with weights
+
+    W[i]=|Delta[I]-Delta[I-1]|
+
+replaced by
+
+    W[i]=|Delta[I]-Delta[I-1]|+0.5*|Delta[I]+Delta[I-1]|
+
+INPUT PARAMETERS:
+    X           -   spline nodes, array[0..N-1]
+    Y           -   function values, array[0..N-1]
+    N           -   points count (optional):
+                    * N>=2
+                    * if given, only first N points are used to build spline
+                    * if not given, automatically detected from X/Y sizes
+                      (len(X) must be equal to len(Y))
+
+OUTPUT PARAMETERS:
+    C           -   spline interpolant
+
+
+ORDER OF POINTS
+
+Subroutine automatically sorts points, so caller may pass unsorted array.
+
+  -- ALGLIB PROJECT --
+     Copyright 24.06.2007 by Bochkanov Sergey
+*************************************************************************/
+void spline1dbuildakimamod(/* Real    */ const ae_vector* x,
+     /* Real    */ const ae_vector* y,
+     ae_int_t n,
+     spline1dinterpolant* c,
+     ae_state *_state)
+{
+
+    _spline1dinterpolant_clear(c);
+
+    spline1d_buildakimax(x, y, n, ae_true, c, _state);
 }
 
 
@@ -3014,6 +2970,197 @@ void spline1dfit(/* Real    */ const ae_vector* _x,
             (int)(ae_tickcount()-tstart));
     }
     ae_frame_leave(_state);
+}
+
+
+/*************************************************************************
+Internal version of Spline1DGridDiffCubic.
+
+Accepts pre-ordered X/Y, temporary arrays (which may be  preallocated,  if
+you want to save time, or not) and output array (which may be preallocated
+too).
+
+Y is passed as var-parameter because we may need to force last element  to
+be equal to the first one (if periodic boundary conditions are specified).
+
+  -- ALGLIB PROJECT --
+     Copyright 03.09.2010 by Bochkanov Sergey
+*************************************************************************/
+void spline1dgriddiffcubicinternal(/* Real    */ const ae_vector* x,
+     /* Real    */ ae_vector* y,
+     ae_int_t n,
+     ae_int_t boundltype,
+     double boundl,
+     ae_int_t boundrtype,
+     double boundr,
+     /* Real    */ ae_vector* d,
+     /* Real    */ ae_vector* a1,
+     /* Real    */ ae_vector* a2,
+     /* Real    */ ae_vector* a3,
+     /* Real    */ ae_vector* b,
+     /* Real    */ ae_vector* dt,
+     ae_state *_state)
+{
+    ae_int_t i;
+
+
+    
+    /*
+     * allocate arrays
+     */
+    if( d->cnt<n )
+    {
+        ae_vector_set_length(d, n, _state);
+    }
+    if( a1->cnt<n )
+    {
+        ae_vector_set_length(a1, n, _state);
+    }
+    if( a2->cnt<n )
+    {
+        ae_vector_set_length(a2, n, _state);
+    }
+    if( a3->cnt<n )
+    {
+        ae_vector_set_length(a3, n, _state);
+    }
+    if( b->cnt<n )
+    {
+        ae_vector_set_length(b, n, _state);
+    }
+    if( dt->cnt<n )
+    {
+        ae_vector_set_length(dt, n, _state);
+    }
+    
+    /*
+     * Special cases:
+     * * N=2, parabolic terminated boundary condition on both ends
+     * * N=2, periodic boundary condition
+     */
+    if( (n==2&&boundltype==0)&&boundrtype==0 )
+    {
+        d->ptr.p_double[0] = (y->ptr.p_double[1]-y->ptr.p_double[0])/(x->ptr.p_double[1]-x->ptr.p_double[0]);
+        d->ptr.p_double[1] = d->ptr.p_double[0];
+        return;
+    }
+    if( (n==2&&boundltype==-1)&&boundrtype==-1 )
+    {
+        d->ptr.p_double[0] = (double)(0);
+        d->ptr.p_double[1] = (double)(0);
+        return;
+    }
+    
+    /*
+     * Periodic and non-periodic boundary conditions are
+     * two separate classes
+     */
+    if( boundrtype==-1&&boundltype==-1 )
+    {
+        
+        /*
+         * Periodic boundary conditions
+         */
+        y->ptr.p_double[n-1] = y->ptr.p_double[0];
+        
+        /*
+         * Boundary conditions at N-1 points
+         * (one point less because last point is the same as first point).
+         */
+        a1->ptr.p_double[0] = x->ptr.p_double[1]-x->ptr.p_double[0];
+        a2->ptr.p_double[0] = (double)2*(x->ptr.p_double[1]-x->ptr.p_double[0]+x->ptr.p_double[n-1]-x->ptr.p_double[n-2]);
+        a3->ptr.p_double[0] = x->ptr.p_double[n-1]-x->ptr.p_double[n-2];
+        b->ptr.p_double[0] = (double)3*(y->ptr.p_double[n-1]-y->ptr.p_double[n-2])/(x->ptr.p_double[n-1]-x->ptr.p_double[n-2])*(x->ptr.p_double[1]-x->ptr.p_double[0])+(double)3*(y->ptr.p_double[1]-y->ptr.p_double[0])/(x->ptr.p_double[1]-x->ptr.p_double[0])*(x->ptr.p_double[n-1]-x->ptr.p_double[n-2]);
+        for(i=1; i<=n-2; i++)
+        {
+            
+            /*
+             * Altough last point is [N-2], we use X[N-1] and Y[N-1]
+             * (because of periodicity)
+             */
+            a1->ptr.p_double[i] = x->ptr.p_double[i+1]-x->ptr.p_double[i];
+            a2->ptr.p_double[i] = (double)2*(x->ptr.p_double[i+1]-x->ptr.p_double[i-1]);
+            a3->ptr.p_double[i] = x->ptr.p_double[i]-x->ptr.p_double[i-1];
+            b->ptr.p_double[i] = (double)3*(y->ptr.p_double[i]-y->ptr.p_double[i-1])/(x->ptr.p_double[i]-x->ptr.p_double[i-1])*(x->ptr.p_double[i+1]-x->ptr.p_double[i])+(double)3*(y->ptr.p_double[i+1]-y->ptr.p_double[i])/(x->ptr.p_double[i+1]-x->ptr.p_double[i])*(x->ptr.p_double[i]-x->ptr.p_double[i-1]);
+        }
+        
+        /*
+         * Solve, add last point (with index N-1)
+         */
+        spline1d_solvecyclictridiagonal(a1, a2, a3, b, n-1, dt, _state);
+        ae_v_move(&d->ptr.p_double[0], 1, &dt->ptr.p_double[0], 1, ae_v_len(0,n-2));
+        d->ptr.p_double[n-1] = d->ptr.p_double[0];
+    }
+    else
+    {
+        
+        /*
+         * Non-periodic boundary condition.
+         * Left boundary conditions.
+         */
+        if( boundltype==0 )
+        {
+            a1->ptr.p_double[0] = (double)(0);
+            a2->ptr.p_double[0] = (double)(1);
+            a3->ptr.p_double[0] = (double)(1);
+            b->ptr.p_double[0] = (double)2*(y->ptr.p_double[1]-y->ptr.p_double[0])/(x->ptr.p_double[1]-x->ptr.p_double[0]);
+        }
+        if( boundltype==1 )
+        {
+            a1->ptr.p_double[0] = (double)(0);
+            a2->ptr.p_double[0] = (double)(1);
+            a3->ptr.p_double[0] = (double)(0);
+            b->ptr.p_double[0] = boundl;
+        }
+        if( boundltype==2 )
+        {
+            a1->ptr.p_double[0] = (double)(0);
+            a2->ptr.p_double[0] = (double)(2);
+            a3->ptr.p_double[0] = (double)(1);
+            b->ptr.p_double[0] = (double)3*(y->ptr.p_double[1]-y->ptr.p_double[0])/(x->ptr.p_double[1]-x->ptr.p_double[0])-0.5*boundl*(x->ptr.p_double[1]-x->ptr.p_double[0]);
+        }
+        
+        /*
+         * Central conditions
+         */
+        for(i=1; i<=n-2; i++)
+        {
+            a1->ptr.p_double[i] = x->ptr.p_double[i+1]-x->ptr.p_double[i];
+            a2->ptr.p_double[i] = (double)2*(x->ptr.p_double[i+1]-x->ptr.p_double[i-1]);
+            a3->ptr.p_double[i] = x->ptr.p_double[i]-x->ptr.p_double[i-1];
+            b->ptr.p_double[i] = (double)3*(y->ptr.p_double[i]-y->ptr.p_double[i-1])/(x->ptr.p_double[i]-x->ptr.p_double[i-1])*(x->ptr.p_double[i+1]-x->ptr.p_double[i])+(double)3*(y->ptr.p_double[i+1]-y->ptr.p_double[i])/(x->ptr.p_double[i+1]-x->ptr.p_double[i])*(x->ptr.p_double[i]-x->ptr.p_double[i-1]);
+        }
+        
+        /*
+         * Right boundary conditions
+         */
+        if( boundrtype==0 )
+        {
+            a1->ptr.p_double[n-1] = (double)(1);
+            a2->ptr.p_double[n-1] = (double)(1);
+            a3->ptr.p_double[n-1] = (double)(0);
+            b->ptr.p_double[n-1] = (double)2*(y->ptr.p_double[n-1]-y->ptr.p_double[n-2])/(x->ptr.p_double[n-1]-x->ptr.p_double[n-2]);
+        }
+        if( boundrtype==1 )
+        {
+            a1->ptr.p_double[n-1] = (double)(0);
+            a2->ptr.p_double[n-1] = (double)(1);
+            a3->ptr.p_double[n-1] = (double)(0);
+            b->ptr.p_double[n-1] = boundr;
+        }
+        if( boundrtype==2 )
+        {
+            a1->ptr.p_double[n-1] = (double)(1);
+            a2->ptr.p_double[n-1] = (double)(2);
+            a3->ptr.p_double[n-1] = (double)(0);
+            b->ptr.p_double[n-1] = (double)3*(y->ptr.p_double[n-1]-y->ptr.p_double[n-2])/(x->ptr.p_double[n-1]-x->ptr.p_double[n-2])+0.5*boundr*(x->ptr.p_double[n-1]-x->ptr.p_double[n-2]);
+        }
+        
+        /*
+         * Solve
+         */
+        spline1d_solvetridiagonal(a1, a2, a3, b, n, d, _state);
+    }
 }
 
 
@@ -5107,193 +5254,103 @@ static double spline1d_basisdiff2(const spline1dbbasis* basis,
 
 
 /*************************************************************************
-Internal version of Spline1DGridDiffCubic.
-
-Accepts pre-ordered X/Y, temporary arrays (which may be  preallocated,  if
-you want to save time, or not) and output array (which may be preallocated
-too).
-
-Y is passed as var-parameter because we may need to force last element  to
-be equal to the first one (if periodic boundary conditions are specified).
+This subroutine builds Akima spline interpolant, either original or modified
+one.
 
   -- ALGLIB PROJECT --
-     Copyright 03.09.2010 by Bochkanov Sergey
+     Copyright 24.06.2007 by Bochkanov Sergey
 *************************************************************************/
-static void spline1d_spline1dgriddiffcubicinternal(/* Real    */ const ae_vector* x,
-     /* Real    */ ae_vector* y,
+static void spline1d_buildakimax(/* Real    */ const ae_vector* _x,
+     /* Real    */ const ae_vector* _y,
      ae_int_t n,
-     ae_int_t boundltype,
-     double boundl,
-     ae_int_t boundrtype,
-     double boundr,
-     /* Real    */ ae_vector* d,
-     /* Real    */ ae_vector* a1,
-     /* Real    */ ae_vector* a2,
-     /* Real    */ ae_vector* a3,
-     /* Real    */ ae_vector* b,
-     /* Real    */ ae_vector* dt,
+     ae_bool modakima,
+     spline1dinterpolant* c,
      ae_state *_state)
 {
+    ae_frame _frame_block;
+    ae_vector x;
+    ae_vector y;
     ae_int_t i;
+    double modmult;
+    ae_vector d;
+    ae_vector w;
+    ae_vector diff;
 
+    ae_frame_make(_state, &_frame_block);
+    memset(&x, 0, sizeof(x));
+    memset(&y, 0, sizeof(y));
+    memset(&d, 0, sizeof(d));
+    memset(&w, 0, sizeof(w));
+    memset(&diff, 0, sizeof(diff));
+    ae_vector_init_copy(&x, _x, _state, ae_true);
+    ae_vector_init_copy(&y, _y, _state, ae_true);
+    _spline1dinterpolant_clear(c);
+    ae_vector_init(&d, 0, DT_REAL, _state, ae_true);
+    ae_vector_init(&w, 0, DT_REAL, _state, ae_true);
+    ae_vector_init(&diff, 0, DT_REAL, _state, ae_true);
 
+    ae_assert(n>=2, "Spline1DBuildAkima(Mod): N<2!", _state);
+    ae_assert(x.cnt>=n, "Spline1DBuildAkima(Mod): Length(X)<N!", _state);
+    ae_assert(y.cnt>=n, "Spline1DBuildAkima(Mod): Length(Y)<N!", _state);
     
     /*
-     * allocate arrays
+     * check and sort points
      */
-    if( d->cnt<n )
-    {
-        ae_vector_set_length(d, n, _state);
-    }
-    if( a1->cnt<n )
-    {
-        ae_vector_set_length(a1, n, _state);
-    }
-    if( a2->cnt<n )
-    {
-        ae_vector_set_length(a2, n, _state);
-    }
-    if( a3->cnt<n )
-    {
-        ae_vector_set_length(a3, n, _state);
-    }
-    if( b->cnt<n )
-    {
-        ae_vector_set_length(b, n, _state);
-    }
-    if( dt->cnt<n )
-    {
-        ae_vector_set_length(dt, n, _state);
-    }
+    ae_assert(isfinitevector(&x, n, _state), "Spline1DBuildAkima(Mod): X contains infinite or NAN values!", _state);
+    ae_assert(isfinitevector(&y, n, _state), "Spline1DBuildAkima(Mod): Y contains infinite or NAN values!", _state);
+    spline1d_heapsortpoints(&x, &y, n, _state);
+    ae_assert(aredistinct(&x, n, _state), "Spline1DBuildAkima(Mod): at least two consequent points are too close!", _state);
     
     /*
-     * Special cases:
-     * * N=2, parabolic terminated boundary condition on both ends
-     * * N=2, periodic boundary condition
+     * Handle special cases: N=2, N=3, N=4
      */
-    if( (n==2&&boundltype==0)&&boundrtype==0 )
+    if( n<=4 )
     {
-        d->ptr.p_double[0] = (y->ptr.p_double[1]-y->ptr.p_double[0])/(x->ptr.p_double[1]-x->ptr.p_double[0]);
-        d->ptr.p_double[1] = d->ptr.p_double[0];
-        return;
-    }
-    if( (n==2&&boundltype==-1)&&boundrtype==-1 )
-    {
-        d->ptr.p_double[0] = (double)(0);
-        d->ptr.p_double[1] = (double)(0);
+        spline1dbuildcubic(&x, &y, n, 0, 0.0, 0, 0.0, c, _state);
+        ae_frame_leave(_state);
         return;
     }
     
     /*
-     * Periodic and non-periodic boundary conditions are
-     * two separate classes
+     * Prepare W (weights), Diff (divided differences)
      */
-    if( boundrtype==-1&&boundltype==-1 )
+    modmult = rcase2(modakima, 0.5, (double)(0), _state);
+    ae_vector_set_length(&w, n-1, _state);
+    ae_vector_set_length(&diff, n-1, _state);
+    for(i=0; i<=n-2; i++)
     {
-        
-        /*
-         * Periodic boundary conditions
-         */
-        y->ptr.p_double[n-1] = y->ptr.p_double[0];
-        
-        /*
-         * Boundary conditions at N-1 points
-         * (one point less because last point is the same as first point).
-         */
-        a1->ptr.p_double[0] = x->ptr.p_double[1]-x->ptr.p_double[0];
-        a2->ptr.p_double[0] = (double)2*(x->ptr.p_double[1]-x->ptr.p_double[0]+x->ptr.p_double[n-1]-x->ptr.p_double[n-2]);
-        a3->ptr.p_double[0] = x->ptr.p_double[n-1]-x->ptr.p_double[n-2];
-        b->ptr.p_double[0] = (double)3*(y->ptr.p_double[n-1]-y->ptr.p_double[n-2])/(x->ptr.p_double[n-1]-x->ptr.p_double[n-2])*(x->ptr.p_double[1]-x->ptr.p_double[0])+(double)3*(y->ptr.p_double[1]-y->ptr.p_double[0])/(x->ptr.p_double[1]-x->ptr.p_double[0])*(x->ptr.p_double[n-1]-x->ptr.p_double[n-2]);
-        for(i=1; i<=n-2; i++)
-        {
-            
-            /*
-             * Altough last point is [N-2], we use X[N-1] and Y[N-1]
-             * (because of periodicity)
-             */
-            a1->ptr.p_double[i] = x->ptr.p_double[i+1]-x->ptr.p_double[i];
-            a2->ptr.p_double[i] = (double)2*(x->ptr.p_double[i+1]-x->ptr.p_double[i-1]);
-            a3->ptr.p_double[i] = x->ptr.p_double[i]-x->ptr.p_double[i-1];
-            b->ptr.p_double[i] = (double)3*(y->ptr.p_double[i]-y->ptr.p_double[i-1])/(x->ptr.p_double[i]-x->ptr.p_double[i-1])*(x->ptr.p_double[i+1]-x->ptr.p_double[i])+(double)3*(y->ptr.p_double[i+1]-y->ptr.p_double[i])/(x->ptr.p_double[i+1]-x->ptr.p_double[i])*(x->ptr.p_double[i]-x->ptr.p_double[i-1]);
-        }
-        
-        /*
-         * Solve, add last point (with index N-1)
-         */
-        spline1d_solvecyclictridiagonal(a1, a2, a3, b, n-1, dt, _state);
-        ae_v_move(&d->ptr.p_double[0], 1, &dt->ptr.p_double[0], 1, ae_v_len(0,n-2));
-        d->ptr.p_double[n-1] = d->ptr.p_double[0];
+        diff.ptr.p_double[i] = (y.ptr.p_double[i+1]-y.ptr.p_double[i])/(x.ptr.p_double[i+1]-x.ptr.p_double[i]);
     }
-    else
+    for(i=1; i<=n-2; i++)
     {
-        
-        /*
-         * Non-periodic boundary condition.
-         * Left boundary conditions.
-         */
-        if( boundltype==0 )
-        {
-            a1->ptr.p_double[0] = (double)(0);
-            a2->ptr.p_double[0] = (double)(1);
-            a3->ptr.p_double[0] = (double)(1);
-            b->ptr.p_double[0] = (double)2*(y->ptr.p_double[1]-y->ptr.p_double[0])/(x->ptr.p_double[1]-x->ptr.p_double[0]);
-        }
-        if( boundltype==1 )
-        {
-            a1->ptr.p_double[0] = (double)(0);
-            a2->ptr.p_double[0] = (double)(1);
-            a3->ptr.p_double[0] = (double)(0);
-            b->ptr.p_double[0] = boundl;
-        }
-        if( boundltype==2 )
-        {
-            a1->ptr.p_double[0] = (double)(0);
-            a2->ptr.p_double[0] = (double)(2);
-            a3->ptr.p_double[0] = (double)(1);
-            b->ptr.p_double[0] = (double)3*(y->ptr.p_double[1]-y->ptr.p_double[0])/(x->ptr.p_double[1]-x->ptr.p_double[0])-0.5*boundl*(x->ptr.p_double[1]-x->ptr.p_double[0]);
-        }
-        
-        /*
-         * Central conditions
-         */
-        for(i=1; i<=n-2; i++)
-        {
-            a1->ptr.p_double[i] = x->ptr.p_double[i+1]-x->ptr.p_double[i];
-            a2->ptr.p_double[i] = (double)2*(x->ptr.p_double[i+1]-x->ptr.p_double[i-1]);
-            a3->ptr.p_double[i] = x->ptr.p_double[i]-x->ptr.p_double[i-1];
-            b->ptr.p_double[i] = (double)3*(y->ptr.p_double[i]-y->ptr.p_double[i-1])/(x->ptr.p_double[i]-x->ptr.p_double[i-1])*(x->ptr.p_double[i+1]-x->ptr.p_double[i])+(double)3*(y->ptr.p_double[i+1]-y->ptr.p_double[i])/(x->ptr.p_double[i+1]-x->ptr.p_double[i])*(x->ptr.p_double[i]-x->ptr.p_double[i-1]);
-        }
-        
-        /*
-         * Right boundary conditions
-         */
-        if( boundrtype==0 )
-        {
-            a1->ptr.p_double[n-1] = (double)(1);
-            a2->ptr.p_double[n-1] = (double)(1);
-            a3->ptr.p_double[n-1] = (double)(0);
-            b->ptr.p_double[n-1] = (double)2*(y->ptr.p_double[n-1]-y->ptr.p_double[n-2])/(x->ptr.p_double[n-1]-x->ptr.p_double[n-2]);
-        }
-        if( boundrtype==1 )
-        {
-            a1->ptr.p_double[n-1] = (double)(0);
-            a2->ptr.p_double[n-1] = (double)(1);
-            a3->ptr.p_double[n-1] = (double)(0);
-            b->ptr.p_double[n-1] = boundr;
-        }
-        if( boundrtype==2 )
-        {
-            a1->ptr.p_double[n-1] = (double)(1);
-            a2->ptr.p_double[n-1] = (double)(2);
-            a3->ptr.p_double[n-1] = (double)(0);
-            b->ptr.p_double[n-1] = (double)3*(y->ptr.p_double[n-1]-y->ptr.p_double[n-2])/(x->ptr.p_double[n-1]-x->ptr.p_double[n-2])+0.5*boundr*(x->ptr.p_double[n-1]-x->ptr.p_double[n-2]);
-        }
-        
-        /*
-         * Solve
-         */
-        spline1d_solvetridiagonal(a1, a2, a3, b, n, d, _state);
+        w.ptr.p_double[i] = ae_fabs(diff.ptr.p_double[i]-diff.ptr.p_double[i-1], _state)+modmult*ae_fabs(diff.ptr.p_double[i]+diff.ptr.p_double[i-1], _state);
     }
+    
+    /*
+     * Prepare Hermite interpolation scheme
+     */
+    ae_vector_set_length(&d, n, _state);
+    for(i=2; i<=n-3; i++)
+    {
+        if( ae_fp_neq(ae_fabs(w.ptr.p_double[i-1], _state)+ae_fabs(w.ptr.p_double[i+1], _state),(double)(0)) )
+        {
+            d.ptr.p_double[i] = (w.ptr.p_double[i+1]*diff.ptr.p_double[i-1]+w.ptr.p_double[i-1]*diff.ptr.p_double[i])/(w.ptr.p_double[i+1]+w.ptr.p_double[i-1]);
+        }
+        else
+        {
+            d.ptr.p_double[i] = ((x.ptr.p_double[i+1]-x.ptr.p_double[i])*diff.ptr.p_double[i-1]+(x.ptr.p_double[i]-x.ptr.p_double[i-1])*diff.ptr.p_double[i])/(x.ptr.p_double[i+1]-x.ptr.p_double[i-1]);
+        }
+    }
+    d.ptr.p_double[0] = spline1d_diffthreepoint(x.ptr.p_double[0], x.ptr.p_double[0], y.ptr.p_double[0], x.ptr.p_double[1], y.ptr.p_double[1], x.ptr.p_double[2], y.ptr.p_double[2], _state);
+    d.ptr.p_double[1] = spline1d_diffthreepoint(x.ptr.p_double[1], x.ptr.p_double[0], y.ptr.p_double[0], x.ptr.p_double[1], y.ptr.p_double[1], x.ptr.p_double[2], y.ptr.p_double[2], _state);
+    d.ptr.p_double[n-2] = spline1d_diffthreepoint(x.ptr.p_double[n-2], x.ptr.p_double[n-3], y.ptr.p_double[n-3], x.ptr.p_double[n-2], y.ptr.p_double[n-2], x.ptr.p_double[n-1], y.ptr.p_double[n-1], _state);
+    d.ptr.p_double[n-1] = spline1d_diffthreepoint(x.ptr.p_double[n-1], x.ptr.p_double[n-3], y.ptr.p_double[n-3], x.ptr.p_double[n-2], y.ptr.p_double[n-2], x.ptr.p_double[n-1], y.ptr.p_double[n-1], _state);
+    
+    /*
+     * Build Akima spline using Hermite interpolation scheme
+     */
+    spline1dbuildhermitebuf(&x, &y, &d, n, c, _state);
+    ae_frame_leave(_state);
 }
 
 

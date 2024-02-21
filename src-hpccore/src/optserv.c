@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -23,6 +23,8 @@ static double optserv_ognoiselevelf = 1.0E2*ae_machineepsilon;
 static double optserv_ognoiselevelg = 1.0E4*ae_machineepsilon;
 static double optserv_ogminrating0 = 50.0;
 static double optserv_ogminrating1 = 50.0;
+static double optserv_xbfgssigma2 = 0.2;
+static double optserv_xbfgssigma3 = 5;
 static double optserv_feasibilityerror(/* Real    */ const ae_matrix* ce,
      /* Real    */ const ae_vector* x,
      ae_int_t nmain,
@@ -66,6 +68,12 @@ static void optserv_c1continuitytest1(smoothnessmonitor* monitor,
      ae_state *_state);
 static void optserv_popfrontxy(xbfgshessian* hess, ae_state *_state);
 static void optserv_hessianupdatelowlevel(xbfgshessian* hess,
+     /* Real    */ ae_matrix* h,
+     /* Real    */ const ae_vector* sk,
+     /* Real    */ const ae_vector* yk,
+     ae_int_t* status,
+     ae_state *_state);
+static void optserv_hessianupdatelowlevel2(xbfgshessian* hess,
      /* Real    */ ae_matrix* h,
      /* Real    */ const ae_vector* sk,
      /* Real    */ const ae_vector* yk,
@@ -171,10 +179,8 @@ the indexes of the "original" constraints via LCSrcIdx[] array.
 
 if lcerr=0 (say, if no constraints are violated) then lcidx=-1.
 
-If nonunits=false then s[] is not referenced at all (assumed unit).
-
   -- ALGLIB --
-     Copyright 7.11.2018 by Bochkanov Sergey
+     Copyright 07.11.2018 by Bochkanov Sergey
 *************************************************************************/
 void checklcviolation(/* Real    */ const ae_matrix* cleic,
      /* Integer */ const ae_vector* lcsrcidx,
@@ -220,6 +226,77 @@ void checklcviolation(/* Real    */ const ae_matrix* cleic,
         if( cx>*lcerr )
         {
             *lcerr = cx;
+            *lcidx = lcsrcidx->ptr.p_int[i];
+        }
+    }
+}
+
+
+/*************************************************************************
+This subroutine checks violation of the general linear constraints.
+
+Constraints are assumed to be un-normalized and having the following format:
+
+    L <= A*x <= U, with some of L/U being infinite
+
+On output it sets lcerr to the maximum scaled violation, lcidx to the source
+index of the most violating constraint (row indexes of A are mapped to the
+indexes of the "original" constraints via LCSrcIdx[] array).
+
+if lcerr=0 (say, if no constraints are violated) then lcidx=-1.
+
+  -- ALGLIB --
+     Copyright 07.11.2018 by Bochkanov Sergey
+*************************************************************************/
+void checklc2violation(const sparsematrix* a,
+     /* Real    */ const ae_vector* al,
+     /* Real    */ const ae_vector* au,
+     /* Integer */ const ae_vector* lcsrcidx,
+     ae_int_t cntlc,
+     /* Real    */ const ae_vector* x,
+     double* lcerr,
+     ae_int_t* lcidx,
+     ae_state *_state)
+{
+    ae_int_t i;
+    ae_int_t j;
+    ae_int_t j0;
+    ae_int_t j1;
+    double cx;
+    double cnrm;
+    double v;
+
+    *lcerr = 0.0;
+    *lcidx = 0;
+
+    *lcerr = (double)(0);
+    *lcidx = -1;
+    if( cntlc==0 )
+    {
+        return;
+    }
+    ae_assert(a->matrixtype==1, "CheckLC2Violation: non-CRS input detected", _state);
+    for(i=0; i<=a->m-1; i++)
+    {
+        cx = 0.0;
+        cnrm = (double)(0);
+        j0 = a->ridx.ptr.p_int[i];
+        j1 = a->ridx.ptr.p_int[i+1]-1;
+        for(j=j0; j<=j1; j++)
+        {
+            v = a->vals.ptr.p_double[j];
+            cx = cx+v*x->ptr.p_double[a->idx.ptr.p_int[j]];
+            cnrm = cnrm+v*v;
+        }
+        cnrm = coalesce(ae_sqrt(cnrm, _state), (double)(1), _state);
+        if( ae_isfinite(al->ptr.p_double[i], _state)&&(al->ptr.p_double[i]-cx)/cnrm>*lcerr )
+        {
+            *lcerr = (al->ptr.p_double[i]-cx)/cnrm;
+            *lcidx = lcsrcidx->ptr.p_int[i];
+        }
+        if( ae_isfinite(au->ptr.p_double[i], _state)&&(cx-au->ptr.p_double[i])/cnrm>*lcerr )
+        {
+            *lcerr = (cx-au->ptr.p_double[i])/cnrm;
             *lcidx = lcsrcidx->ptr.p_int[i];
         }
     }
@@ -316,6 +393,56 @@ void unscaleandchecknlcviolation(/* Real    */ const ae_vector* fi,
         if( v>*nlcerr )
         {
             *nlcerr = v;
+            *nlcidx = i;
+        }
+    }
+}
+
+
+/*************************************************************************
+This subroutine is same as CheckNLCViolation, but  is  works  with  scaled
+constraints: it assumes that Fi[] were divided by FScales[] vector  BEFORE
+passing them to this function.
+
+The function checks scaled values, but reports unscaled errors.
+
+  -- ALGLIB --
+     Copyright 7.11.2018 by Bochkanov Sergey
+*************************************************************************/
+void unscaleandchecknlc2violation(/* Real    */ const ae_vector* fi,
+     /* Real    */ const ae_vector* fscales,
+     /* Real    */ const ae_vector* rawnl,
+     /* Real    */ const ae_vector* rawnu,
+     ae_int_t cntnlc,
+     double* nlcerr,
+     ae_int_t* nlcidx,
+     ae_state *_state)
+{
+    ae_int_t i;
+    double v;
+    double err;
+
+    *nlcerr = 0.0;
+    *nlcidx = 0;
+
+    *nlcerr = (double)(0);
+    *nlcidx = -1;
+    for(i=0; i<=cntnlc-1; i++)
+    {
+        ae_assert(ae_fp_greater(fscales->ptr.p_double[i+1],(double)(0)), "UnscaleAndCheckNLC2Violation: integrity check failed", _state);
+        v = fi->ptr.p_double[i+1]*fscales->ptr.p_double[i+1];
+        err = (double)(0);
+        if( ae_isfinite(rawnl->ptr.p_double[i], _state) )
+        {
+            err = ae_maxreal(err, rawnl->ptr.p_double[i]-v, _state);
+        }
+        if( ae_isfinite(rawnu->ptr.p_double[i], _state) )
+        {
+            err = ae_maxreal(err, v-rawnu->ptr.p_double[i], _state);
+        }
+        if( err>*nlcerr )
+        {
+            *nlcerr = err;
             *nlcidx = i;
         }
     }
@@ -2759,9 +2886,8 @@ void smoothnessmonitorenqueuepoint(smoothnessmonitor* monitor,
                         nrm = nrm+ae_sqr(monitor->enqueuedx.ptr.p_double[monitor->sortedidx.ptr.p_int[0]*n+i]-monitor->enqueuedx.ptr.p_double[monitor->sortedidx.ptr.p_int[sortedcnt-1]*n+i], _state);
                     }
                     nrm = ae_sqrt(nrm, _state);
-                    nrm = ae_minreal(nrm, 1.0, _state);
                     nrm = coalesce(nrm, ae_machineepsilon, _state);
-                    lengthrating = (double)sortedcnt+ae_log(nrm, _state)/ae_log((double)(100), _state);
+                    lengthrating = ae_log(nrm, _state)+0.2*ae_log((double)(sortedcnt), _state)+0.2*ae_log(rating, _state);
                     if( lengthrating>monitor->nonc0lngrating )
                     {
                         monitor->nonc0lngrating = lengthrating;
@@ -3993,7 +4119,6 @@ void hessianinitbfgs(xbfgshessian* hess,
     hess->sumy2 = hess->sumsy*hess->gammasml;
     hess->sums2 = (double)(0);
     hess->updatestatus = 0;
-    hess->sigmadecay = 1.0;
     rvectorsetlengthatleast(&hess->sk, n, _state);
     rvectorsetlengthatleast(&hess->yk, n, _state);
     rsetallocm(n, n, 0.0, &hess->hcurrent, _state);
@@ -4077,9 +4202,24 @@ void hessianinitlowrank(xbfgshessian* hess,
     hess->wolfeeps = 0.001;
     hess->maxhess = maxhess;
     hess->updatestatus = 0;
-    hess->sigmadecay = 1.0;
     rallocv(n, &hess->sk, _state);
     rallocv(n, &hess->yk, _state);
+}
+
+
+/*************************************************************************
+This function changes upper limit on Hessian norm.
+
+  -- ALGLIB --
+     Copyright 23.09.2023 by Bochkanov Sergey
+*************************************************************************/
+void hessiansetmaxhess(xbfgshessian* hess,
+     double maxhess,
+     ae_state *_state)
+{
+
+
+    hess->maxhess = maxhess;
 }
 
 
@@ -4268,9 +4408,12 @@ void hessianupdate(xbfgshessian* hess,
             /*
              * Hessian norm is too high
              */
+            optserv_popfrontxy(hess, _state);
+            hess->sigma = ae_maxreal(0.1*hess->sigma, 1.0E-4, _state);
+            optserv_resetlowrankmodel(hess, _state);
             if( dotrace )
             {
-                ae_trace(">> Hessian norm is too high (%0.2e), update rejected, diagonal scaling sigma=%0.2e (unchanged)\n",
+                ae_trace(">> Hessian norm is too high (%0.2e), update rejected, queue size decreased by 1, diagonal scaling sigma=%0.2e (decreased)\n",
                     (double)(ynrm2/sy),
                     (double)(hess->sigma));
             }
@@ -4325,14 +4468,13 @@ void hessianupdate(xbfgshessian* hess,
         rcopyvc(hess->memlen, &hess->buf, &hess->lowranksyt, hess->memlen-1, _state);
         
         /*
-         * Recompute scaling, set SigmaDecay to 1
+         * Recompute scaling
          */
         yk2 = rdotv2(n, &hess->yk, _state);
         skyk = rdotv(n, &hess->sk, &hess->yk, _state);
         hess->sigma = boundval(yk2/skyk, 0.1*hess->sigma, (double)10*hess->sigma, _state);
         hess->sigma = ae_minreal(hess->sigma, (double)1/(hess->reg+ae_machineepsilon), _state);
         hess->gamma = (double)1/hess->sigma;
-        hess->sigmadecay = 1.0;
         if( dotrace )
         {
             ae_trace(">> diagonal scaling sigma=%0.2e\n",
@@ -4342,6 +4484,434 @@ void hessianupdate(xbfgshessian* hess,
         /*
          * Invalidate model
          */
+        optserv_resetlowrankmodel(hess, _state);
+    }
+}
+
+
+/*************************************************************************
+Updates Hessian estimate,  uses  damped  formula  which  prevents  Hessian
+eigenvalues from decreasing below ~sqrt(Eps)  and  rejects  updates larger
+than ~1/sqrt(Eps) in magnitude.
+
+Either BFGS or LBFGS formula is used, depending on Hessian model settings.
+
+INPUT PARAMETERS:
+    Hess            -   Hessian state
+    X0, G0          -   point #0 and gradient at #0, array[N]
+    X1, G1          -   point #1 and gradient at #1, array[N]
+    Strategy        -   update stabilization strategy:
+                        * 0     do nothing
+                        * 1     apply damped (L)BFGS, safeguarding from
+                                rapid curvature increase and decrease
+                        * 2     apply damped (L)BFGS for too high curvature,
+                                ignore Y and decrease curvature conservatively
+                                for low values of S'Y
+    TryReplaceLast  -   whether we append update or try to replace the last
+                        one in a queue:
+                        * if False, update is applied as usual
+                        * if True, then:
+                          * if we have BFGS Hessian - applied as usual
+                          * if we have L-BFGS Hessian, we pop the last one
+                            in a memory (if have any), then add this update
+    DoTrace         -   True if we want to print trace messages
+    TraceLevel      -   amount of ">" symbols to append to trace messages
+
+
+  -- ALGLIB --
+     Copyright 28.09.2023 by Bochkanov Sergey
+*************************************************************************/
+void hessianupdatev2(xbfgshessian* hess,
+     /* Real    */ const ae_vector* x0,
+     /* Real    */ const ae_vector* g0,
+     /* Real    */ const ae_vector* x1,
+     /* Real    */ const ae_vector* g1,
+     ae_int_t strategy,
+     ae_bool tryreplacelast,
+     ae_bool dotrace,
+     ae_int_t tracelevel,
+     ae_state *_state)
+{
+    ae_int_t i;
+    ae_int_t n;
+    double gamma;
+    double sy;
+    double snrm2;
+    double ynrm2;
+    double ski;
+    double yki;
+    double skg0;
+    double skg1;
+    double shs;
+    double tau;
+    double phi;
+    double eps2;
+    double eps3;
+    double v;
+
+
+    n = hess->n;
+    eps2 = (double)10*ae_sqrt(ae_machineepsilon, _state);
+    eps3 = (double)10*ae_machineepsilon*((double)1+ae_sqrt((double)(n), _state));
+    
+    /*
+     * Print initial trace line
+     */
+    if( dotrace )
+    {
+        traceangles(tracelevel, _state);
+        ae_trace(" analyzing Hessian update\n");
+    }
+    
+    /*
+     * Prepare Sk, Yk, compute some necessary quantities
+     */
+    sy = (double)(0);
+    snrm2 = (double)(0);
+    ynrm2 = (double)(0);
+    skg0 = (double)(0);
+    skg1 = (double)(0);
+    for(i=0; i<=n-1; i++)
+    {
+        ski = x1->ptr.p_double[i]-x0->ptr.p_double[i];
+        yki = g1->ptr.p_double[i]-g0->ptr.p_double[i];
+        hess->sk.ptr.p_double[i] = ski;
+        hess->yk.ptr.p_double[i] = yki;
+        sy = sy+ski*yki;
+        snrm2 = snrm2+ski*ski;
+        ynrm2 = ynrm2+yki*yki;
+        skg0 = skg0+ski*g0->ptr.p_double[i];
+        skg1 = skg1+ski*g1->ptr.p_double[i];
+    }
+    hess->updatestatus = 0;
+    
+    /*
+     * Skip updates with zero or short steps
+     */
+    if( ae_fp_less_eq(rmaxabsv(n, &hess->sk, _state),hess->stpshort) )
+    {
+        
+        /*
+         * Sk is too small, skip update
+         */
+        if( dotrace )
+        {
+            traceangles(tracelevel+1, _state);
+            ae_trace(" step is too short, update rejected\n");
+        }
+        return;
+    }
+    
+    /*
+     * Analyze existing curvature along S
+     */
+    hessianmv(hess, &hess->sk, &hess->hsk, _state);
+    shs = rdotv(n, &hess->sk, &hess->hsk, _state);
+    if( ae_fp_greater(shs,eps3*snrm2) )
+    {
+        
+        /*
+         * Hessian has sufficiently good curvature along Sk, can proceed with analysis of update.
+         * Apply damping or other stabilization
+         */
+        ae_assert((strategy==0||strategy==1)||strategy==2, "OPTSERV: integrity check 9223 failed", _state);
+        phi = 1.0;
+        tau = sy/shs;
+        if( strategy==1&&ae_fp_less(tau,optserv_xbfgssigma2) )
+        {
+            if( dotrace )
+            {
+                traceangles(tracelevel+1, _state);
+                ae_trace(" applying damping to correct too low (or rapidly changing) curvature\n");
+            }
+            phi = ((double)1-optserv_xbfgssigma2)/((double)1-tau);
+        }
+        if( strategy==2&&ae_fp_less(tau,optserv_xbfgssigma2) )
+        {
+            if( dotrace )
+            {
+                traceangles(tracelevel+1, _state);
+                ae_trace(" applying conservative curvature decrease to correct too low (or rapidly changing) curvature\n");
+            }
+            rcopyv(n, &hess->hsk, &hess->yk, _state);
+            rmulv(n, optserv_xbfgssigma2, &hess->yk, _state);
+            sy = optserv_xbfgssigma2*shs;
+            ynrm2 = rdotv2(n, &hess->yk, _state);
+        }
+        if( (strategy==1||strategy==2)&&ae_fp_greater(tau,optserv_xbfgssigma3) )
+        {
+            if( dotrace )
+            {
+                traceangles(tracelevel+1, _state);
+                ae_trace(" applying damping to correct too high (or rapidly changing) curvature\n");
+            }
+            phi = (optserv_xbfgssigma3-(double)1)/(tau-(double)1);
+        }
+        if( ae_fp_neq(phi,(double)(1)) )
+        {
+            rmulv(n, phi, &hess->yk, _state);
+            raddv(n, (double)1-phi, &hess->hsk, &hess->yk, _state);
+            sy = rdotv(n, &hess->sk, &hess->yk, _state);
+            ynrm2 = rdotv2(n, &hess->yk, _state);
+        }
+    }
+    else
+    {
+        
+        /*
+         * Hessian is not sufficiently good along Sk, propose conservative curvature-preserving update
+         */
+        if( dotrace )
+        {
+            traceangles(tracelevel+1, _state);
+            ae_trace(" Hessian curvature along Sk is too low, proposing conservative corrector update\n");
+        }
+        rcopymulv(n, eps2, &hess->sk, &hess->yk, _state);
+        sy = rdotv(n, &hess->sk, &hess->yk, _state);
+        ynrm2 = rdotv2(n, &hess->yk, _state);
+    }
+    
+    /*
+     * Do not allow a  lower bound on Hessian eigenvalues (S'Y)/(S'S) to decrease below Eps2,
+     * do not allow an upper bound on Hessian eigenvalues (Y'Y)/(S'Y) to increase above 1/Eps2
+     */
+    if( ae_fp_less_eq(sy,(double)(0))||ae_fp_less(sy/snrm2,eps2) )
+    {
+        if( dotrace )
+        {
+            traceangles(tracelevel+1, _state);
+            ae_trace(" damped curvature is still too low (lower estimate is SY/SS=%0.2e), truncating to ~sqrt(epsilon)\n",
+                (double)(sy/snrm2));
+        }
+        rcopymulv(n, eps2, &hess->sk, &hess->yk, _state);
+        sy = rdotv(n, &hess->sk, &hess->yk, _state);
+        ynrm2 = rdotv2(n, &hess->yk, _state);
+    }
+    if( ae_fp_greater(sy,(double)(0))&&ae_fp_greater(ynrm2/sy,(double)1/eps2) )
+    {
+        if( dotrace )
+        {
+            traceangles(tracelevel+1, _state);
+            ae_trace(" damped curvature is still too high (upper estimate is YY/SY=%0.2e), truncating to ~1/sqrt(epsilon)\n",
+                (double)(ynrm2/sy));
+        }
+        v = (double)1/eps2/(ynrm2/sy);
+        rmulv(n, v, &hess->yk, _state);
+        sy = v*sy;
+        ynrm2 = v*v*ynrm2;
+    }
+    
+    /*
+     * Update current and incoming Hessians
+     */
+    ae_assert(hess->htype==0||hess->htype==3, "HessianUpdate: Hessian mode not supported", _state);
+    if( hess->htype==0 )
+    {
+        
+        /*
+         * Update dense Hessian using BFGS formula for Bk
+         */
+        optserv_hessianupdatelowlevel2(hess, &hess->hcurrent, &hess->sk, &hess->yk, &hess->updatestatus, _state);
+        optserv_hessianupdatelowlevel2(hess, &hess->hincoming, &hess->sk, &hess->yk, &i, _state);
+        if( ae_fp_greater(sy,(double)(0)) )
+        {
+            hess->sumsy = hess->sumsy+sy;
+            hess->sumy2 = hess->sumy2+ynrm2;
+        }
+        hess->sums2 = hess->sums2+snrm2;
+        hess->hage = hess->hage+1;
+        if( dotrace )
+        {
+            traceangles(tracelevel+1, _state);
+            ae_trace(" BFGS update applied\n");
+        }
+        
+        /*
+         * Perform Hessian reset if needed
+         */
+        if( hess->resetfreq>0&&hess->hage>=hess->resetfreq )
+        {
+            rmatrixcopy(n, n, &hess->hincoming, 0, 0, &hess->hcurrent, 0, 0, _state);
+            gamma = hess->sumy2/(hess->sumsy+hess->reg*hess->sumy2+hess->smallreg*hess->sums2);
+            rsetm(n, n, 0.0, &hess->hincoming, _state);
+            for(i=0; i<=n-1; i++)
+            {
+                hess->hincoming.ptr.pp_double[i][i] = gamma;
+            }
+            hess->sumsy = ae_sqr(ae_machineepsilon, _state);
+            hess->sumy2 = hess->sumsy*hess->gammasml;
+            hess->sums2 = (double)(0);
+            hess->hage = 0;
+            hess->updatestatus = 3;
+        }
+        return;
+    }
+    if( hess->htype==3 )
+    {
+        
+        /*
+         * Decide whether update is good enough to be remembered
+         */
+        if( hess->m==0 )
+        {
+            
+            /*
+             * Zero memory was specified, update ignored
+             */
+            if( dotrace )
+            {
+                traceangles(tracelevel+1, _state);
+                ae_trace(" zero memory length, update rejected\n");
+            }
+            return;
+        }
+        
+        /*
+         * Update historical averages
+         */
+        hess->sumsy = hess->sumsy+sy;
+        hess->sumy2 = hess->sumy2+ynrm2;
+        hess->sums2 = hess->sums2+snrm2;
+        
+        /*
+         * Remove items from memory, if necessary
+         */
+        ae_assert(hess->memlen<=hess->m, "HessianUpdate: integrity check 5763 failed", _state);
+        if( tryreplacelast )
+        {
+            if( dotrace )
+            {
+                traceangles(tracelevel+1, _state);
+                ae_trace(" rewriting most recent update pair\n");
+            }
+            hessianpoplatestifpossible(hess, _state);
+        }
+        if( hess->memlen==hess->m )
+        {
+            optserv_popfrontxy(hess, _state);
+        }
+        
+        /*
+         * Append to S and Y
+         */
+        ae_assert(hess->memlen<hess->m, "HessianUpdate: integrity check 5764 failed", _state);
+        hess->memlen = hess->memlen+1;
+        rcopyvr(n, &hess->sk, &hess->s, hess->memlen-1, _state);
+        rcopyvr(n, &hess->yk, &hess->y, hess->memlen-1, _state);
+        
+        /*
+         * Append row/col to LowRankSST and LowRankSYT
+         */
+        rallocv(hess->memlen, &hess->buf, _state);
+        rgemv(hess->memlen, n, 1.0, &hess->s, 0, &hess->sk, 0.0, &hess->buf, _state);
+        rcopyvr(hess->memlen, &hess->buf, &hess->lowranksst, hess->memlen-1, _state);
+        rcopyvc(hess->memlen, &hess->buf, &hess->lowranksst, hess->memlen-1, _state);
+        rgemv(hess->memlen, n, 1.0, &hess->y, 0, &hess->sk, 0.0, &hess->buf, _state);
+        rcopyvr(hess->memlen, &hess->buf, &hess->lowranksyt, hess->memlen-1, _state);
+        rgemv(hess->memlen, n, 1.0, &hess->s, 0, &hess->yk, 0.0, &hess->buf, _state);
+        rcopyvc(hess->memlen, &hess->buf, &hess->lowranksyt, hess->memlen-1, _state);
+        
+        /*
+         * Recompute scaling
+         */
+        hess->sigma = boundval(ynrm2/sy, eps2, (double)1/eps2, _state);
+        hess->gamma = (double)1/hess->sigma;
+        if( dotrace )
+        {
+            traceangles(tracelevel+1, _state);
+            ae_trace(" LBFGS update applied, diagonal scaling sigma=%0.2e\n",
+                (double)(hess->sigma));
+        }
+        
+        /*
+         * Invalidate model
+         */
+        optserv_resetlowrankmodel(hess, _state);
+    }
+}
+
+
+/*************************************************************************
+Removes newest update pair from the limited memory Hessian model and
+invalidates Hessian model. If Hessian does not allow to pop latest pair,
+does nothing.
+
+  -- ALGLIB --
+     Copyright 28.09.2023 by Bochkanov Sergey
+*************************************************************************/
+void hessianpoplatestifpossible(xbfgshessian* hess, ae_state *_state)
+{
+
+
+    ae_assert(hess->htype==0||hess->htype==3, "HessianPopLatestIfPossible: Hessian mode is not supported", _state);
+    if( hess->htype==0 )
+    {
+        return;
+    }
+    if( hess->memlen==0 )
+    {
+        return;
+    }
+    ae_assert(hess->htype==3, "OPTSERV: integrity check 0140 failed", _state);
+    hess->memlen = hess->memlen-1;
+    optserv_resetlowrankmodel(hess, _state);
+}
+
+
+/*************************************************************************
+Multiplies internally stored model (and all internally stored corrections)
+by S.
+
+This function works only with the following Hessian modes:
+* direct BFGS
+* low-rank LBFGS
+
+Any attempt to call it for other Hessian type will result in exception.
+
+INPUT PARAMETERS:
+    Hess            -   Hessian state
+    S               -   scale factor
+
+  -- ALGLIB --
+     Copyright 05.06.2023 by Bochkanov Sergey
+*************************************************************************/
+void hessianmultiplyby(xbfgshessian* hess, double s, ae_state *_state)
+{
+    ae_int_t i;
+    ae_int_t j;
+    ae_int_t n;
+
+
+    ae_assert(hess->htype==0||hess->htype==3, "HessianMultiplyBy: Hessian mode is not supported", _state);
+    n = hess->n;
+    if( hess->htype==0 )
+    {
+        
+        /*
+         * Explicit dense Hessian
+         */
+        for(i=0; i<=n-1; i++)
+        {
+            for(j=0; j<=n-1; j++)
+            {
+                hess->hcurrent.ptr.pp_double[i][j] = hess->hcurrent.ptr.pp_double[i][j]*s;
+                hess->hincoming.ptr.pp_double[i][j] = hess->hincoming.ptr.pp_double[i][j]*s;
+            }
+        }
+    }
+    if( hess->htype==3 )
+    {
+        
+        /*
+         * Low rank model
+         */
+        hess->sigma = s*hess->sigma;
+        hess->gamma = hess->gamma/s;
+        for(i=0; i<=hess->memlen-1; i++)
+        {
+            rmulr(n, s, &hess->y, i, _state);
+            rmulr(hess->memlen, s, &hess->lowranksyt, i, _state);
+        }
         optserv_resetlowrankmodel(hess, _state);
     }
 }
@@ -4431,7 +5001,7 @@ void hessiangetmatrix(xbfgshessian* hess,
     ae_int_t n;
 
 
-    ae_assert(hess->htype==0||hess->htype==3, "HessianGetHessian: Hessian mode is not supported", _state);
+    ae_assert(hess->htype==0||hess->htype==3, "HessianGetMatrix: Hessian mode is not supported", _state);
     n = hess->n;
     rallocm(n, n, h, _state);
     if( hess->htype==0 )
@@ -4457,6 +5027,308 @@ void hessiangetmatrix(xbfgshessian* hess,
         rmatrixgemm(n, n, hess->lowrankk, 1.0, &hess->lowrankcp, 0, 0, 1, &hess->lowrankcp, 0, 0, 0, 1.0, h, 0, 0, _state);
         rmatrixgemm(n, n, hess->lowrankk, -1.0, &hess->lowrankcm, 0, 0, 1, &hess->lowrankcm, 0, 0, 0, 1.0, h, 0, 0, _state);
     }
+}
+
+
+/*************************************************************************
+Get Hessian matrix in a low-rank format D + C'*S*C where D is  a  diagonal
+matrix, C is a low rank matrix, S is a matrix of +1 and -1.
+
+This function works only with the following Hessian modes:
+* low-rank LBFGS (needs k*N operations)
+
+Any attempt to call it for other Hessian type will result in an exception.
+
+IMPORTANT: thus function uses original formulas  from  'REPRESENTATIONS OF
+           QUASI-NEWTON MATRICES AND THEIR USE IN LIMITED MEMORY  METHODS'
+           which produce a positive definite D+C'*S*C.
+           However, only  the  final  result  is  positive  definite.  Any
+           partial update D+G'*U*G, where G/U are subsets of C/S,  is  NOT
+           guaranteed to be positive definite. Lack  of  these  guarantees
+           usually destabilizes interior point low rank  QP   solvers  and
+           other algorithms which rely on positive definiteness of partial
+           updates.
+           Use HessianGetLowRankStabilized() if you need robust updates.
+
+INPUT PARAMETERS:
+    Hess            -   Hessian state
+    D               -   possibly preallocated array, reused if large enough
+    CorrC           -   possibly preallocated array, reused if large enough
+    CorrS           -   possibly preallocated array, reused if large enough
+    
+OUTPUT PARAMETERS:
+    D               -   array[N], diagonal matrix
+    CorrC           -   array[CorrK,N], low rank correction
+    CorrS           -   array[CorrK], signs
+    CorrK           -   correction rank, CorrK>=0
+
+  -- ALGLIB --
+     Copyright 28.11.2022 by Bochkanov Sergey
+*************************************************************************/
+void hessiangetlowrank(xbfgshessian* hess,
+     /* Real    */ ae_vector* d,
+     /* Real    */ ae_matrix* corrc,
+     /* Real    */ ae_vector* corrs,
+     ae_int_t* corrk,
+     ae_state *_state)
+{
+    ae_int_t i;
+    ae_int_t j;
+    ae_int_t n;
+
+    *corrk = 0;
+
+    ae_assert(hess->htype==3, "HessianGetMatrixLowRank: Hessian mode is not supported", _state);
+    n = hess->n;
+    if( hess->htype==3 )
+    {
+        
+        /*
+         * Low-rank model
+         */
+        optserv_recomputelowrankmodel(hess, _state);
+        *corrk = 2*hess->lowrankk;
+        rsetallocv(n, hess->sigma, d, _state);
+        if( hess->lowrankk>0 )
+        {
+            rallocm(*corrk, n, corrc, _state);
+            rallocv(*corrk, corrs, _state);
+            for(i=0; i<=hess->lowrankk-1; i++)
+            {
+                for(j=0; j<=n-1; j++)
+                {
+                    corrc->ptr.pp_double[2*i+0][j] = hess->lowrankcp.ptr.pp_double[i][j];
+                    corrc->ptr.pp_double[2*i+1][j] = hess->lowrankcm.ptr.pp_double[i][j];
+                }
+                corrs->ptr.p_double[2*i+0] = (double)(1);
+                corrs->ptr.p_double[2*i+1] = (double)(-1);
+            }
+        }
+    }
+}
+
+
+/*************************************************************************
+Get LBFGS memory contents:
+* steps S
+* gradient changes Y
+* diagonal scaling Sigma
+
+The function guarantees that for each k we have (Sk,Yk)>0, however it does
+NOT guarantee that all steps are stored and that steps are stored  as  is.
+It may modify S and Y in order to improve conditioning, and  it  may  skip
+some update pairs if it decides to do so.
+
+This function works only with the following Hessian modes:
+* low-rank LBFGS
+
+Any attempt to call it for other Hessian type will result in an exception.
+
+INPUT PARAMETERS:
+    Hess            -   Hessian state
+    S               -   possibly preallocated array, reused if large enough
+    Y               -   possibly preallocated array, reused if large enough
+    
+OUTPUT PARAMETERS:
+    Sigma           -   Hessian diagonal magnitude, Sigma>0
+    S               -   array[UpdCnt,N], steps stored (latest steps are
+                        stored at the end)
+    Y               -   array[UpdCnt,N], gradient changes
+    UpdCnt          -   updates count
+
+  -- ALGLIB --
+     Copyright 28.11.2022 by Bochkanov Sergey
+*************************************************************************/
+void hessiangetlowrankmemory(xbfgshessian* hess,
+     double* sigma,
+     /* Real    */ ae_matrix* s,
+     /* Real    */ ae_matrix* y,
+     ae_int_t* updcnt,
+     ae_state *_state)
+{
+    ae_int_t n;
+
+    *sigma = 0.0;
+    *updcnt = 0;
+
+    ae_assert(hess->htype==3, "HessianGetMatrixLowRank: Hessian mode is not supported", _state);
+    n = hess->n;
+    if( hess->htype==3 )
+    {
+        *sigma = hess->sigma;
+        *updcnt = hess->memlen;
+        if( hess->memlen>0 )
+        {
+            rcopyallocm(hess->memlen, n, &hess->s, s, _state);
+            rcopyallocm(hess->memlen, n, &hess->y, y, _state);
+        }
+    }
+}
+
+
+/*************************************************************************
+Get Hessian matrix in a low-rank format D + C'*S*C where D is  a  diagonal
+matrix, C is a low rank matrix, S is a matrix of +1 and -1.
+
+This is a stabilized version of a low rank representation which guarantees
+that both complete update C'*S*C of D and any partial update are  positive
+definite. It is more expensive  than  HessianGetLowRank()  because  a  KxK
+symmetric eigenproblem has to be solved in order to compute robust update.
+
+Unlike non-stabilized version, this function produces  C  with  orthogonal
+rows (rows are mutually orthogonal, although not normalized and  can  even
+be zero).
+
+This function works only with the following Hessian modes:
+* low-rank LBFGS
+
+Any attempt to call it for other Hessian type will result in an exception.
+
+INPUT PARAMETERS:
+    Hess            -   Hessian state
+    D               -   possibly preallocated array, reused if large enough
+    CorrC           -   possibly preallocated array, reused if large enough
+    CorrS           -   possibly preallocated array, reused if large enough
+    
+OUTPUT PARAMETERS:
+    D               -   array[N], diagonal matrix
+    CorrC           -   array[CorrK,N], low rank correction
+    CorrS           -   array[CorrK], signs
+    CorrK           -   correction rank, CorrK>=0
+
+  -- ALGLIB --
+     Copyright 06.06.2023 by Bochkanov Sergey
+*************************************************************************/
+void hessiangetlowrankstabilized(xbfgshessian* hess,
+     /* Real    */ ae_vector* d,
+     /* Real    */ ae_matrix* corrc,
+     /* Real    */ ae_vector* corrs,
+     ae_int_t* corrk,
+     ae_state *_state)
+{
+    ae_int_t i;
+    ae_int_t n;
+
+    *corrk = 0;
+
+    ae_assert(hess->htype==3, "HessianGetMatrixLowRankStabilized: Hessian mode is not supported", _state);
+    n = hess->n;
+    
+    /*
+     * Get non-modified low rank representation D+C'*S*C
+     */
+    hessiangetlowrank(hess, d, &hess->tmpunstablec, &hess->tmpunstables, corrk, _state);
+    if( *corrk==0 )
+    {
+        return;
+    }
+    
+    /*
+     * Handle low-dimensional case where K>N. We handle it by
+     * forming C'*S*C explicitly and by performing its EVD
+     * decomposition.
+     *
+     * As a result, CorrK is decreased down to N.
+     *
+     * A degenerate case which does not need much sophistication.
+     */
+    if( *corrk>n )
+    {
+        rallocm(*corrk, n, &hess->tmpsl, _state);
+        rallocm(*corrk, n, &hess->tmpl, _state);
+        for(i=0; i<=*corrk-1; i++)
+        {
+            rcopyrr(n, &hess->tmpunstablec, i, &hess->tmpl, i, _state);
+            rcopyrr(n, &hess->tmpunstablec, i, &hess->tmpsl, i, _state);
+            rmulr(n, hess->tmpunstables.ptr.p_double[i], &hess->tmpsl, i, _state);
+        }
+        rallocm(n, n, &hess->tmpw, _state);
+        rmatrixgemm(n, n, *corrk, 1.0, &hess->tmpl, 0, 0, 1, &hess->tmpsl, 0, 0, 0, 0.0, &hess->tmpw, 0, 0, _state);
+        if( !smatrixevd(&hess->tmpw, n, 1, ae_false, &hess->tmpe, &hess->tmpq, _state) )
+        {
+            ae_assert(ae_false, "HessianGetLowRankStabilized: eigensolver failure", _state);
+        }
+        *corrk = n;
+        rallocm(n, n, corrc, _state);
+        rmatrixtranspose(n, n, &hess->tmpq, 0, 0, corrc, 0, 0, _state);
+        for(i=0; i<=n-1; i++)
+        {
+            rmulr(n, ae_sqrt(ae_fabs(hess->tmpe.ptr.p_double[i], _state), _state), corrc, i, _state);
+        }
+        rallocv(n, corrs, _state);
+        for(i=0; i<=n-1; i++)
+        {
+            corrs->ptr.p_double[i] = rcase2(ae_fp_greater_eq(hess->tmpe.ptr.p_double[i],(double)(0)), (double)(1), (double)(-1), _state);
+        }
+        return;
+    }
+    
+    /*
+     * A non-degenerate case with CorrK<=N.
+     *
+     * Compute LQ decomposition of C, use it to transform C'*S*C to
+     * U'*W*U with orthogonal U being a factor from LQ decomposition
+     * and W being a KxK matrix equal to L'*S*L
+     * 
+     */
+    rmatrixlq(&hess->tmpunstablec, *corrk, n, &hess->tmptau, _state);
+    rmatrixlqunpackq(&hess->tmpunstablec, *corrk, n, &hess->tmptau, *corrk, &hess->tmpu, _state);
+    rsetallocm(*corrk, *corrk, 0.0, &hess->tmpsl, _state);
+    rsetallocm(*corrk, *corrk, 0.0, &hess->tmpl, _state);
+    for(i=0; i<=*corrk-1; i++)
+    {
+        rcopyrr(i+1, &hess->tmpunstablec, i, &hess->tmpl, i, _state);
+        rcopyrr(i+1, &hess->tmpunstablec, i, &hess->tmpsl, i, _state);
+        rmulr(i+1, hess->tmpunstables.ptr.p_double[i], &hess->tmpsl, i, _state);
+    }
+    rallocm(*corrk, *corrk, &hess->tmpw, _state);
+    rmatrixgemm(*corrk, *corrk, *corrk, 1.0, &hess->tmpl, 0, 0, 1, &hess->tmpsl, 0, 0, 0, 0.0, &hess->tmpw, 0, 0, _state);
+    
+    /*
+     * Now we have C'*S*C = U'*W*U, with S being diagonal and W being a general matrix.
+     * Another different is that C is non-orthogonal whilst U is orthogonal.
+     *
+     * Use EVD to obtain orthogonal decomposition W=Q*E*Q' with orthogonal Q and diagonal E.
+     */
+    if( !smatrixevd(&hess->tmpw, *corrk, 1, ae_false, &hess->tmpe, &hess->tmpq, _state) )
+    {
+        ae_assert(ae_false, "HessianGetLowRankStabilized: eigensolver failure", _state);
+    }
+    
+    /*
+     * Finally, output robust representation:
+     * * C = sqrt(abs(E))*Q'*U
+     * * S = E/abs(E)
+     */
+    rallocm(*corrk, n, corrc, _state);
+    rmatrixgemm(*corrk, n, *corrk, 1.0, &hess->tmpq, 0, 0, 1, &hess->tmpu, 0, 0, 0, 0.0, corrc, 0, 0, _state);
+    for(i=0; i<=*corrk-1; i++)
+    {
+        rmulr(n, ae_sqrt(ae_fabs(hess->tmpe.ptr.p_double[i], _state), _state), corrc, i, _state);
+    }
+    rallocv(*corrk, corrs, _state);
+    for(i=0; i<=*corrk-1; i++)
+    {
+        corrs->ptr.p_double[i] = rcase2(ae_fp_greater_eq(hess->tmpe.ptr.p_double[i],(double)(0)), (double)(1), (double)(-1), _state);
+    }
+}
+
+
+/*************************************************************************
+Returns maximum rank of the models returned by the HessianGetLowRank()
+function.
+
+  -- ALGLIB --
+     Copyright 28.11.2022 by Bochkanov Sergey
+*************************************************************************/
+ae_int_t hessiangetmaxrank(const xbfgshessian* hess, ae_state *_state)
+{
+    ae_int_t result;
+
+
+    ae_assert(hess->htype==3, "HessianGetMaxRank: Hessian mode is not supported", _state);
+    result = 2*hess->m;
+    return result;
 }
 
 
@@ -4668,6 +5540,9 @@ INPUT PARAMETERS:
     NLQuadratic     -   scale of the quadratic term of nonlinear constraints
     NLQuartic       -   scale of the quadratic term of nonlinear constraints
 
+NOTE: this function does NOT set Lagrange multipliers because it does not
+      know them.
+
   -- ALGLIB --
      Copyright 04.03.2023 by Bochkanov Sergey
 *************************************************************************/
@@ -4737,6 +5612,7 @@ void motfcreaterandomunknown(ae_int_t n,
     /*
      * Generate random test functions
      */
+    problem->problemtype = 0;
     problem->n = n;
     problem->m = m;
     rsetallocv(m, 0.0, &problem->tgtc, _state);
@@ -4817,6 +5693,15 @@ void motfcreaterandomunknown(ae_int_t n,
      * No known solutions
      */
     ae_matrix_set_length(&problem->xsol, 0, 0, _state);
+    ae_matrix_set_length(&problem->fsol, 0, 0, _state);
+    problem->ksol = 0;
+    
+    /*
+     * No Lagrange multipliers
+     */
+    ae_vector_set_length(&problem->lagmultbc, 0, _state);
+    ae_vector_set_length(&problem->lagmultlc, 0, _state);
+    ae_vector_set_length(&problem->lagmultnlc, 0, _state);
     
     /*
      * Generate random trial point which will be strictly feasible
@@ -5018,6 +5903,709 @@ void motfcreaterandomunknown(ae_int_t n,
 
 
 /*************************************************************************
+Creates random multiobjective test problem with known answer and Lagrange
+multipliers
+
+INPUT PARAMETERS:
+    N               -   vars cnt, N>=3
+    NLQuadratic     -   scale of the quadratic term of nonlinear constraints
+    NLQuartic       -   scale of the quartic term of nonlinear constraints
+
+  -- ALGLIB --
+     Copyright 04.03.2023 by Bochkanov Sergey
+*************************************************************************/
+void motfcreate1knownanswer(ae_int_t n,
+     double nlquadratic,
+     double nlquartic,
+     hqrndstate* rs,
+     multiobjectivetestfunction* problem,
+     ae_state *_state)
+{
+    ae_frame _frame_block;
+    ae_int_t i;
+    ae_int_t j;
+    ae_int_t k;
+    ae_vector grad;
+    ae_vector c;
+    ae_int_t nactive;
+    ae_int_t ngenerated;
+    ae_int_t nadditionallin;
+    ae_int_t nadditionalnl;
+    double lagmult;
+    ae_int_t passcount;
+    ae_int_t ctype;
+    double v;
+    double vmul;
+    ae_matrix q;
+    double padinactive;
+
+    ae_frame_make(_state, &_frame_block);
+    memset(&grad, 0, sizeof(grad));
+    memset(&c, 0, sizeof(c));
+    memset(&q, 0, sizeof(q));
+    _multiobjectivetestfunction_clear(problem);
+    ae_vector_init(&grad, 0, DT_REAL, _state, ae_true);
+    ae_vector_init(&c, 0, DT_REAL, _state, ae_true);
+    ae_matrix_init(&q, 0, 0, DT_REAL, _state, ae_true);
+
+    padinactive = 10.0;
+    
+    /*
+     * Set problem metrics
+     */
+    problem->problemtype = 0;
+    problem->n = n;
+    problem->m = 1;
+    
+    /*
+     * Set empty constraints
+     */
+    rsetallocv(n, _state->v_neginf, &problem->bndl, _state);
+    rsetallocv(n, _state->v_posinf, &problem->bndu, _state);
+    problem->nlinear = 0;
+    problem->nnonlinear = 0;
+    
+    /*
+     * Generate a priori known solution
+     */
+    ae_matrix_set_length(&problem->xsol, 1, n, _state);
+    ae_matrix_set_length(&problem->fsol, 1, 1, _state);
+    for(i=0; i<=n-1; i++)
+    {
+        problem->xsol.ptr.pp_double[0][i] = hqrndnormal(rs, _state);
+    }
+    problem->fsol.ptr.pp_double[0][0] = (double)(0);
+    problem->ksol = 1;
+    
+    /*
+     * Initial state of Lagrange multipliers
+     */
+    ae_vector_set_length(&problem->lagmultbc, n, _state);
+    rsetv(n, 0.0, &problem->lagmultbc, _state);
+    ae_vector_set_length(&problem->lagmultlc, 0, _state);
+    ae_vector_set_length(&problem->lagmultnlc, 0, _state);
+    
+    /*
+     * Compute gradient introduced by constraints multiplied by Lagrange coefficients
+     * Randomly generate set of active (equality or inequality) constraints
+     */
+    ae_assert(n>=3, "MOTFCreate1KnownAnswer: N<3", _state);
+    rsetallocv(n, 0.0, &grad, _state);
+    ngenerated = 0;
+    nactive = hqrnduniformi(rs, n-2, _state);
+    passcount = 0;
+    while(ngenerated<nactive&&passcount<2*n)
+    {
+        passcount = passcount+1;
+        ctype = hqrnduniformi(rs, 3, _state);
+        lagmult = hqrndnormal(rs, _state);
+        lagmult = lagmult+0.05*possign(lagmult, _state);
+        
+        /*
+         * Try adding a box constraint
+         */
+        if( ctype==0 )
+        {
+            
+            /*
+             * Try to find a box constraint that is not defined yet
+             */
+            i = hqrnduniformi(rs, n, _state);
+            if( ae_isneginf(problem->bndl.ptr.p_double[i], _state)&&ae_isposinf(problem->bndu.ptr.p_double[i], _state) )
+            {
+                
+                /*
+                 * Use this box constraint.
+                 * Fix a bound corresponding to the Lagrange multiplier direction,
+                 * with probability 15% fix other bound too (when it is free).
+                 */
+                ae_assert(ae_fp_neq(lagmult,(double)(0)), "OPTSERV: integrity check 0948 failed", _state);
+                if( ae_fp_less(lagmult,(double)(0)) )
+                {
+                    problem->bndl.ptr.p_double[i] = problem->xsol.ptr.pp_double[0][i];
+                }
+                if( ae_fp_greater(lagmult,(double)(0)) )
+                {
+                    problem->bndu.ptr.p_double[i] = problem->xsol.ptr.pp_double[0][i];
+                }
+                if( ae_fp_less(hqrnduniformr(rs, _state),0.15) )
+                {
+                    problem->bndl.ptr.p_double[i] = problem->xsol.ptr.pp_double[0][i];
+                    problem->bndu.ptr.p_double[i] = problem->xsol.ptr.pp_double[0][i];
+                }
+                grad.ptr.p_double[i] = grad.ptr.p_double[i]+lagmult;
+                problem->lagmultbc.ptr.p_double[i] = problem->lagmultbc.ptr.p_double[i]+lagmult;
+                ngenerated = ngenerated+1;
+            }
+            continue;
+        }
+        
+        /*
+         * Add a linear constraint.
+         */
+        if( ctype==1 )
+        {
+            ae_assert(ae_fp_neq(lagmult,(double)(0)), "OPTSERV: integrity check 0948 failed", _state);
+            hqrndnormalv(rs, n, &c, _state);
+            v = rdotvr(n, &c, &problem->xsol, 0, _state);
+            rmatrixgrowrowsto(&problem->densea, problem->nlinear+1, n, _state);
+            rgrowv(problem->nlinear+1, &problem->al, _state);
+            rgrowv(problem->nlinear+1, &problem->au, _state);
+            rcopyvr(n, &c, &problem->densea, problem->nlinear, _state);
+            problem->al.ptr.p_double[problem->nlinear] = _state->v_neginf;
+            problem->au.ptr.p_double[problem->nlinear] = _state->v_posinf;
+            if( ae_fp_less(lagmult,(double)(0)) )
+            {
+                problem->al.ptr.p_double[problem->nlinear] = v;
+            }
+            if( ae_fp_greater(lagmult,(double)(0)) )
+            {
+                problem->au.ptr.p_double[problem->nlinear] = v;
+            }
+            if( ae_fp_less(hqrnduniformr(rs, _state),0.15) )
+            {
+                problem->al.ptr.p_double[problem->nlinear] = v;
+                problem->au.ptr.p_double[problem->nlinear] = v;
+            }
+            raddv(n, lagmult, &c, &grad, _state);
+            rvectorresize(&problem->lagmultlc, problem->nlinear+1, _state);
+            problem->lagmultlc.ptr.p_double[problem->nlinear] = lagmult;
+            problem->nlinear = problem->nlinear+1;
+            ngenerated = ngenerated+1;
+            continue;
+        }
+        
+        /*
+         * Add a nonlinear constraint.
+         */
+        if( ctype==2 )
+        {
+            ae_assert(ae_fp_neq(lagmult,(double)(0)), "OPTSERV: integrity check 0948 failed", _state);
+            
+            /*
+             * Allocate place
+             */
+            rgrowv(problem->nnonlinear+1, &problem->nlc, _state);
+            rmatrixgrowrowsto(&problem->nlb, problem->nnonlinear+1, n, _state);
+            rmatrixgrowrowsto(&problem->nla, (problem->nnonlinear+1)*n, n, _state);
+            rmatrixgrowrowsto(&problem->nld, problem->nnonlinear+1, n, _state);
+            rgrowv(problem->nnonlinear+1, &problem->hl, _state);
+            rgrowv(problem->nnonlinear+1, &problem->hu, _state);
+            
+            /*
+             * Generate and compute value of the nonlinear constraint, update gradient
+             */
+            v = (double)(0);
+            problem->nlc.ptr.p_double[problem->nnonlinear] = hqrndnormal(rs, _state);
+            v = v+problem->nlc.ptr.p_double[problem->nnonlinear];
+            hqrndnormalv(rs, n, &c, _state);
+            rcopyvr(n, &c, &problem->nlb, problem->nnonlinear, _state);
+            v = v+rdotvr(n, &c, &problem->xsol, 0, _state);
+            raddv(n, lagmult, &c, &grad, _state);
+            spdmatrixrndcond(n, 10.0, &q, _state);
+            vmul = nlquadratic*ae_fabs(hqrndnormal(rs, _state), _state);
+            for(i=0; i<=n-1; i++)
+            {
+                rmulr(n, vmul, &q, i, _state);
+            }
+            rmatrixcopy(n, n, &q, 0, 0, &problem->nla, problem->nnonlinear*n, 0, _state);
+            for(i=0; i<=n-1; i++)
+            {
+                for(j=0; j<=n-1; j++)
+                {
+                    v = v+0.5*problem->xsol.ptr.pp_double[0][i]*q.ptr.pp_double[i][j]*problem->xsol.ptr.pp_double[0][j];
+                    grad.ptr.p_double[i] = grad.ptr.p_double[i]+lagmult*q.ptr.pp_double[i][j]*problem->xsol.ptr.pp_double[0][j];
+                }
+            }
+            for(i=0; i<=n-1; i++)
+            {
+                problem->nld.ptr.pp_double[problem->nnonlinear][i] = nlquartic*ae_pow((double)(2), 0.33*hqrndnormal(rs, _state), _state);
+                v = v+problem->nld.ptr.pp_double[problem->nnonlinear][i]*ae_pow(problem->xsol.ptr.pp_double[0][i], (double)(4), _state);
+                grad.ptr.p_double[i] = grad.ptr.p_double[i]+lagmult*problem->nld.ptr.pp_double[problem->nnonlinear][i]*(double)4*ae_pow(problem->xsol.ptr.pp_double[0][i], (double)(3), _state);
+            }
+            problem->hl.ptr.p_double[problem->nnonlinear] = _state->v_neginf;
+            problem->hu.ptr.p_double[problem->nnonlinear] = _state->v_posinf;
+            if( ae_fp_less(lagmult,(double)(0)) )
+            {
+                problem->hl.ptr.p_double[problem->nnonlinear] = v;
+            }
+            if( ae_fp_greater(lagmult,(double)(0)) )
+            {
+                problem->hu.ptr.p_double[problem->nnonlinear] = v;
+            }
+            if( ae_fp_less(hqrnduniformr(rs, _state),0.15) )
+            {
+                problem->hl.ptr.p_double[problem->nnonlinear] = v;
+                problem->hu.ptr.p_double[problem->nnonlinear] = v;
+            }
+            rvectorresize(&problem->lagmultnlc, problem->nnonlinear+1, _state);
+            problem->lagmultnlc.ptr.p_double[problem->nnonlinear] = lagmult;
+            problem->nnonlinear = problem->nnonlinear+1;
+            ngenerated = ngenerated+1;
+            continue;
+        }
+    }
+    
+    /*
+     * Generate convex target which exactly balances gradient introduced by constraints
+     */
+    rsetallocv(1, 0.0, &problem->tgtc, _state);
+    rsetallocm(1, n, 0.0, &problem->tgtb, _state);
+    rsetallocm(n, n, 0.0, &problem->tgta, _state);
+    rsetallocm(1, n, 0.0, &problem->tgtd, _state);
+    for(i=0; i<=n-1; i++)
+    {
+        problem->tgtd.ptr.pp_double[0][i] = 0.05*ae_pow((double)(2), 0.33*hqrndnormal(rs, _state), _state);
+        problem->fsol.ptr.pp_double[0][0] = problem->fsol.ptr.pp_double[0][0]+problem->tgtd.ptr.pp_double[0][i]*ae_pow(problem->xsol.ptr.pp_double[0][i], (double)(4), _state);
+        grad.ptr.p_double[i] = grad.ptr.p_double[i]+problem->tgtd.ptr.pp_double[0][i]*(double)4*ae_pow(problem->xsol.ptr.pp_double[0][i], (double)(3), _state);
+    }
+    for(i=0; i<=n-1; i++)
+    {
+        problem->tgtb.ptr.pp_double[0][i] = -grad.ptr.p_double[i];
+        problem->fsol.ptr.pp_double[0][0] = problem->fsol.ptr.pp_double[0][0]+problem->tgtb.ptr.pp_double[0][i]*problem->xsol.ptr.pp_double[0][i];
+    }
+    
+    /*
+     * Randomly generate constraints which are inactive at the trial point
+     */
+    k = hqrnduniformi(rs, ae_minint(1+n/2, 5, _state), _state);
+    nadditionallin = hqrnduniformi(rs, k+1, _state);
+    nadditionalnl = k-nadditionallin;
+    for(i=0; i<=n-1; i++)
+    {
+        if( (ae_fp_less(hqrnduniformr(rs, _state),0.5)&&ae_isneginf(problem->bndl.ptr.p_double[i], _state))&&ae_isposinf(problem->bndu.ptr.p_double[i], _state) )
+        {
+            ctype = hqrnduniformi(rs, 3, _state);
+            problem->bndl.ptr.p_double[i] = rcase2(ctype==0||ctype==2, problem->xsol.ptr.pp_double[0][i]-padinactive-ae_pow((double)(2), hqrndnormal(rs, _state), _state), _state->v_neginf, _state);
+            problem->bndu.ptr.p_double[i] = rcase2(ctype==1||ctype==2, problem->xsol.ptr.pp_double[0][i]+padinactive+ae_pow((double)(2), hqrndnormal(rs, _state), _state), _state->v_posinf, _state);
+        }
+    }
+    for(k=0; k<=nadditionallin-1; k++)
+    {
+        hqrndnormalv(rs, n, &c, _state);
+        v = rdotvr(n, &c, &problem->xsol, 0, _state);
+        rmatrixgrowrowsto(&problem->densea, problem->nlinear+1, n, _state);
+        rgrowv(problem->nlinear+1, &problem->al, _state);
+        rgrowv(problem->nlinear+1, &problem->au, _state);
+        rcopyvr(n, &c, &problem->densea, problem->nlinear, _state);
+        ctype = hqrnduniformi(rs, 3, _state);
+        problem->al.ptr.p_double[problem->nlinear] = rcase2(ctype==0||ctype==2, v-padinactive-ae_pow((double)(2), hqrndnormal(rs, _state), _state), _state->v_neginf, _state);
+        problem->au.ptr.p_double[problem->nlinear] = rcase2(ctype==1||ctype==2, v+padinactive+ae_pow((double)(2), hqrndnormal(rs, _state), _state), _state->v_posinf, _state);
+        problem->nlinear = problem->nlinear+1;
+    }
+    for(k=0; k<=nadditionalnl-1; k++)
+    {
+        
+        /*
+         * Allocate place
+         */
+        rgrowv(problem->nnonlinear+1, &problem->nlc, _state);
+        rmatrixgrowrowsto(&problem->nlb, problem->nnonlinear+1, n, _state);
+        rmatrixgrowrowsto(&problem->nla, (problem->nnonlinear+1)*n, n, _state);
+        rmatrixgrowrowsto(&problem->nld, problem->nnonlinear+1, n, _state);
+        rgrowv(problem->nnonlinear+1, &problem->hl, _state);
+        rgrowv(problem->nnonlinear+1, &problem->hu, _state);
+        
+        /*
+         * Generate and compute value of the nonlinear constraint
+         */
+        v = (double)(0);
+        problem->nlc.ptr.p_double[problem->nnonlinear] = hqrndnormal(rs, _state);
+        v = v+problem->nlc.ptr.p_double[problem->nnonlinear];
+        hqrndnormalv(rs, n, &c, _state);
+        rcopyvr(n, &c, &problem->nlb, problem->nnonlinear, _state);
+        v = v+rdotvr(n, &c, &problem->xsol, 0, _state);
+        spdmatrixrndcond(n, 10.0, &q, _state);
+        vmul = nlquadratic*ae_fabs(hqrndnormal(rs, _state), _state);
+        for(i=0; i<=n-1; i++)
+        {
+            rmulr(n, vmul, &q, i, _state);
+        }
+        rmatrixcopy(n, n, &q, 0, 0, &problem->nla, problem->nnonlinear*n, 0, _state);
+        for(i=0; i<=n-1; i++)
+        {
+            for(j=0; j<=n-1; j++)
+            {
+                v = v+0.5*problem->xsol.ptr.pp_double[0][i]*q.ptr.pp_double[i][j]*problem->xsol.ptr.pp_double[0][j];
+            }
+        }
+        for(i=0; i<=n-1; i++)
+        {
+            problem->nld.ptr.pp_double[problem->nnonlinear][i] = nlquartic*ae_pow((double)(2), 0.33*hqrndnormal(rs, _state), _state);
+            v = v+problem->nld.ptr.pp_double[problem->nnonlinear][i]*ae_pow(problem->xsol.ptr.pp_double[0][i], (double)(4), _state);
+        }
+        ctype = hqrnduniformi(rs, 3, _state);
+        problem->hl.ptr.p_double[problem->nnonlinear] = rcase2(ctype==0||ctype==2, v-padinactive-ae_pow((double)(2), hqrndnormal(rs, _state), _state), _state->v_neginf, _state);
+        problem->hu.ptr.p_double[problem->nnonlinear] = rcase2(ctype==1||ctype==2, v+padinactive+ae_pow((double)(2), hqrndnormal(rs, _state), _state), _state->v_posinf, _state);
+        problem->nnonlinear = problem->nnonlinear+1;
+    }
+    ae_frame_leave(_state);
+}
+
+
+/*************************************************************************
+Returns the size of the METAHEURISTIC-U1 collection
+
+  -- ALGLIB --
+     Copyright 04.03.2023 by Bochkanov Sergey
+*************************************************************************/
+ae_int_t motfgetmetaheuristicu1size(ae_state *_state)
+{
+    ae_int_t result;
+
+
+    result = 11;
+    return result;
+}
+
+
+/*************************************************************************
+Returns the size of the METAHEURISTIC-U2 collection
+
+  -- ALGLIB --
+     Copyright 04.03.2023 by Bochkanov Sergey
+*************************************************************************/
+ae_int_t motfgetmetaheuristicu2size(ae_state *_state)
+{
+    ae_int_t result;
+
+
+    result = 5;
+    return result;
+}
+
+
+/*************************************************************************
+Creates a single-objective test problem from the METAHEURISTIC-U1 collection
+
+INPUT PARAMETERS:
+    ProblemIdx      -   a value from [0,MOTFGetMetaheuristicU1Size)
+    RS              -   RNG, ignored in the current version because
+                        all problems are deterministic, but may be used
+                        later
+
+  -- ALGLIB --
+     Copyright 04.03.2023 by Bochkanov Sergey
+*************************************************************************/
+void motfcreatemetaheuristicu1(ae_int_t problemidx,
+     hqrndstate* rs,
+     multiobjectivetestfunction* problem,
+     ae_state *_state)
+{
+    ae_bool processed;
+
+    _multiobjectivetestfunction_clear(problem);
+
+    
+    /*
+     * Set problem metrics
+     */
+    problem->problemtype = 1;
+    problem->problemsubtype = problemidx;
+    problem->m = 1;
+    problem->nlinear = 0;
+    problem->nnonlinear = 0;
+    problem->ksol = 0;
+    ae_matrix_set_length(&problem->xsol, 0, 0, _state);
+    ae_matrix_set_length(&problem->fsol, 0, 0, _state);
+    ae_vector_set_length(&problem->lagmultbc, 0, _state);
+    ae_vector_set_length(&problem->lagmultlc, 0, _state);
+    ae_vector_set_length(&problem->lagmultnlc, 0, _state);
+    
+    /*
+     * Handle various problems from the collection
+     */
+    processed = ae_false;
+    if( problemidx==0 )
+    {
+        
+        /*
+         * f_sp = sum(x^2)
+         */
+        problem->n = 30;
+        rsetallocv(problem->n, (double)(-100), &problem->bndl, _state);
+        rsetallocv(problem->n, (double)(100), &problem->bndu, _state);
+        problem->ksol = 1;
+        rsetallocm(1, problem->n, 0.0, &problem->xsol, _state);
+        rsetallocm(1, 1, 0.0, &problem->fsol, _state);
+        rsetallocv(problem->n, 0.0, &problem->lagmultbc, _state);
+        processed = ae_true;
+    }
+    if( problemidx==1 )
+    {
+        
+        /*
+         * f_sch = sum(|x|) + prod(|x|)
+         */
+        problem->n = 30;
+        rsetallocv(problem->n, (double)(-10), &problem->bndl, _state);
+        rsetallocv(problem->n, (double)(10), &problem->bndu, _state);
+        problem->ksol = 1;
+        rsetallocm(1, problem->n, 0.0, &problem->xsol, _state);
+        rsetallocm(1, 1, 0.0, &problem->fsol, _state);
+        rsetallocv(problem->n, 0.0, &problem->lagmultbc, _state);
+        processed = ae_true;
+    }
+    if( problemidx==2 )
+    {
+        
+        /*
+         * f_schDS
+         */
+        problem->n = 30;
+        rsetallocv(problem->n, (double)(-100), &problem->bndl, _state);
+        rsetallocv(problem->n, (double)(100), &problem->bndu, _state);
+        problem->ksol = 1;
+        rsetallocm(1, problem->n, 0.0, &problem->xsol, _state);
+        rsetallocm(1, 1, 0.0, &problem->fsol, _state);
+        rsetallocv(problem->n, 0.0, &problem->lagmultbc, _state);
+        processed = ae_true;
+    }
+    if( problemidx==3 )
+    {
+        
+        /*
+         * f_sch
+         */
+        problem->n = 30;
+        rsetallocv(problem->n, (double)(-100), &problem->bndl, _state);
+        rsetallocv(problem->n, (double)(100), &problem->bndu, _state);
+        problem->ksol = 1;
+        rsetallocm(1, problem->n, 0.0, &problem->xsol, _state);
+        rsetallocm(1, 1, 0.0, &problem->fsol, _state);
+        rsetallocv(problem->n, 0.0, &problem->lagmultbc, _state);
+        processed = ae_true;
+    }
+    if( problemidx==4 )
+    {
+        
+        /*
+         * f_ros
+         */
+        problem->n = 3;
+        rsetallocv(problem->n, (double)(-30), &problem->bndl, _state);
+        rsetallocv(problem->n, (double)(30), &problem->bndu, _state);
+        problem->ksol = 1;
+        rsetallocm(1, problem->n, 0.0, &problem->xsol, _state);
+        rsetallocm(1, 1, 0.0, &problem->fsol, _state);
+        rsetallocv(problem->n, 0.0, &problem->lagmultbc, _state);
+        processed = ae_true;
+    }
+    if( problemidx==5 )
+    {
+        
+        /*
+         * f = |x|^2 / (1+|x|^2)
+         */
+        problem->n = 30;
+        rsetallocv(problem->n, (double)(-30), &problem->bndl, _state);
+        rsetallocv(problem->n, (double)(30), &problem->bndu, _state);
+        problem->ksol = 1;
+        rsetallocm(1, problem->n, 0.0, &problem->xsol, _state);
+        rsetallocm(1, 1, 0.0, &problem->fsol, _state);
+        rsetallocv(problem->n, 0.0, &problem->lagmultbc, _state);
+        processed = ae_true;
+    }
+    if( problemidx==6 )
+    {
+        
+        /*
+         * f = |x| / (1+|x|)
+         */
+        problem->n = 30;
+        rsetallocv(problem->n, (double)(-30), &problem->bndl, _state);
+        rsetallocv(problem->n, (double)(30), &problem->bndu, _state);
+        problem->ksol = 1;
+        rsetallocm(1, problem->n, 0.0, &problem->xsol, _state);
+        rsetallocm(1, 1, 0.0, &problem->fsol, _state);
+        rsetallocv(problem->n, 0.0, &problem->lagmultbc, _state);
+        processed = ae_true;
+    }
+    if( problemidx==7 )
+    {
+        
+        /*
+         * f = |x| + |x|^2
+         */
+        problem->n = 30;
+        rsetallocv(problem->n, (double)(-30), &problem->bndl, _state);
+        rsetallocv(problem->n, (double)(30), &problem->bndu, _state);
+        problem->ksol = 1;
+        rsetallocm(1, problem->n, 0.0, &problem->xsol, _state);
+        rsetallocm(1, 1, 0.0, &problem->fsol, _state);
+        rsetallocv(problem->n, 0.0, &problem->lagmultbc, _state);
+        processed = ae_true;
+    }
+    if( problemidx==8 )
+    {
+        
+        /*
+         * f_sp = sum(I*x^2)
+         */
+        problem->n = 30;
+        rsetallocv(problem->n, (double)(-100), &problem->bndl, _state);
+        rsetallocv(problem->n, (double)(100), &problem->bndu, _state);
+        problem->ksol = 1;
+        rsetallocm(1, problem->n, 0.0, &problem->xsol, _state);
+        rsetallocm(1, 1, 0.0, &problem->fsol, _state);
+        rsetallocv(problem->n, 0.0, &problem->lagmultbc, _state);
+        processed = ae_true;
+    }
+    if( problemidx==9 )
+    {
+        
+        /*
+         * f_sp = sum(I*|x|)
+         */
+        problem->n = 30;
+        rsetallocv(problem->n, (double)(-100), &problem->bndl, _state);
+        rsetallocv(problem->n, (double)(100), &problem->bndu, _state);
+        problem->ksol = 1;
+        rsetallocm(1, problem->n, 0.0, &problem->xsol, _state);
+        rsetallocm(1, 1, 0.0, &problem->fsol, _state);
+        rsetallocv(problem->n, 0.0, &problem->lagmultbc, _state);
+        processed = ae_true;
+    }
+    if( problemidx==10 )
+    {
+        
+        /*
+         * Brown function
+         */
+        problem->n = 30;
+        rsetallocv(problem->n, (double)(-1), &problem->bndl, _state);
+        rsetallocv(problem->n, (double)(4), &problem->bndu, _state);
+        problem->ksol = 1;
+        rsetallocm(1, problem->n, 0.0, &problem->xsol, _state);
+        rsetallocm(1, 1, 0.0, &problem->fsol, _state);
+        rsetallocv(problem->n, 0.0, &problem->lagmultbc, _state);
+        processed = ae_true;
+    }
+    ae_assert(processed, "MOTFCreateMetaheuristicU1: incorrect ProblemIdx", _state);
+}
+
+
+/*************************************************************************
+Creates a single-objective test problem from the METAHEURISTIC-U2 collection
+
+INPUT PARAMETERS:
+    ProblemIdx      -   a value from [0,MOTFGetMetaheuristicU2Size)
+    RS              -   RNG, ignored in the current version because
+                        all problems are deterministic, but may be used
+                        later
+
+  -- ALGLIB --
+     Copyright 04.03.2023 by Bochkanov Sergey
+*************************************************************************/
+void motfcreatemetaheuristicu2(ae_int_t problemidx,
+     hqrndstate* rs,
+     multiobjectivetestfunction* problem,
+     ae_state *_state)
+{
+    ae_bool processed;
+
+    _multiobjectivetestfunction_clear(problem);
+
+    
+    /*
+     * Set problem metrics
+     */
+    problem->problemtype = 2;
+    problem->problemsubtype = problemidx;
+    problem->m = 1;
+    problem->nlinear = 0;
+    problem->nnonlinear = 0;
+    problem->ksol = 0;
+    ae_matrix_set_length(&problem->xsol, 0, 0, _state);
+    ae_matrix_set_length(&problem->fsol, 0, 0, _state);
+    ae_vector_set_length(&problem->lagmultbc, 0, _state);
+    ae_vector_set_length(&problem->lagmultlc, 0, _state);
+    ae_vector_set_length(&problem->lagmultnlc, 0, _state);
+    
+    /*
+     * Handle various problems from the collection
+     */
+    processed = ae_false;
+    if( problemidx==0 )
+    {
+        
+        /*
+         * Rastrigin: f = sum( x_i^2 - 10*cos(2pi*x_i)+10 )
+         */
+        problem->n = 30;
+        rsetallocv(problem->n, -5.12, &problem->bndl, _state);
+        rsetallocv(problem->n, 5.12, &problem->bndu, _state);
+        problem->ksol = 1;
+        rsetallocm(1, problem->n, 0.0, &problem->xsol, _state);
+        rsetallocm(1, 1, 0.0, &problem->fsol, _state);
+        rsetallocv(problem->n, 0.0, &problem->lagmultbc, _state);
+        processed = ae_true;
+    }
+    if( problemidx==1 )
+    {
+        
+        /*
+         * Ackley function
+         */
+        problem->n = 30;
+        rsetallocv(problem->n, (double)(-32), &problem->bndl, _state);
+        rsetallocv(problem->n, (double)(32), &problem->bndu, _state);
+        problem->ksol = 1;
+        rsetallocm(1, problem->n, 0.0, &problem->xsol, _state);
+        rsetallocm(1, 1, 0.0, &problem->fsol, _state);
+        rsetallocv(problem->n, 0.0, &problem->lagmultbc, _state);
+        processed = ae_true;
+    }
+    if( problemidx==2 )
+    {
+        
+        /*
+         * Alphine function
+         */
+        problem->n = 30;
+        rsetallocv(problem->n, (double)(-10), &problem->bndl, _state);
+        rsetallocv(problem->n, (double)(10), &problem->bndu, _state);
+        problem->ksol = 1;
+        rsetallocm(1, problem->n, 0.0, &problem->xsol, _state);
+        rsetallocm(1, 1, 0.0, &problem->fsol, _state);
+        rsetallocv(problem->n, 0.0, &problem->lagmultbc, _state);
+        processed = ae_true;
+    }
+    if( problemidx==3 )
+    {
+        
+        /*
+         * Csendes function
+         */
+        problem->n = 30;
+        rsetallocv(problem->n, (double)(-1), &problem->bndl, _state);
+        rsetallocv(problem->n, (double)(1), &problem->bndu, _state);
+        problem->ksol = 1;
+        rsetallocm(1, problem->n, 0.0, &problem->xsol, _state);
+        rsetallocm(1, 1, 0.0, &problem->fsol, _state);
+        rsetallocv(problem->n, 0.0, &problem->lagmultbc, _state);
+        processed = ae_true;
+    }
+    if( problemidx==4 )
+    {
+        
+        /*
+         * Griewank function
+         */
+        problem->n = 30;
+        rsetallocv(problem->n, (double)(-100), &problem->bndl, _state);
+        rsetallocv(problem->n, (double)(100), &problem->bndu, _state);
+        problem->ksol = 1;
+        rsetallocm(1, problem->n, 0.0, &problem->xsol, _state);
+        rsetallocm(1, 1, 0.0, &problem->fsol, _state);
+        rsetallocv(problem->n, 0.0, &problem->lagmultbc, _state);
+        processed = ae_true;
+    }
+    ae_assert(processed, "MOTFCreateMetaheuristicU2: incorrect ProblemIdx", _state);
+}
+
+
+/*************************************************************************
 Evaluate multiobjective test problem and its nonlinear constraints.
 
 INPUT PARAMETERS:
@@ -5042,16 +6630,21 @@ void motfeval(const multiobjectivetestfunction* problem,
 {
     ae_frame _frame_block;
     ae_int_t i;
+    ae_int_t j;
     ae_int_t k;
     ae_int_t n;
     ae_int_t m;
     ae_int_t dst;
     ae_vector ax;
+    double vsum;
+    double vprod;
+    double v;
 
     ae_frame_make(_state, &_frame_block);
     memset(&ax, 0, sizeof(ax));
     ae_vector_init(&ax, 0, DT_REAL, _state, ae_true);
 
+    ae_assert((problem->problemtype==0||problem->problemtype==1)||problem->problemtype==2, "MOTFEval: unknown problem type", _state);
     ae_assert(!needfi||fi->cnt>=problem->m+problem->nnonlinear, "MOTFEval: Fi is too short", _state);
     ae_assert(!needjac||jac->rows>=problem->m+problem->nnonlinear, "MOTFEval: Jac is too short", _state);
     ae_assert(!needjac||jac->cols>=problem->n, "MOTFEval: Jac is too short", _state);
@@ -5059,126 +6652,347 @@ void motfeval(const multiobjectivetestfunction* problem,
     m = problem->m;
     
     /*
-     * Evaluate objectives
+     * Problem type #0
      */
-    for(k=0; k<=m-1; k++)
+    if( problem->problemtype==0 )
     {
-        dst = k;
         
         /*
-         * Initial values (constant term)
+         * Evaluate objectives
          */
-        if( needfi )
+        for(k=0; k<=m-1; k++)
         {
-            fi->ptr.p_double[dst] = problem->tgtc.ptr.p_double[k];
-        }
-        if( needjac )
-        {
-            rsetr(n, 0.0, jac, dst, _state);
-        }
-        
-        /*
-         * Linear term
-         */
-        if( needfi )
-        {
-            fi->ptr.p_double[dst] = fi->ptr.p_double[dst]+rdotvr(n, x, &problem->tgtb, k, _state);
-        }
-        if( needjac )
-        {
-            raddrr(n, 1.0, &problem->tgtb, k, jac, dst, _state);
-        }
-        
-        /*
-         * Quadratic term
-         */
-        rallocv(n, &ax, _state);
-        rmatrixgemv(n, n, 1.0, &problem->tgta, k*n, 0, 0, x, 0, 0.0, &ax, 0, _state);
-        if( needfi )
-        {
-            fi->ptr.p_double[dst] = fi->ptr.p_double[dst]+0.5*rdotv(n, x, &ax, _state);
-        }
-        if( needjac )
-        {
-            raddvr(n, 1.0, &ax, jac, dst, _state);
-        }
-        
-        /*
-         * Quartic term
-         */
-        for(i=0; i<=n-1; i++)
-        {
+            dst = k;
+            
+            /*
+             * Initial values (constant term)
+             */
             if( needfi )
             {
-                fi->ptr.p_double[dst] = fi->ptr.p_double[dst]+problem->tgtd.ptr.pp_double[k][i]*ae_pow(x->ptr.p_double[i], (double)(4), _state);
+                fi->ptr.p_double[dst] = problem->tgtc.ptr.p_double[k];
             }
             if( needjac )
             {
-                jac->ptr.pp_double[dst][i] = jac->ptr.pp_double[dst][i]+problem->tgtd.ptr.pp_double[k][i]*(double)4*ae_pow(x->ptr.p_double[i], (double)(3), _state);
+                rsetr(n, 0.0, jac, dst, _state);
+            }
+            
+            /*
+             * Linear term
+             */
+            if( needfi )
+            {
+                fi->ptr.p_double[dst] = fi->ptr.p_double[dst]+rdotvr(n, x, &problem->tgtb, k, _state);
+            }
+            if( needjac )
+            {
+                raddrr(n, 1.0, &problem->tgtb, k, jac, dst, _state);
+            }
+            
+            /*
+             * Quadratic term
+             */
+            rallocv(n, &ax, _state);
+            rmatrixgemv(n, n, 1.0, &problem->tgta, k*n, 0, 0, x, 0, 0.0, &ax, 0, _state);
+            if( needfi )
+            {
+                fi->ptr.p_double[dst] = fi->ptr.p_double[dst]+0.5*rdotv(n, x, &ax, _state);
+            }
+            if( needjac )
+            {
+                raddvr(n, 1.0, &ax, jac, dst, _state);
+            }
+            
+            /*
+             * Quartic term
+             */
+            for(i=0; i<=n-1; i++)
+            {
+                if( needfi )
+                {
+                    fi->ptr.p_double[dst] = fi->ptr.p_double[dst]+problem->tgtd.ptr.pp_double[k][i]*ae_pow(x->ptr.p_double[i], (double)(4), _state);
+                }
+                if( needjac )
+                {
+                    jac->ptr.pp_double[dst][i] = jac->ptr.pp_double[dst][i]+problem->tgtd.ptr.pp_double[k][i]*(double)4*ae_pow(x->ptr.p_double[i], (double)(3), _state);
+                }
             }
         }
+        
+        /*
+         * Nonlinear constraints
+         */
+        for(k=0; k<=problem->nnonlinear-1; k++)
+        {
+            dst = m+k;
+            
+            /*
+             * Initial values (constant term)
+             */
+            if( needfi )
+            {
+                fi->ptr.p_double[dst] = problem->nlc.ptr.p_double[k];
+            }
+            if( needjac )
+            {
+                rsetr(n, 0.0, jac, dst, _state);
+            }
+            
+            /*
+             * Linear term
+             */
+            if( needfi )
+            {
+                fi->ptr.p_double[dst] = fi->ptr.p_double[dst]+rdotvr(n, x, &problem->nlb, k, _state);
+            }
+            if( needjac )
+            {
+                raddrr(n, 1.0, &problem->nlb, k, jac, dst, _state);
+            }
+            
+            /*
+             * Quadratic term
+             */
+            rallocv(n, &ax, _state);
+            rmatrixgemv(n, n, 1.0, &problem->nla, k*n, 0, 0, x, 0, 0.0, &ax, 0, _state);
+            if( needfi )
+            {
+                fi->ptr.p_double[dst] = fi->ptr.p_double[dst]+0.5*rdotv(n, x, &ax, _state);
+            }
+            if( needjac )
+            {
+                raddvr(n, 1.0, &ax, jac, dst, _state);
+            }
+            
+            /*
+             * Quartic term
+             */
+            for(i=0; i<=n-1; i++)
+            {
+                if( needfi )
+                {
+                    fi->ptr.p_double[dst] = fi->ptr.p_double[dst]+problem->nld.ptr.pp_double[k][i]*ae_pow(x->ptr.p_double[i], (double)(4), _state);
+                }
+                if( needjac )
+                {
+                    jac->ptr.pp_double[dst][i] = jac->ptr.pp_double[dst][i]+problem->nld.ptr.pp_double[k][i]*(double)4*ae_pow(x->ptr.p_double[i], (double)(3), _state);
+                }
+            }
+        }
+        
+        /*
+         * Done
+         */
+        ae_frame_leave(_state);
+        return;
     }
     
     /*
-     * Nonlinear constraints
+     * METAHEURISTICS-U1 collection
      */
-    for(k=0; k<=problem->nnonlinear-1; k++)
+    if( problem->problemtype==1 )
     {
-        dst = m+k;
-        
-        /*
-         * Initial values (constant term)
-         */
-        if( needfi )
+        ae_assert(!needjac, "OPTSERV: the METAHEURISTICS-U1 collection does not support Jacobians", _state);
+        if( !needfi )
         {
-            fi->ptr.p_double[dst] = problem->nlc.ptr.p_double[k];
+            ae_frame_leave(_state);
+            return;
         }
-        if( needjac )
+        fi->ptr.p_double[0] = (double)(0);
+        if( problem->problemsubtype==0 )
         {
-            rsetr(n, 0.0, jac, dst, _state);
-        }
-        
-        /*
-         * Linear term
-         */
-        if( needfi )
-        {
-            fi->ptr.p_double[dst] = fi->ptr.p_double[dst]+rdotvr(n, x, &problem->nlb, k, _state);
-        }
-        if( needjac )
-        {
-            raddrr(n, 1.0, &problem->nlb, k, jac, dst, _state);
-        }
-        
-        /*
-         * Quadratic term
-         */
-        rallocv(n, &ax, _state);
-        rmatrixgemv(n, n, 1.0, &problem->nla, k*n, 0, 0, x, 0, 0.0, &ax, 0, _state);
-        if( needfi )
-        {
-            fi->ptr.p_double[dst] = fi->ptr.p_double[dst]+0.5*rdotv(n, x, &ax, _state);
-        }
-        if( needjac )
-        {
-            raddvr(n, 1.0, &ax, jac, dst, _state);
-        }
-        
-        /*
-         * Quartic term
-         */
-        for(i=0; i<=n-1; i++)
-        {
-            if( needfi )
+            for(i=0; i<=problem->n-1; i++)
             {
-                fi->ptr.p_double[dst] = fi->ptr.p_double[dst]+problem->nld.ptr.pp_double[k][i]*ae_pow(x->ptr.p_double[i], (double)(4), _state);
+                fi->ptr.p_double[0] = fi->ptr.p_double[0]+ae_sqr(x->ptr.p_double[i], _state);
             }
-            if( needjac )
-            {
-                jac->ptr.pp_double[dst][i] = jac->ptr.pp_double[dst][i]+problem->nld.ptr.pp_double[k][i]*(double)4*ae_pow(x->ptr.p_double[i], (double)(3), _state);
-            }
+            ae_frame_leave(_state);
+            return;
         }
+        if( problem->problemsubtype==1 )
+        {
+            vsum = (double)(0);
+            vprod = (double)(1);
+            for(i=0; i<=problem->n-1; i++)
+            {
+                vsum = vsum+ae_fabs(x->ptr.p_double[i], _state);
+                vprod = vprod*ae_fabs(x->ptr.p_double[i], _state);
+            }
+            fi->ptr.p_double[0] = vsum+vprod;
+            ae_frame_leave(_state);
+            return;
+        }
+        if( problem->problemsubtype==2 )
+        {
+            for(i=0; i<=problem->n-1; i++)
+            {
+                v = (double)(0);
+                for(j=0; j<=i; j++)
+                {
+                    v = v+x->ptr.p_double[i];
+                }
+                fi->ptr.p_double[0] = fi->ptr.p_double[0]+ae_sqr(v, _state);
+            }
+            ae_frame_leave(_state);
+            return;
+        }
+        if( problem->problemsubtype==3 )
+        {
+            for(i=0; i<=problem->n-1; i++)
+            {
+                fi->ptr.p_double[0] = ae_maxreal(fi->ptr.p_double[0], ae_fabs(x->ptr.p_double[i], _state), _state);
+            }
+            ae_frame_leave(_state);
+            return;
+        }
+        if( problem->problemsubtype==4 )
+        {
+            for(i=0; i<=problem->n-2; i++)
+            {
+                fi->ptr.p_double[0] = fi->ptr.p_double[0]+((double)100*ae_sqr(x->ptr.p_double[i+1]-x->ptr.p_double[i]*x->ptr.p_double[i], _state)+ae_sqr(x->ptr.p_double[i]-(double)1, _state));
+            }
+            ae_frame_leave(_state);
+            return;
+        }
+        if( problem->problemsubtype==5 )
+        {
+            v = rdotv2(problem->n, x, _state);
+            fi->ptr.p_double[0] = v/(v+(double)1);
+            ae_frame_leave(_state);
+            return;
+        }
+        if( problem->problemsubtype==6 )
+        {
+            v = ae_sqrt(rdotv2(problem->n, x, _state), _state);
+            fi->ptr.p_double[0] = v/(v+(double)1);
+            ae_frame_leave(_state);
+            return;
+        }
+        if( problem->problemsubtype==7 )
+        {
+            v = rdotv2(problem->n, x, _state);
+            fi->ptr.p_double[0] = v+ae_sqrt(v, _state);
+            ae_frame_leave(_state);
+            return;
+        }
+        if( problem->problemsubtype==8 )
+        {
+            for(i=0; i<=problem->n-1; i++)
+            {
+                fi->ptr.p_double[0] = fi->ptr.p_double[0]+(double)(i+1)*ae_sqr(x->ptr.p_double[i], _state);
+            }
+            ae_frame_leave(_state);
+            return;
+        }
+        if( problem->problemsubtype==9 )
+        {
+            for(i=0; i<=problem->n-1; i++)
+            {
+                fi->ptr.p_double[0] = fi->ptr.p_double[0]+(double)(i+1)*ae_fabs(x->ptr.p_double[i], _state);
+            }
+            ae_frame_leave(_state);
+            return;
+        }
+        if( problem->problemsubtype==10 )
+        {
+            for(i=0; i<=problem->n-2; i++)
+            {
+                fi->ptr.p_double[0] = fi->ptr.p_double[0]+ae_pow(ae_sqr(x->ptr.p_double[i], _state), ae_sqr(x->ptr.p_double[i+1], _state)+(double)1, _state)+ae_pow(ae_sqr(x->ptr.p_double[i+1], _state), ae_sqr(x->ptr.p_double[i], _state)+(double)1, _state);
+            }
+            ae_frame_leave(_state);
+            return;
+        }
+        
+        /*
+         * Error
+         */
+        ae_assert(ae_false, "OPTSERV: integrity check 9909 failed", _state);
     }
+    
+    /*
+     * METAHEURISTICS-U2 collection
+     */
+    if( problem->problemtype==2 )
+    {
+        ae_assert(!needjac, "OPTSERV: the METAHEURISTICS-U2 collection does not support Jacobians", _state);
+        if( !needfi )
+        {
+            ae_frame_leave(_state);
+            return;
+        }
+        fi->ptr.p_double[0] = (double)(0);
+        if( problem->problemsubtype==0 )
+        {
+            for(i=0; i<=problem->n-1; i++)
+            {
+                fi->ptr.p_double[0] = fi->ptr.p_double[0]+ae_sqr(x->ptr.p_double[i], _state)-(double)10*ae_cos((double)2*ae_pi*x->ptr.p_double[i], _state)+(double)10;
+            }
+            ae_frame_leave(_state);
+            return;
+        }
+        if( problem->problemsubtype==1 )
+        {
+            v = (double)(0);
+            for(i=0; i<=problem->n-1; i++)
+            {
+                v = v+ae_sqr(x->ptr.p_double[i], _state);
+            }
+            fi->ptr.p_double[0] = fi->ptr.p_double[0]-(double)20*ae_exp(-0.2*ae_sqrt(v/(double)problem->n, _state), _state);
+            v = (double)(0);
+            for(i=0; i<=problem->n-1; i++)
+            {
+                v = v+ae_cos((double)2*ae_pi*x->ptr.p_double[i], _state);
+            }
+            fi->ptr.p_double[0] = fi->ptr.p_double[0]-ae_exp(v/(double)problem->n, _state);
+            fi->ptr.p_double[0] = fi->ptr.p_double[0]+(double)20+ae_exp((double)(1), _state);
+            ae_frame_leave(_state);
+            return;
+        }
+        if( problem->problemsubtype==2 )
+        {
+            for(i=0; i<=problem->n-1; i++)
+            {
+                fi->ptr.p_double[0] = fi->ptr.p_double[0]+ae_fabs(x->ptr.p_double[i]*(0.1+ae_sin(x->ptr.p_double[i], _state)), _state);
+            }
+            ae_frame_leave(_state);
+            return;
+        }
+        if( problem->problemsubtype==3 )
+        {
+            for(i=0; i<=problem->n-1; i++)
+            {
+                if( ae_fp_neq(x->ptr.p_double[i],(double)(0)) )
+                {
+                    fi->ptr.p_double[0] = fi->ptr.p_double[0]+ae_pow(x->ptr.p_double[i], (double)(6), _state)*((double)2+ae_sin((double)1/x->ptr.p_double[i], _state));
+                }
+            }
+            ae_frame_leave(_state);
+            return;
+        }
+        if( problem->problemsubtype==4 )
+        {
+            for(i=0; i<=problem->n-1; i++)
+            {
+                fi->ptr.p_double[0] = fi->ptr.p_double[0]+ae_sqr(x->ptr.p_double[i], _state)/(double)4000;
+            }
+            v = (double)(1);
+            for(i=0; i<=problem->n-1; i++)
+            {
+                v = v*ae_cos(x->ptr.p_double[i]/ae_sqrt((double)(i+1), _state), _state);
+            }
+            fi->ptr.p_double[0] = fi->ptr.p_double[0]+((double)1-v);
+            ae_frame_leave(_state);
+            return;
+        }
+        
+        /*
+         * Error
+         */
+        ae_assert(ae_false, "OPTSERV: integrity check 9919 failed", _state);
+    }
+    
+    /*
+     * Error
+     */
+    ae_assert(ae_false, "OPTSERV: integrity check 4407 failed", _state);
     ae_frame_leave(_state);
 }
 
@@ -5491,6 +7305,764 @@ void trustradresetmomentum(double* growthfactor,
 
 
     *growthfactor = mingrowthfactor;
+}
+
+
+/*************************************************************************
+Initialize V-F-J structure by allocating uninitialized fields
+*************************************************************************/
+void vfjallocdense(ae_int_t n,
+     ae_int_t m,
+     varsfuncjac* s,
+     ae_state *_state)
+{
+
+
+    ae_assert(n>=1, "vfjAllocDense: N<1", _state);
+    ae_assert(m>=1, "vfjAllocDense: M<1", _state);
+    s->n = n;
+    s->m = m;
+    s->isdense = ae_true;
+    rallocv(n, &s->x, _state);
+    rallocv(m, &s->fi, _state);
+    rallocm(m, n, &s->jac, _state);
+}
+
+
+/*************************************************************************
+Initialize V-F-J structure by allocating uninitialized fields
+*************************************************************************/
+void vfjallocsparse(ae_int_t n,
+     ae_int_t m,
+     varsfuncjac* s,
+     ae_state *_state)
+{
+
+
+    ae_assert(n>=1, "vfjAllocSparse: N<1", _state);
+    ae_assert(m>=1, "vfjAllocSparse: M<1", _state);
+    s->n = n;
+    s->m = m;
+    s->isdense = ae_false;
+    rallocv(n, &s->x, _state);
+    rallocv(m, &s->fi, _state);
+    s->sj.matrixtype = -1;
+    s->sj.m = -1;
+    s->sj.n = -1;
+}
+
+
+/*************************************************************************
+Initialize V-F-J structure from user-supplied data
+*************************************************************************/
+void vfjinitfromdense(/* Real    */ const ae_vector* x,
+     ae_int_t n,
+     /* Real    */ const ae_vector* fi,
+     ae_int_t m,
+     /* Real    */ const ae_matrix* jac,
+     varsfuncjac* s,
+     ae_state *_state)
+{
+
+
+    ae_assert(n>=1, "vfjInitFromDense: N<1", _state);
+    ae_assert(m>=1, "vfjInitFromDense: M<1", _state);
+    s->n = n;
+    s->m = m;
+    s->isdense = ae_true;
+    rcopyallocv(n, x, &s->x, _state);
+    rcopyallocv(m, fi, &s->fi, _state);
+    rcopyallocm(m, n, jac, &s->jac, _state);
+}
+
+
+/*************************************************************************
+Copy V-F-J structure
+*************************************************************************/
+void vfjcopy(const varsfuncjac* src, varsfuncjac* dst, ae_state *_state)
+{
+
+
+    dst->n = src->n;
+    dst->m = src->m;
+    dst->isdense = src->isdense;
+    rcopyallocv(src->n, &src->x, &dst->x, _state);
+    rcopyallocv(src->m, &src->fi, &dst->fi, _state);
+    if( src->isdense )
+    {
+        rcopyallocm(src->m, src->n, &src->jac, &dst->jac, _state);
+    }
+    else
+    {
+        sparsecopybuf(&src->sj, &dst->sj, _state);
+    }
+}
+
+
+/*************************************************************************
+Initialize criteria with default settings
+*************************************************************************/
+void critinitdefault(nlpstoppingcriteria* crit, ae_state *_state)
+{
+
+
+    crit->epsf = (double)(0);
+    crit->epsx = (double)(0);
+    crit->maxits = 0;
+}
+
+
+/*************************************************************************
+Copy criteria
+*************************************************************************/
+void critcopy(const nlpstoppingcriteria* src,
+     nlpstoppingcriteria* dst,
+     ae_state *_state)
+{
+
+
+    dst->epsf = src->epsf;
+    dst->epsx = src->epsx;
+    dst->maxits = src->maxits;
+}
+
+
+/*************************************************************************
+Overwrites stopping CONDITIONS (not TOLERANCES) by values  passed  by  the
+user.
+
+Future versions of the structure may introduce additional conditions, these
+condifitons will be set to zero by this version-1 function.
+*************************************************************************/
+void critsetcondv1(nlpstoppingcriteria* crit,
+     double epsf,
+     double epsx,
+     ae_int_t maxits,
+     ae_state *_state)
+{
+
+
+    ae_assert(ae_isfinite(epsf, _state)&&ae_fp_greater_eq(epsf,(double)(0)), "critSetCondV1: EpsF is infinite or negative", _state);
+    ae_assert(ae_isfinite(epsx, _state)&&ae_fp_greater_eq(epsx,(double)(0)), "critSetCondV1: EpsX is infinite or negative", _state);
+    ae_assert(maxits>=0, "critSetCondV1: MaxIts is negative", _state);
+    crit->epsf = epsf;
+    crit->epsx = epsx;
+    crit->maxits = maxits;
+}
+
+
+/*************************************************************************
+Returns the value of the EpsF stopping condition:
+* if user specified nonzero value, it will be returned
+* if user specified zero value of EpsF, but non-zero value for  any  other
+  condition or tolerance, zero will be returned
+* if user specified zero value of EpsF and zero values for all  other
+  conditions and tolerances, a default value will be returned
+*************************************************************************/
+double critgetepsf(const nlpstoppingcriteria* crit, ae_state *_state)
+{
+    double result;
+
+
+    if( rmax3(crit->epsf, crit->epsx, (double)(crit->maxits), _state)==0.0 )
+    {
+        result = 1.0E-8;
+    }
+    else
+    {
+        result = crit->epsf;
+    }
+    return result;
+}
+
+
+/*************************************************************************
+Returns the value of the EpsX stopping condition:
+* if user specified nonzero value, it will be returned
+* if user specified zero value of EpsX, but non-zero value for  any  other
+  condition or tolerance, zero will be returned
+* if user specified zero value of EpsX and zero values for all  other
+  conditions and tolerances, a default value will be returned
+*************************************************************************/
+double critgetepsx(const nlpstoppingcriteria* crit, ae_state *_state)
+{
+    double result;
+
+
+    result = critgetepsxwithdefault(crit, 1.0E-7, _state);
+    return result;
+}
+
+
+/*************************************************************************
+Returns the value of the EpsX stopping condition:
+* if user specified nonzero value, it will be returned
+* if user specified zero value of EpsX, but non-zero value for  any  other
+  condition or tolerance, zero will be returned
+* if user specified zero value of EpsX and zero values for all  other
+  conditions and tolerances, a default value will be returned
+*************************************************************************/
+double critgetepsxwithdefault(const nlpstoppingcriteria* crit,
+     double defval,
+     ae_state *_state)
+{
+    double result;
+
+
+    if( rmax3(crit->epsf, crit->epsx, (double)(crit->maxits), _state)==0.0 )
+    {
+        result = defval;
+    }
+    else
+    {
+        result = crit->epsx;
+    }
+    return result;
+}
+
+
+/*************************************************************************
+Returns the value of the MaxIts stopping condition:
+* the value specified by the user (either zero or nonzero) will be returned
+*************************************************************************/
+ae_int_t critgetmaxits(const nlpstoppingcriteria* crit, ae_state *_state)
+{
+    ae_int_t result;
+
+
+    result = crit->maxits;
+    return result;
+}
+
+
+/*************************************************************************
+Initializes line search using bisection
+
+NOTES:
+* MaxIts>=2 is required
+*************************************************************************/
+void linesearchinitbisect(double f0,
+     double g0,
+     double alpha1,
+     double alphamax,
+     double c1,
+     double c2,
+     ae_bool strongwolfecond,
+     ae_int_t maxits,
+     ae_bool dotrace,
+     ae_int_t tracelevel,
+     linesearchstate* state,
+     ae_state *_state)
+{
+
+
+    ae_assert(ae_isfinite(f0, _state), "OPTSERV: integrity check 9420 failed", _state);
+    ae_assert(ae_isfinite(g0, _state), "OPTSERV: integrity check 9421 failed", _state);
+    ae_assert(ae_isfinite(alpha1, _state), "OPTSERV: integrity check 9422 failed", _state);
+    ae_assert(ae_isfinite(alphamax, _state), "OPTSERV: integrity check 9422A failed", _state);
+    ae_assert(ae_fp_greater(alpha1,(double)(0)), "OPTSERV: integrity check 9423 failed", _state);
+    ae_assert(ae_fp_greater_eq(alphamax,alpha1), "OPTSERV: integrity check 9423A failed", _state);
+    ae_assert(maxits>=2, "OPTSERV: integrity check 9424 failed", _state);
+    ae_assert(ae_isfinite(c1, _state), "OPTSERV: integrity check 9425 failed", _state);
+    ae_assert(ae_isfinite(c2, _state), "OPTSERV: integrity check 9426 failed", _state);
+    ae_assert(ae_fp_greater(c1,(double)(0))&&ae_fp_less(c1,(double)(1)), "OPTSERV: integrity check 9427 failed", _state);
+    ae_assert(ae_fp_greater(c2,(double)(0))&&ae_fp_less(c2,(double)(1)), "OPTSERV: integrity check 9428 failed", _state);
+    state->f0 = f0;
+    state->g0 = g0;
+    state->alpha1 = alpha1;
+    state->alphamax = alphamax;
+    state->c1 = c1;
+    state->c2 = c2;
+    state->strongwolfecond = strongwolfecond;
+    state->maxits = maxits;
+    state->dotrace = dotrace;
+    state->tracelevel = tracelevel;
+    state->rstate.stage = -1;
+}
+
+
+/*************************************************************************
+Performs iteration.
+
+After the end it stores the best  step  to  State.AlphaSol.  The  function
+warrants that either:
+* AlphaSol is the last Alpha tried
+* AlphaSol=0, which means that a non-descent direction was specified.
+  In the latter case no search was performed.
+
+The function also sets TerminationType field  to  a  value  which  roughly
+corresponds to ones returned by MCSRCH:
+* 0 for non-descent direction
+* 1 for search ended with the sufficient decrease condition and the
+    curvature condition satisfied
+* 3 for iteration budget being exhausted, stopping at the best point so far
+* 5 for a step being at the upper bound
+*************************************************************************/
+ae_bool linesearchiteration(linesearchstate* state, ae_state *_state)
+{
+    ae_bool result;
+
+
+    
+    /*
+     * Reverse communication preparations
+     * I know it looks ugly, but it works the same way
+     * anywhere from C++ to Python.
+     *
+     * This code initializes locals by:
+     * * random values determined during code
+     *   generation - on first subroutine call
+     * * values from previous call - on subsequent calls
+     */
+    if( state->rstate.stage>=0 )
+    {
+    }
+    else
+    {
+    }
+    if( state->rstate.stage==0 )
+    {
+        goto lbl_0;
+    }
+    if( state->rstate.stage==1 )
+    {
+        goto lbl_1;
+    }
+    if( state->rstate.stage==2 )
+    {
+        goto lbl_2;
+    }
+    if( state->rstate.stage==3 )
+    {
+        goto lbl_3;
+    }
+    if( state->rstate.stage==4 )
+    {
+        goto lbl_4;
+    }
+    
+    /*
+     * Routine body
+     */
+    
+    /*
+     * Initial checks
+     */
+    if( state->dotrace )
+    {
+        traceangles(state->tracelevel, _state);
+        ae_trace(" starting line search\n");
+    }
+    if( ae_fp_greater_eq(state->g0,(double)(0)) )
+    {
+        if( state->dotrace )
+        {
+            traceangles(state->tracelevel, _state);
+            ae_trace(" directional derivative non-negative (%0.2e), stopping\n",
+                (double)(state->g0));
+        }
+        state->alphasol = 0.0;
+        state->terminationtype = 0;
+        result = ae_false;
+        return result;
+    }
+    state->nfev = 0;
+    
+    /*
+     * Phase 1: bracket step
+     */
+    state->fprev = state->f0;
+    state->gprev = state->g0;
+    state->alphaprev = (double)(0);
+    state->alphacur = state->alpha1;
+    state->bestalphasofar = (double)(0);
+    state->bestfsofar = state->f0;
+lbl_5:
+    if( ae_false )
+    {
+        goto lbl_6;
+    }
+    
+    /*
+     * RComm
+     */
+    state->alphatrial = state->alphacur;
+    state->rstate.stage = 0;
+    goto lbl_rcomm;
+lbl_0:
+    state->fcur = state->ftrial;
+    state->gcur = state->gtrial;
+    state->nfev = state->nfev+1;
+    if( state->dotrace )
+    {
+        traceangles(state->tracelevel, _state);
+        ae_trace(" target evaluated at stp=%0.3e, deltaF=%0.3e, dg=%0.3e\n",
+            (double)(state->alphacur),
+            (double)(state->fcur-state->f0),
+            (double)(state->gcur));
+    }
+    
+    /*
+     * Update best point so far
+     *
+     * NOTE: strict inequality is essential
+     */
+    if( ae_fp_eq(state->bestalphasofar,(double)(0))||ae_fp_less(state->fcur,state->bestfsofar) )
+    {
+        state->bestalphasofar = state->alphacur;
+        state->bestfsofar = state->fcur;
+    }
+    
+    /*
+     * Tests
+     */
+    if( state->nfev<state->maxits-1 )
+    {
+        goto lbl_7;
+    }
+    
+    /*
+     * Function budget is almost exhausted. We may have to terminate before exhausting it completely
+     * in order to be able to evaluate the target at the last point known.
+     */
+    ae_assert(ae_fp_greater(state->bestalphasofar,(double)(0)), "OPTSERV: integrity check 1224 failed", _state);
+    if( ae_fp_eq(state->alphacur,state->bestalphasofar) )
+    {
+        goto lbl_9;
+    }
+    
+    /*
+     * Make one reverse communication request.
+     *
+     * We do not use its results, it is here merely for caller to evaluate the target at the point where we stopped
+     */
+    state->alphatrial = state->bestalphasofar;
+    state->rstate.stage = 1;
+    goto lbl_rcomm;
+lbl_1:
+    state->nfev = state->nfev+1;
+lbl_9:
+    state->alphasol = state->bestalphasofar;
+    state->terminationtype = 3;
+    if( state->dotrace )
+    {
+        traceangles(state->tracelevel, _state);
+        ae_trace(" iteration budget of %0d evaluations is used, stopping\n",
+            (int)(state->maxits));
+    }
+    result = ae_false;
+    return result;
+lbl_7:
+    if( ae_fp_less_eq(state->fcur,state->f0+state->c1*state->alphacur*state->g0)&&(ae_fp_less_eq(ae_fabs(state->gcur, _state),-state->c2*state->g0)||(!state->strongwolfecond&&ae_fp_greater_eq(state->gcur,state->c2*state->g0))) )
+    {
+        
+        /*
+         * Found
+         */
+        state->alphasol = state->alphacur;
+        state->terminationtype = 1;
+        if( state->dotrace )
+        {
+            traceangles(state->tracelevel, _state);
+            ae_trace(" sufficient decrease and curvature conditions hold, stopping\n");
+        }
+        result = ae_false;
+        return result;
+    }
+    if( ae_fp_greater_eq(state->fcur,state->f0+state->c1*state->alphacur*state->g0)||ae_fp_greater_eq(state->fcur,state->fprev) )
+    {
+        
+        /*
+         * Bracketed by target value
+         */
+        state->alphalo = state->alphaprev;
+        state->alphahi = state->alphacur;
+        state->flo = state->fprev;
+        state->fhi = state->fcur;
+        state->glo = state->gprev;
+        state->ghi = state->gcur;
+        if( state->dotrace )
+        {
+            traceangles(state->tracelevel, _state);
+            ae_trace(" the minimum is bracketed by the target, stp=[%0.3e,%0.3e], proceeding to phase 2\n",
+                (double)(state->alphalo),
+                (double)(state->alphahi));
+        }
+        goto lbl_6;
+    }
+    if( ae_fp_greater_eq(state->gcur,(double)(0)) )
+    {
+        
+        /*
+         * Bracketed by gradient value
+         */
+        state->alphahi = state->alphaprev;
+        state->alphalo = state->alphacur;
+        state->fhi = state->fprev;
+        state->flo = state->fcur;
+        state->ghi = state->gprev;
+        state->glo = state->gcur;
+        if( state->dotrace )
+        {
+            traceangles(state->tracelevel, _state);
+            ae_trace(" the minimum is bracketed by the gradient, stp=[%0.3e,%0.3e], proceeding to phase 2\n",
+                (double)(state->alphahi),
+                (double)(state->alphalo));
+        }
+        goto lbl_6;
+    }
+    if( !(ae_fp_greater_eq(state->alphacur,0.999*state->alphamax)||ae_fp_eq(state->alphacur,state->alphaprev)) )
+    {
+        goto lbl_11;
+    }
+    
+    /*
+     * We reached upper bound on the step length (or the step stagnated due to numerical errors)
+     */
+    ae_assert(ae_fp_greater(state->bestalphasofar,(double)(0)), "OPTSERV: integrity check 1224 failed", _state);
+    if( ae_fp_eq(state->alphacur,state->bestalphasofar) )
+    {
+        goto lbl_13;
+    }
+    
+    /*
+     * Make one reverse communication request.
+     *
+     * We do not use its results, it is here merely for caller to evaluate the target at the point where we stopped
+     */
+    state->alphatrial = state->bestalphasofar;
+    state->rstate.stage = 2;
+    goto lbl_rcomm;
+lbl_2:
+    state->nfev = state->nfev+1;
+lbl_13:
+    if( state->dotrace )
+    {
+        traceangles(state->tracelevel, _state);
+        ae_trace(" reached an upper bound on the step length, stopping at the best point so far (stp=%0.3e)\n",
+            (double)(state->bestalphasofar));
+    }
+    state->alphasol = state->bestalphasofar;
+    state->terminationtype = 5;
+    result = ae_false;
+    return result;
+lbl_11:
+    
+    /*
+     * Next step
+     */
+    state->fprev = state->fcur;
+    state->gprev = state->gcur;
+    state->alphaprev = state->alphacur;
+    state->alphacur = ae_minreal((double)2*state->alphacur, state->alphamax, _state);
+    goto lbl_5;
+lbl_6:
+    
+    /*
+     * Phase 2: perform bisection on bracketed step
+     */
+lbl_15:
+    if( ae_false )
+    {
+        goto lbl_16;
+    }
+    
+    /*
+     * Compute AlphaTrial and evaluate target
+     */
+    state->alphacur = 0.5*(state->alphalo+state->alphahi);
+    state->alphatrial = state->alphacur;
+    state->rstate.stage = 3;
+    goto lbl_rcomm;
+lbl_3:
+    state->fcur = state->ftrial;
+    state->gcur = state->gtrial;
+    state->nfev = state->nfev+1;
+    if( state->dotrace )
+    {
+        traceangles(state->tracelevel, _state);
+        ae_trace(" target evaluated at stp=%0.3e, deltaF=%0.3e, dg=%0.3e, interval of uncertainty is [%0.3e,%0.3e]\n",
+            (double)(state->alphacur),
+            (double)(state->fcur-state->f0),
+            (double)(state->gcur),
+            (double)(ae_minreal(state->alphalo, state->alphahi, _state)),
+            (double)(ae_maxreal(state->alphalo, state->alphahi, _state)));
+    }
+    
+    /*
+     * Update best point so far
+     *
+     * NOTE: strict inequality is essential
+     */
+    ae_assert(ae_fp_neq(state->bestalphasofar,(double)(0)), "OPTSERV: integrity check 1130 failed", _state);
+    if( ae_fp_less(state->fcur,state->bestfsofar) )
+    {
+        state->bestalphasofar = state->alphacur;
+        state->bestfsofar = state->fcur;
+    }
+    
+    /*
+     * Check iteration budget
+     */
+    if( state->nfev<state->maxits-1 )
+    {
+        goto lbl_17;
+    }
+    
+    /*
+     * Function budget is almost exhausted. We may have to terminate before exhausting it completely
+     * in order to be able to evaluate the target at the last point known.
+     */
+    ae_assert(ae_fp_greater(state->bestalphasofar,(double)(0)), "OPTSERV: integrity check 1224 failed", _state);
+    if( ae_fp_eq(state->alphacur,state->bestalphasofar) )
+    {
+        goto lbl_19;
+    }
+    
+    /*
+     * Make one reverse communication request.
+     *
+     * We do not use its results, it is here merely for caller to evaluate the target at the point where we stopped
+     */
+    state->alphatrial = state->bestalphasofar;
+    state->rstate.stage = 4;
+    goto lbl_rcomm;
+lbl_4:
+    state->nfev = state->nfev+1;
+lbl_19:
+    state->alphasol = state->bestalphasofar;
+    state->terminationtype = 3;
+    if( state->dotrace )
+    {
+        traceangles(state->tracelevel, _state);
+        ae_trace(" iteration budget of %0d evaluations is used, stopping\n",
+            (int)(state->maxits));
+    }
+    result = ae_false;
+    return result;
+lbl_17:
+    
+    /*
+     * Check stopping criteria
+     */
+    if( ae_fp_less_eq(state->fcur,state->f0+state->c1*state->alphacur*state->g0)&&(ae_fp_less_eq(ae_fabs(state->gcur, _state),-state->c2*state->g0)||(!state->strongwolfecond&&ae_fp_greater_eq(state->gcur,state->c2*state->g0))) )
+    {
+        
+        /*
+         * Found
+         */
+        state->alphasol = state->alphacur;
+        state->terminationtype = 1;
+        if( state->dotrace )
+        {
+            traceangles(state->tracelevel, _state);
+            ae_trace(" sufficient decrease and curvature conditions hold, stopping\n");
+        }
+        result = ae_false;
+        return result;
+    }
+    
+    /*
+     * Analyze
+     */
+    if( ae_fp_greater_eq(state->fcur,state->f0+state->c1*state->alphatrial*state->g0)||ae_fp_greater_eq(state->fcur,state->flo) )
+    {
+        state->alphahi = state->alphacur;
+        state->fhi = state->fcur;
+        state->ghi = state->gcur;
+    }
+    else
+    {
+        if( ae_fp_greater_eq(state->gcur*(state->alphahi-state->alphalo),(double)(0)) )
+        {
+            state->alphahi = state->alphalo;
+            state->fhi = state->flo;
+            state->ghi = state->glo;
+        }
+        state->alphalo = state->alphacur;
+        state->flo = state->fcur;
+        state->glo = state->gcur;
+    }
+    goto lbl_15;
+lbl_16:
+    result = ae_false;
+    return result;
+    
+    /*
+     * Saving state
+     */
+lbl_rcomm:
+    result = ae_true;
+    return result;
+}
+
+
+/*************************************************************************
+Create a filter for NLP solver
+*************************************************************************/
+void nlpfinit(double maxh, nlpfilter* s, ae_state *_state)
+{
+
+
+    s->maxh = maxh;
+    s->filtersize = 0;
+}
+
+
+/*************************************************************************
+Check point for acceptance
+*************************************************************************/
+ae_bool nlpfisacceptable(const nlpfilter* s,
+     double f,
+     double h,
+     ae_state *_state)
+{
+    ae_int_t i;
+    ae_bool result;
+
+
+    result = h<s->maxh;
+    if( !result )
+    {
+        return result;
+    }
+    for(i=0; i<=s->filtersize-1; i++)
+    {
+        result = result&&(f<s->filterf.ptr.p_double[i]||h<s->filterh.ptr.p_double[i]);
+    }
+    return result;
+}
+
+
+/*************************************************************************
+Append point, if acceptable. Behavior is undefined for unacceptable points.
+*************************************************************************/
+void nlpfappend(nlpfilter* s, double f, double h, ae_state *_state)
+{
+    ae_int_t i;
+
+
+    i = 0;
+    while(i<s->filtersize)
+    {
+        if( f<=s->filterf.ptr.p_double[i]&&h<=s->filterh.ptr.p_double[i] )
+        {
+            
+            /*
+             * The point being added dominates the I-th one, remove it
+             */
+            s->filterf.ptr.p_double[i] = s->filterf.ptr.p_double[s->filtersize-1];
+            s->filterh.ptr.p_double[i] = s->filterh.ptr.p_double[s->filtersize-1];
+            s->filtersize = s->filtersize-1;
+            continue;
+        }
+        i = i+1;
+    }
+    rgrowv(s->filtersize+1, &s->filterf, _state);
+    rgrowv(s->filtersize+1, &s->filterh, _state);
+    s->filterf.ptr.p_double[s->filtersize] = f;
+    s->filterh.ptr.p_double[s->filtersize] = h;
+    s->filtersize = s->filtersize+1;
 }
 
 
@@ -5841,9 +8413,8 @@ static void optserv_c1continuitytest0(smoothnessmonitor* monitor,
             nrm = nrm+ae_sqr(monitor->enqueuedx.ptr.p_double[monitor->sortedidx.ptr.p_int[0]*n+i]-monitor->enqueuedx.ptr.p_double[monitor->sortedidx.ptr.p_int[sortedcnt-1]*n+i], _state);
         }
         nrm = ae_sqrt(nrm, _state);
-        nrm = ae_minreal(nrm, 1.0, _state);
         nrm = coalesce(nrm, ae_machineepsilon, _state);
-        lengthrating = (double)sortedcnt+ae_log(nrm, _state)/ae_log((double)(100), _state);
+        lengthrating = nrm;
         if( lengthrating>monitor->nonc1test0lngrating )
         {
             monitor->nonc1test0lngrating = lengthrating;
@@ -5987,9 +8558,8 @@ static void optserv_c1continuitytest1(smoothnessmonitor* monitor,
                 nrm = nrm+ae_sqr(monitor->enqueuedx.ptr.p_double[monitor->sortedidx.ptr.p_int[0]*n+i]-monitor->enqueuedx.ptr.p_double[monitor->sortedidx.ptr.p_int[sortedcnt-1]*n+i], _state);
             }
             nrm = ae_sqrt(nrm, _state);
-            nrm = ae_minreal(nrm, 1.0, _state);
             nrm = coalesce(nrm, ae_machineepsilon, _state);
-            lengthrating = (double)sortedcnt+ae_log(nrm, _state)/ae_log((double)(100), _state);
+            lengthrating = nrm;
             if( lengthrating>monitor->nonc1test1lngrating )
             {
                 monitor->nonc1test1lngrating = lengthrating;
@@ -6213,6 +8783,91 @@ static void optserv_hessianupdatelowlevel(xbfgshessian* hess,
 
 
 /*************************************************************************
+Low-level Hessian update function, to be used by HessianUpdate().
+
+Performs no integrity checks.
+
+INPUT PARAMETERS:
+    Hess            -   Hessian state
+    H               -   specific Hessian matrix to update, usually one
+                        of the Hess fields
+    X0, G0          -   point #0 and gradient at #0, array[N]
+    X1, G1          -   point #1 and gradient at #1, array[N]
+
+OUTPUT PARAMETERS:
+    Status          -   sets update status (informative)
+
+  -- ALGLIB --
+     Copyright 28.11.2022 by Bochkanov Sergey
+*************************************************************************/
+static void optserv_hessianupdatelowlevel2(xbfgshessian* hess,
+     /* Real    */ ae_matrix* h,
+     /* Real    */ const ae_vector* sk,
+     /* Real    */ const ae_vector* yk,
+     ae_int_t* status,
+     ae_state *_state)
+{
+    ae_int_t i;
+    ae_int_t n;
+    double shs;
+    double sy;
+    double snrm2;
+    double hsnrm2;
+    double ynrm2;
+    double ski;
+    double yki;
+    double mxs;
+    double mxy;
+    double mxhs;
+    double mxd;
+
+    *status = 0;
+
+    n = hess->n;
+    *status = 0;
+    
+    /*
+     * Perform preliminary analysis
+     */
+    rvectorsetlengthatleast(&hess->hsk, n, _state);
+    rmatrixgemv(n, n, 1.0, h, 0, 0, 0, sk, 0, 0.0, &hess->hsk, 0, _state);
+    shs = (double)(0);
+    sy = (double)(0);
+    snrm2 = (double)(0);
+    ynrm2 = (double)(0);
+    mxs = (double)(0);
+    mxy = (double)(0);
+    mxhs = (double)(0);
+    hsnrm2 = (double)(0);
+    mxd = (double)(0);
+    for(i=0; i<=n-1; i++)
+    {
+        ski = sk->ptr.p_double[i];
+        yki = yk->ptr.p_double[i];
+        shs = shs+ski*hess->hsk.ptr.p_double[i];
+        sy = sy+ski*yki;
+        snrm2 = snrm2+ski*ski;
+        ynrm2 = ynrm2+yki*yki;
+        mxs = ae_maxreal(mxs, ae_fabs(ski, _state), _state);
+        mxy = ae_maxreal(mxy, ae_fabs(yki, _state), _state);
+        mxhs = ae_maxreal(mxhs, ae_fabs(hess->hsk.ptr.p_double[i], _state), _state);
+        hsnrm2 = hsnrm2+ae_sqr(hess->hsk.ptr.p_double[i], _state);
+        mxd = ae_maxreal(mxd, ae_fabs(h->ptr.pp_double[i][i], _state), _state);
+    }
+    
+    /*
+     * First, we discard Hessian components which give non-zero product with Sk.
+     */
+    ae_assert(ae_fp_greater(hsnrm2,(double)(0)), "UpdateHessian: integrity check failed", _state);
+    rmatrixger(n, n, h, 0, 0, -(double)1/shs, &hess->hsk, 0, &hess->hsk, 0, _state);
+    *status = 1;
+    ae_assert(ae_fp_greater(sy,(double)(0)), "UpdateHessian: integrity check failed", _state);
+    rmatrixger(n, n, h, 0, 0, (double)1/sy, yk, 0, yk, 0, _state);
+    *status = 2;
+}
+
+
+/*************************************************************************
 Invalidate low-rank model
 
 INPUT PARAMETERS:
@@ -6249,7 +8904,8 @@ static void optserv_recomputelowrankmodel(xbfgshessian* hess,
     ae_int_t memlen;
     ae_int_t i;
     ae_int_t j;
-    ae_bool success;
+    double reg;
+    double mx;
 
 
     n = hess->n;
@@ -6326,10 +8982,32 @@ static void optserv_recomputelowrankmodel(xbfgshessian* hess,
         rcopyrr(i, &hess->lowranksyt, i, &hess->invsqrtdlk, i, _state);
         rmergemulvr(i, &hess->buf, &hess->invsqrtdlk, i, _state);
     }
-    rcopyallocm(memlen, memlen, &hess->lowranksst, &hess->jk, _state);
-    rmatrixgemm(memlen, memlen, memlen, 1.0, &hess->invsqrtdlk, 0, 0, 0, &hess->invsqrtdlk, 0, 0, 1, hess->sigma, &hess->jk, 0, 0, _state);
-    success = spdmatrixcholeskyrec(&hess->jk, 0, memlen, ae_false, &hess->buf, _state);
-    ae_assert(success, "OPTSERV: integrity check 9828 failed", _state);
+    reg = (double)(0);
+    mx = (double)(0);
+    for(;;)
+    {
+        
+        /*
+         * Try Cholesky decomposition
+         */
+        rcopyallocm(memlen, memlen, &hess->lowranksst, &hess->jk, _state);
+        rmatrixgemm(memlen, memlen, memlen, 1.0, &hess->invsqrtdlk, 0, 0, 0, &hess->invsqrtdlk, 0, 0, 1, hess->sigma, &hess->jk, 0, 0, _state);
+        for(i=0; i<=memlen-1; i++)
+        {
+            mx = ae_maxreal(mx, ae_fabs(hess->jk.ptr.pp_double[i][i], _state), _state);
+            hess->jk.ptr.pp_double[i][i] = hess->jk.ptr.pp_double[i][i]+reg;
+        }
+        if( spdmatrixcholeskyrec(&hess->jk, 0, memlen, ae_false, &hess->buf, _state) )
+        {
+            break;
+        }
+        
+        /*
+         * Cholesky decomposition failed, increase regularization
+         */
+        mx = coalesce(mx, ae_machineepsilon, _state);
+        reg = coalesce((double)10*reg, ae_sqrt(ae_machineepsilon, _state)*mx, _state);
+    }
     
     /*
      * After computing Jk we proceed to form triangular factorization of the entire block matrix
@@ -6553,11 +9231,11 @@ void _xbfgshessian_init(void* _p, ae_state *_state, ae_bool make_automatic)
     ae_matrix_init(&p->hcurrent, 0, 0, DT_REAL, _state, make_automatic);
     ae_matrix_init(&p->s, 0, 0, DT_REAL, _state, make_automatic);
     ae_matrix_init(&p->y, 0, 0, DT_REAL, _state, make_automatic);
+    ae_matrix_init(&p->lowranksst, 0, 0, DT_REAL, _state, make_automatic);
+    ae_matrix_init(&p->lowranksyt, 0, 0, DT_REAL, _state, make_automatic);
     ae_matrix_init(&p->lowrankcp, 0, 0, DT_REAL, _state, make_automatic);
     ae_matrix_init(&p->lowrankcm, 0, 0, DT_REAL, _state, make_automatic);
     ae_vector_init(&p->lowrankeffd, 0, DT_REAL, _state, make_automatic);
-    ae_matrix_init(&p->lowranksst, 0, 0, DT_REAL, _state, make_automatic);
-    ae_matrix_init(&p->lowranksyt, 0, 0, DT_REAL, _state, make_automatic);
     ae_matrix_init(&p->hincoming, 0, 0, DT_REAL, _state, make_automatic);
     ae_vector_init(&p->sk, 0, DT_REAL, _state, make_automatic);
     ae_vector_init(&p->yk, 0, DT_REAL, _state, make_automatic);
@@ -6569,6 +9247,15 @@ void _xbfgshessian_init(void* _p, ae_state *_state, ae_bool make_automatic)
     ae_matrix_init(&p->invsqrtdlk, 0, 0, DT_REAL, _state, make_automatic);
     ae_vector_init(&p->bufvmv, 0, DT_REAL, _state, make_automatic);
     ae_vector_init(&p->bufupdhx, 0, DT_REAL, _state, make_automatic);
+    ae_matrix_init(&p->tmpunstablec, 0, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->tmpunstables, 0, DT_REAL, _state, make_automatic);
+    ae_matrix_init(&p->tmpu, 0, 0, DT_REAL, _state, make_automatic);
+    ae_matrix_init(&p->tmpq, 0, 0, DT_REAL, _state, make_automatic);
+    ae_matrix_init(&p->tmpw, 0, 0, DT_REAL, _state, make_automatic);
+    ae_matrix_init(&p->tmpsl, 0, 0, DT_REAL, _state, make_automatic);
+    ae_matrix_init(&p->tmpl, 0, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->tmpe, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->tmptau, 0, DT_REAL, _state, make_automatic);
 }
 
 
@@ -6597,15 +9284,14 @@ void _xbfgshessian_init_copy(void* _dst, const void* _src, ae_state *_state, ae_
     dst->gamma = src->gamma;
     ae_matrix_init_copy(&dst->s, &src->s, _state, make_automatic);
     ae_matrix_init_copy(&dst->y, &src->y, _state, make_automatic);
-    dst->sigmadecay = src->sigmadecay;
+    ae_matrix_init_copy(&dst->lowranksst, &src->lowranksst, _state, make_automatic);
+    ae_matrix_init_copy(&dst->lowranksyt, &src->lowranksyt, _state, make_automatic);
     dst->lowrankmodelvalid = src->lowrankmodelvalid;
     dst->lowrankk = src->lowrankk;
     ae_matrix_init_copy(&dst->lowrankcp, &src->lowrankcp, _state, make_automatic);
     ae_matrix_init_copy(&dst->lowrankcm, &src->lowrankcm, _state, make_automatic);
     dst->lowrankeffdvalid = src->lowrankeffdvalid;
     ae_vector_init_copy(&dst->lowrankeffd, &src->lowrankeffd, _state, make_automatic);
-    ae_matrix_init_copy(&dst->lowranksst, &src->lowranksst, _state, make_automatic);
-    ae_matrix_init_copy(&dst->lowranksyt, &src->lowranksyt, _state, make_automatic);
     dst->updatestatus = src->updatestatus;
     ae_matrix_init_copy(&dst->hincoming, &src->hincoming, _state, make_automatic);
     ae_vector_init_copy(&dst->sk, &src->sk, _state, make_automatic);
@@ -6618,6 +9304,15 @@ void _xbfgshessian_init_copy(void* _dst, const void* _src, ae_state *_state, ae_
     ae_matrix_init_copy(&dst->invsqrtdlk, &src->invsqrtdlk, _state, make_automatic);
     ae_vector_init_copy(&dst->bufvmv, &src->bufvmv, _state, make_automatic);
     ae_vector_init_copy(&dst->bufupdhx, &src->bufupdhx, _state, make_automatic);
+    ae_matrix_init_copy(&dst->tmpunstablec, &src->tmpunstablec, _state, make_automatic);
+    ae_vector_init_copy(&dst->tmpunstables, &src->tmpunstables, _state, make_automatic);
+    ae_matrix_init_copy(&dst->tmpu, &src->tmpu, _state, make_automatic);
+    ae_matrix_init_copy(&dst->tmpq, &src->tmpq, _state, make_automatic);
+    ae_matrix_init_copy(&dst->tmpw, &src->tmpw, _state, make_automatic);
+    ae_matrix_init_copy(&dst->tmpsl, &src->tmpsl, _state, make_automatic);
+    ae_matrix_init_copy(&dst->tmpl, &src->tmpl, _state, make_automatic);
+    ae_vector_init_copy(&dst->tmpe, &src->tmpe, _state, make_automatic);
+    ae_vector_init_copy(&dst->tmptau, &src->tmptau, _state, make_automatic);
 }
 
 
@@ -6628,11 +9323,11 @@ void _xbfgshessian_clear(void* _p)
     ae_matrix_clear(&p->hcurrent);
     ae_matrix_clear(&p->s);
     ae_matrix_clear(&p->y);
+    ae_matrix_clear(&p->lowranksst);
+    ae_matrix_clear(&p->lowranksyt);
     ae_matrix_clear(&p->lowrankcp);
     ae_matrix_clear(&p->lowrankcm);
     ae_vector_clear(&p->lowrankeffd);
-    ae_matrix_clear(&p->lowranksst);
-    ae_matrix_clear(&p->lowranksyt);
     ae_matrix_clear(&p->hincoming);
     ae_vector_clear(&p->sk);
     ae_vector_clear(&p->yk);
@@ -6644,6 +9339,15 @@ void _xbfgshessian_clear(void* _p)
     ae_matrix_clear(&p->invsqrtdlk);
     ae_vector_clear(&p->bufvmv);
     ae_vector_clear(&p->bufupdhx);
+    ae_matrix_clear(&p->tmpunstablec);
+    ae_vector_clear(&p->tmpunstables);
+    ae_matrix_clear(&p->tmpu);
+    ae_matrix_clear(&p->tmpq);
+    ae_matrix_clear(&p->tmpw);
+    ae_matrix_clear(&p->tmpsl);
+    ae_matrix_clear(&p->tmpl);
+    ae_vector_clear(&p->tmpe);
+    ae_vector_clear(&p->tmptau);
 }
 
 
@@ -6654,11 +9358,11 @@ void _xbfgshessian_destroy(void* _p)
     ae_matrix_destroy(&p->hcurrent);
     ae_matrix_destroy(&p->s);
     ae_matrix_destroy(&p->y);
+    ae_matrix_destroy(&p->lowranksst);
+    ae_matrix_destroy(&p->lowranksyt);
     ae_matrix_destroy(&p->lowrankcp);
     ae_matrix_destroy(&p->lowrankcm);
     ae_vector_destroy(&p->lowrankeffd);
-    ae_matrix_destroy(&p->lowranksst);
-    ae_matrix_destroy(&p->lowranksyt);
     ae_matrix_destroy(&p->hincoming);
     ae_vector_destroy(&p->sk);
     ae_vector_destroy(&p->yk);
@@ -6670,6 +9374,93 @@ void _xbfgshessian_destroy(void* _p)
     ae_matrix_destroy(&p->invsqrtdlk);
     ae_vector_destroy(&p->bufvmv);
     ae_vector_destroy(&p->bufupdhx);
+    ae_matrix_destroy(&p->tmpunstablec);
+    ae_vector_destroy(&p->tmpunstables);
+    ae_matrix_destroy(&p->tmpu);
+    ae_matrix_destroy(&p->tmpq);
+    ae_matrix_destroy(&p->tmpw);
+    ae_matrix_destroy(&p->tmpsl);
+    ae_matrix_destroy(&p->tmpl);
+    ae_vector_destroy(&p->tmpe);
+    ae_vector_destroy(&p->tmptau);
+}
+
+
+void _varsfuncjac_init(void* _p, ae_state *_state, ae_bool make_automatic)
+{
+    varsfuncjac *p = (varsfuncjac*)_p;
+    ae_touch_ptr((void*)p);
+    ae_vector_init(&p->x, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->fi, 0, DT_REAL, _state, make_automatic);
+    ae_matrix_init(&p->jac, 0, 0, DT_REAL, _state, make_automatic);
+    _sparsematrix_init(&p->sj, _state, make_automatic);
+}
+
+
+void _varsfuncjac_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic)
+{
+    varsfuncjac       *dst = (varsfuncjac*)_dst;
+    const varsfuncjac *src = (const varsfuncjac*)_src;
+    dst->n = src->n;
+    dst->m = src->m;
+    dst->isdense = src->isdense;
+    ae_vector_init_copy(&dst->x, &src->x, _state, make_automatic);
+    ae_vector_init_copy(&dst->fi, &src->fi, _state, make_automatic);
+    ae_matrix_init_copy(&dst->jac, &src->jac, _state, make_automatic);
+    _sparsematrix_init_copy(&dst->sj, &src->sj, _state, make_automatic);
+}
+
+
+void _varsfuncjac_clear(void* _p)
+{
+    varsfuncjac *p = (varsfuncjac*)_p;
+    ae_touch_ptr((void*)p);
+    ae_vector_clear(&p->x);
+    ae_vector_clear(&p->fi);
+    ae_matrix_clear(&p->jac);
+    _sparsematrix_clear(&p->sj);
+}
+
+
+void _varsfuncjac_destroy(void* _p)
+{
+    varsfuncjac *p = (varsfuncjac*)_p;
+    ae_touch_ptr((void*)p);
+    ae_vector_destroy(&p->x);
+    ae_vector_destroy(&p->fi);
+    ae_matrix_destroy(&p->jac);
+    _sparsematrix_destroy(&p->sj);
+}
+
+
+void _nlpstoppingcriteria_init(void* _p, ae_state *_state, ae_bool make_automatic)
+{
+    nlpstoppingcriteria *p = (nlpstoppingcriteria*)_p;
+    ae_touch_ptr((void*)p);
+}
+
+
+void _nlpstoppingcriteria_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic)
+{
+    nlpstoppingcriteria       *dst = (nlpstoppingcriteria*)_dst;
+    const nlpstoppingcriteria *src = (const nlpstoppingcriteria*)_src;
+    dst->epsf = src->epsf;
+    dst->epsx = src->epsx;
+    dst->maxits = src->maxits;
+}
+
+
+void _nlpstoppingcriteria_clear(void* _p)
+{
+    nlpstoppingcriteria *p = (nlpstoppingcriteria*)_p;
+    ae_touch_ptr((void*)p);
+}
+
+
+void _nlpstoppingcriteria_destroy(void* _p)
+{
+    nlpstoppingcriteria *p = (nlpstoppingcriteria*)_p;
+    ae_touch_ptr((void*)p);
 }
 
 
@@ -6931,6 +9722,10 @@ void _multiobjectivetestfunction_init(void* _p, ae_state *_state, ae_bool make_a
     multiobjectivetestfunction *p = (multiobjectivetestfunction*)_p;
     ae_touch_ptr((void*)p);
     ae_matrix_init(&p->xsol, 0, 0, DT_REAL, _state, make_automatic);
+    ae_matrix_init(&p->fsol, 0, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->lagmultbc, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->lagmultlc, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->lagmultnlc, 0, DT_REAL, _state, make_automatic);
     ae_vector_init(&p->tgtc, 0, DT_REAL, _state, make_automatic);
     ae_matrix_init(&p->tgtb, 0, 0, DT_REAL, _state, make_automatic);
     ae_matrix_init(&p->tgta, 0, 0, DT_REAL, _state, make_automatic);
@@ -6953,10 +9748,16 @@ void _multiobjectivetestfunction_init_copy(void* _dst, const void* _src, ae_stat
 {
     multiobjectivetestfunction       *dst = (multiobjectivetestfunction*)_dst;
     const multiobjectivetestfunction *src = (const multiobjectivetestfunction*)_src;
+    dst->problemtype = src->problemtype;
+    dst->problemsubtype = src->problemsubtype;
     dst->n = src->n;
     dst->m = src->m;
-    dst->nactive = src->nactive;
     ae_matrix_init_copy(&dst->xsol, &src->xsol, _state, make_automatic);
+    ae_matrix_init_copy(&dst->fsol, &src->fsol, _state, make_automatic);
+    dst->ksol = src->ksol;
+    ae_vector_init_copy(&dst->lagmultbc, &src->lagmultbc, _state, make_automatic);
+    ae_vector_init_copy(&dst->lagmultlc, &src->lagmultlc, _state, make_automatic);
+    ae_vector_init_copy(&dst->lagmultnlc, &src->lagmultnlc, _state, make_automatic);
     ae_vector_init_copy(&dst->tgtc, &src->tgtc, _state, make_automatic);
     ae_matrix_init_copy(&dst->tgtb, &src->tgtb, _state, make_automatic);
     ae_matrix_init_copy(&dst->tgta, &src->tgta, _state, make_automatic);
@@ -6982,6 +9783,10 @@ void _multiobjectivetestfunction_clear(void* _p)
     multiobjectivetestfunction *p = (multiobjectivetestfunction*)_p;
     ae_touch_ptr((void*)p);
     ae_matrix_clear(&p->xsol);
+    ae_matrix_clear(&p->fsol);
+    ae_vector_clear(&p->lagmultbc);
+    ae_vector_clear(&p->lagmultlc);
+    ae_vector_clear(&p->lagmultnlc);
     ae_vector_clear(&p->tgtc);
     ae_matrix_clear(&p->tgtb);
     ae_matrix_clear(&p->tgta);
@@ -7005,6 +9810,10 @@ void _multiobjectivetestfunction_destroy(void* _p)
     multiobjectivetestfunction *p = (multiobjectivetestfunction*)_p;
     ae_touch_ptr((void*)p);
     ae_matrix_destroy(&p->xsol);
+    ae_matrix_destroy(&p->fsol);
+    ae_vector_destroy(&p->lagmultbc);
+    ae_vector_destroy(&p->lagmultlc);
+    ae_vector_destroy(&p->lagmultnlc);
     ae_vector_destroy(&p->tgtc);
     ae_matrix_destroy(&p->tgtb);
     ae_matrix_destroy(&p->tgta);
@@ -7020,6 +9829,106 @@ void _multiobjectivetestfunction_destroy(void* _p)
     ae_matrix_destroy(&p->nld);
     ae_vector_destroy(&p->hl);
     ae_vector_destroy(&p->hu);
+}
+
+
+void _linesearchstate_init(void* _p, ae_state *_state, ae_bool make_automatic)
+{
+    linesearchstate *p = (linesearchstate*)_p;
+    ae_touch_ptr((void*)p);
+    _rcommstate_init(&p->rstate, _state, make_automatic);
+}
+
+
+void _linesearchstate_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic)
+{
+    linesearchstate       *dst = (linesearchstate*)_dst;
+    const linesearchstate *src = (const linesearchstate*)_src;
+    dst->f0 = src->f0;
+    dst->g0 = src->g0;
+    dst->alpha1 = src->alpha1;
+    dst->alphamax = src->alphamax;
+    dst->c1 = src->c1;
+    dst->c2 = src->c2;
+    dst->strongwolfecond = src->strongwolfecond;
+    dst->maxits = src->maxits;
+    dst->dotrace = src->dotrace;
+    dst->tracelevel = src->tracelevel;
+    dst->bestalphasofar = src->bestalphasofar;
+    dst->bestfsofar = src->bestfsofar;
+    dst->alphaprev = src->alphaprev;
+    dst->fprev = src->fprev;
+    dst->gprev = src->gprev;
+    dst->alphacur = src->alphacur;
+    dst->fcur = src->fcur;
+    dst->gcur = src->gcur;
+    dst->alphalo = src->alphalo;
+    dst->alphahi = src->alphahi;
+    dst->flo = src->flo;
+    dst->fhi = src->fhi;
+    dst->glo = src->glo;
+    dst->ghi = src->ghi;
+    dst->nfev = src->nfev;
+    dst->alphasol = src->alphasol;
+    dst->terminationtype = src->terminationtype;
+    dst->alphatrial = src->alphatrial;
+    dst->ftrial = src->ftrial;
+    dst->gtrial = src->gtrial;
+    _rcommstate_init_copy(&dst->rstate, &src->rstate, _state, make_automatic);
+}
+
+
+void _linesearchstate_clear(void* _p)
+{
+    linesearchstate *p = (linesearchstate*)_p;
+    ae_touch_ptr((void*)p);
+    _rcommstate_clear(&p->rstate);
+}
+
+
+void _linesearchstate_destroy(void* _p)
+{
+    linesearchstate *p = (linesearchstate*)_p;
+    ae_touch_ptr((void*)p);
+    _rcommstate_destroy(&p->rstate);
+}
+
+
+void _nlpfilter_init(void* _p, ae_state *_state, ae_bool make_automatic)
+{
+    nlpfilter *p = (nlpfilter*)_p;
+    ae_touch_ptr((void*)p);
+    ae_vector_init(&p->filterf, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->filterh, 0, DT_REAL, _state, make_automatic);
+}
+
+
+void _nlpfilter_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic)
+{
+    nlpfilter       *dst = (nlpfilter*)_dst;
+    const nlpfilter *src = (const nlpfilter*)_src;
+    dst->maxh = src->maxh;
+    dst->filtersize = src->filtersize;
+    ae_vector_init_copy(&dst->filterf, &src->filterf, _state, make_automatic);
+    ae_vector_init_copy(&dst->filterh, &src->filterh, _state, make_automatic);
+}
+
+
+void _nlpfilter_clear(void* _p)
+{
+    nlpfilter *p = (nlpfilter*)_p;
+    ae_touch_ptr((void*)p);
+    ae_vector_clear(&p->filterf);
+    ae_vector_clear(&p->filterh);
+}
+
+
+void _nlpfilter_destroy(void* _p)
+{
+    nlpfilter *p = (nlpfilter*)_p;
+    ae_touch_ptr((void*)p);
+    ae_vector_destroy(&p->filterf);
+    ae_vector_destroy(&p->filterh);
 }
 
 

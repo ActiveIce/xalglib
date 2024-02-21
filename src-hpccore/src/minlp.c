@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -1103,13 +1103,11 @@ void minlpoptimize(minlpstate* state, ae_state *_state)
                     sparseset(&state->ipmquadratic, i, i, state->ipmlambda, _state);
                 }
                 sparseconverttocrs(&state->ipmquadratic, _state);
-                vipminitsparse(&state->ipm, &state->units, &state->zeroorigin, state->presolver.newn, _state);
-                vipmsetquadraticlinear(&state->ipm, &dummy, &state->ipmquadratic, 1, ae_false, &state->presolver.c, _state);
-                vipmsetconstraints(&state->ipm, &state->presolver.bndl, &state->presolver.bndu, &state->presolver.sparsea, state->presolver.newm, &dummy, 0, &state->presolver.al, &state->presolver.au, _state);
-                vipmsetcond(&state->ipm, state->ipmeps, state->ipmeps, state->ipmeps, _state);
-                vipmoptimize(&state->ipm, ae_true, &state->xs, &state->lagbc, &state->laglc, &state->repterminationtype, _state);
+                ipm2init(&state->ipm2, &state->units, &state->zeroorigin, state->presolver.newn, &dummy, &state->ipmquadratic, 1, ae_false, &dummy, &dummy1, 0, &state->presolver.c, &state->presolver.bndl, &state->presolver.bndu, &state->presolver.sparsea, state->presolver.newm, &dummy, 0, &state->presolver.al, &state->presolver.au, _state);
+                ipm2setcond(&state->ipm2, state->ipmeps, state->ipmeps, state->ipmeps, _state);
+                ipm2optimize(&state->ipm2, ae_true, &state->xs, &state->lagbc, &state->laglc, &state->repterminationtype, _state);
+                state->repiterationscount = state->ipm2.repiterationscount;
                 isetallocv(state->presolver.newn+state->presolver.newm, 0, &state->cs, _state);
-                state->repiterationscount = state->ipm.repiterationscount;
             }
         }
         else
@@ -1313,6 +1311,7 @@ void _minlpstate_init(void* _p, ae_state *_state, ae_bool make_automatic)
     ae_vector_init(&p->cs, 0, DT_INT, _state, make_automatic);
     _dualsimplexstate_init(&p->dss, _state, make_automatic);
     _vipmstate_init(&p->ipm, _state, make_automatic);
+    _ipm2state_init(&p->ipm2, _state, make_automatic);
     ae_vector_init(&p->adddtmpi, 0, DT_INT, _state, make_automatic);
     ae_vector_init(&p->adddtmpr, 0, DT_REAL, _state, make_automatic);
     ae_vector_init(&p->tmpax, 0, DT_REAL, _state, make_automatic);
@@ -1355,6 +1354,7 @@ void _minlpstate_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bo
     dst->ipmeps = src->ipmeps;
     _dualsimplexstate_init_copy(&dst->dss, &src->dss, _state, make_automatic);
     _vipmstate_init_copy(&dst->ipm, &src->ipm, _state, make_automatic);
+    _ipm2state_init_copy(&dst->ipm2, &src->ipm2, _state, make_automatic);
     ae_vector_init_copy(&dst->adddtmpi, &src->adddtmpi, _state, make_automatic);
     ae_vector_init_copy(&dst->adddtmpr, &src->adddtmpr, _state, make_automatic);
     ae_vector_init_copy(&dst->tmpax, &src->tmpax, _state, make_automatic);
@@ -1383,6 +1383,7 @@ void _minlpstate_clear(void* _p)
     ae_vector_clear(&p->cs);
     _dualsimplexstate_clear(&p->dss);
     _vipmstate_clear(&p->ipm);
+    _ipm2state_clear(&p->ipm2);
     ae_vector_clear(&p->adddtmpi);
     ae_vector_clear(&p->adddtmpr);
     ae_vector_clear(&p->tmpax);
@@ -1411,6 +1412,7 @@ void _minlpstate_destroy(void* _p)
     ae_vector_destroy(&p->cs);
     _dualsimplexstate_destroy(&p->dss);
     _vipmstate_destroy(&p->ipm);
+    _ipm2state_destroy(&p->ipm2);
     ae_vector_destroy(&p->adddtmpi);
     ae_vector_destroy(&p->adddtmpr);
     ae_vector_destroy(&p->tmpax);

@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -120,15 +120,14 @@ typedef struct
     double gamma;
     ae_matrix s;
     ae_matrix y;
-    double sigmadecay;
+    ae_matrix lowranksst;
+    ae_matrix lowranksyt;
     ae_bool lowrankmodelvalid;
     ae_int_t lowrankk;
     ae_matrix lowrankcp;
     ae_matrix lowrankcm;
     ae_bool lowrankeffdvalid;
     ae_vector lowrankeffd;
-    ae_matrix lowranksst;
-    ae_matrix lowranksyt;
     ae_int_t updatestatus;
     ae_matrix hincoming;
     ae_vector sk;
@@ -141,7 +140,48 @@ typedef struct
     ae_matrix invsqrtdlk;
     ae_vector bufvmv;
     ae_vector bufupdhx;
+    ae_matrix tmpunstablec;
+    ae_vector tmpunstables;
+    ae_matrix tmpu;
+    ae_matrix tmpq;
+    ae_matrix tmpw;
+    ae_matrix tmpsl;
+    ae_matrix tmpl;
+    ae_vector tmpe;
+    ae_vector tmptau;
 } xbfgshessian;
+
+
+/*************************************************************************
+This object stores:
+* variables
+* functions vector
+* Jacobian, either dense or sparse
+*************************************************************************/
+typedef struct
+{
+    ae_int_t n;
+    ae_int_t m;
+    ae_bool isdense;
+    ae_vector x;
+    ae_vector fi;
+    ae_matrix jac;
+    sparsematrix sj;
+} varsfuncjac;
+
+
+/*************************************************************************
+Stopping conditions and tolerances
+
+  -- ALGLIB --
+     Copyright 21.09.2023 by Bochkanov Sergey
+*************************************************************************/
+typedef struct
+{
+    double epsf;
+    double epsx;
+    ae_int_t maxits;
+} nlpstoppingcriteria;
 
 
 /*************************************************************************
@@ -242,10 +282,16 @@ Used for testing purposes.
 *************************************************************************/
 typedef struct
 {
+    ae_int_t problemtype;
+    ae_int_t problemsubtype;
     ae_int_t n;
     ae_int_t m;
-    ae_int_t nactive;
     ae_matrix xsol;
+    ae_matrix fsol;
+    ae_int_t ksol;
+    ae_vector lagmultbc;
+    ae_vector lagmultlc;
+    ae_vector lagmultnlc;
     ae_vector tgtc;
     ae_matrix tgtb;
     ae_matrix tgta;
@@ -264,6 +310,51 @@ typedef struct
     ae_vector hu;
     ae_int_t nnonlinear;
 } multiobjectivetestfunction;
+
+
+typedef struct
+{
+    double f0;
+    double g0;
+    double alpha1;
+    double alphamax;
+    double c1;
+    double c2;
+    ae_bool strongwolfecond;
+    ae_int_t maxits;
+    ae_bool dotrace;
+    ae_int_t tracelevel;
+    double bestalphasofar;
+    double bestfsofar;
+    double alphaprev;
+    double fprev;
+    double gprev;
+    double alphacur;
+    double fcur;
+    double gcur;
+    double alphalo;
+    double alphahi;
+    double flo;
+    double fhi;
+    double glo;
+    double ghi;
+    ae_int_t nfev;
+    double alphasol;
+    ae_int_t terminationtype;
+    double alphatrial;
+    double ftrial;
+    double gtrial;
+    rcommstate rstate;
+} linesearchstate;
+
+
+typedef struct
+{
+    double maxh;
+    ae_int_t filtersize;
+    ae_vector filterf;
+    ae_vector filterh;
+} nlpfilter;
 
 
 /*$ Body $*/
@@ -306,10 +397,8 @@ the indexes of the "original" constraints via LCSrcIdx[] array.
 
 if lcerr=0 (say, if no constraints are violated) then lcidx=-1.
 
-If nonunits=false then s[] is not referenced at all (assumed unit).
-
   -- ALGLIB --
-     Copyright 7.11.2018 by Bochkanov Sergey
+     Copyright 07.11.2018 by Bochkanov Sergey
 *************************************************************************/
 void checklcviolation(/* Real    */ const ae_matrix* cleic,
      /* Integer */ const ae_vector* lcsrcidx,
@@ -317,6 +406,33 @@ void checklcviolation(/* Real    */ const ae_matrix* cleic,
      ae_int_t nic,
      /* Real    */ const ae_vector* x,
      ae_int_t n,
+     double* lcerr,
+     ae_int_t* lcidx,
+     ae_state *_state);
+
+
+/*************************************************************************
+This subroutine checks violation of the general linear constraints.
+
+Constraints are assumed to be un-normalized and having the following format:
+
+    L <= A*x <= U, with some of L/U being infinite
+
+On output it sets lcerr to the maximum scaled violation, lcidx to the source
+index of the most violating constraint (row indexes of A are mapped to the
+indexes of the "original" constraints via LCSrcIdx[] array).
+
+if lcerr=0 (say, if no constraints are violated) then lcidx=-1.
+
+  -- ALGLIB --
+     Copyright 07.11.2018 by Bochkanov Sergey
+*************************************************************************/
+void checklc2violation(const sparsematrix* a,
+     /* Real    */ const ae_vector* al,
+     /* Real    */ const ae_vector* au,
+     /* Integer */ const ae_vector* lcsrcidx,
+     ae_int_t cntlc,
+     /* Real    */ const ae_vector* x,
      double* lcerr,
      ae_int_t* lcidx,
      ae_state *_state);
@@ -358,6 +474,26 @@ void unscaleandchecknlcviolation(/* Real    */ const ae_vector* fi,
      /* Real    */ const ae_vector* fscales,
      ae_int_t ng,
      ae_int_t nh,
+     double* nlcerr,
+     ae_int_t* nlcidx,
+     ae_state *_state);
+
+
+/*************************************************************************
+This subroutine is same as CheckNLCViolation, but  is  works  with  scaled
+constraints: it assumes that Fi[] were divided by FScales[] vector  BEFORE
+passing them to this function.
+
+The function checks scaled values, but reports unscaled errors.
+
+  -- ALGLIB --
+     Copyright 7.11.2018 by Bochkanov Sergey
+*************************************************************************/
+void unscaleandchecknlc2violation(/* Real    */ const ae_vector* fi,
+     /* Real    */ const ae_vector* fscales,
+     /* Real    */ const ae_vector* rawnl,
+     /* Real    */ const ae_vector* rawnu,
+     ae_int_t cntnlc,
      double* nlcerr,
      ae_int_t* nlcidx,
      ae_state *_state);
@@ -1220,6 +1356,17 @@ void hessianinitlowrank(xbfgshessian* hess,
 
 
 /*************************************************************************
+This function changes upper limit on Hessian norm.
+
+  -- ALGLIB --
+     Copyright 23.09.2023 by Bochkanov Sergey
+*************************************************************************/
+void hessiansetmaxhess(xbfgshessian* hess,
+     double maxhess,
+     ae_state *_state);
+
+
+/*************************************************************************
 Updates Hessian estimate, uses regularized formula which prevents  Hessian
 eigenvalues from decreasing below ~sqrt(Eps)  and  rejects  updates larger
 than ~1/sqrt(Eps) in magnitude.
@@ -1244,6 +1391,81 @@ void hessianupdate(xbfgshessian* hess,
      /* Real    */ const ae_vector* g1,
      ae_bool dotrace,
      ae_state *_state);
+
+
+/*************************************************************************
+Updates Hessian estimate,  uses  damped  formula  which  prevents  Hessian
+eigenvalues from decreasing below ~sqrt(Eps)  and  rejects  updates larger
+than ~1/sqrt(Eps) in magnitude.
+
+Either BFGS or LBFGS formula is used, depending on Hessian model settings.
+
+INPUT PARAMETERS:
+    Hess            -   Hessian state
+    X0, G0          -   point #0 and gradient at #0, array[N]
+    X1, G1          -   point #1 and gradient at #1, array[N]
+    Strategy        -   update stabilization strategy:
+                        * 0     do nothing
+                        * 1     apply damped (L)BFGS, safeguarding from
+                                rapid curvature increase and decrease
+                        * 2     apply damped (L)BFGS for too high curvature,
+                                ignore Y and decrease curvature conservatively
+                                for low values of S'Y
+    TryReplaceLast  -   whether we append update or try to replace the last
+                        one in a queue:
+                        * if False, update is applied as usual
+                        * if True, then:
+                          * if we have BFGS Hessian - applied as usual
+                          * if we have L-BFGS Hessian, we pop the last one
+                            in a memory (if have any), then add this update
+    DoTrace         -   True if we want to print trace messages
+    TraceLevel      -   amount of ">" symbols to append to trace messages
+
+
+  -- ALGLIB --
+     Copyright 28.09.2023 by Bochkanov Sergey
+*************************************************************************/
+void hessianupdatev2(xbfgshessian* hess,
+     /* Real    */ const ae_vector* x0,
+     /* Real    */ const ae_vector* g0,
+     /* Real    */ const ae_vector* x1,
+     /* Real    */ const ae_vector* g1,
+     ae_int_t strategy,
+     ae_bool tryreplacelast,
+     ae_bool dotrace,
+     ae_int_t tracelevel,
+     ae_state *_state);
+
+
+/*************************************************************************
+Removes newest update pair from the limited memory Hessian model and
+invalidates Hessian model. If Hessian does not allow to pop latest pair,
+does nothing.
+
+  -- ALGLIB --
+     Copyright 28.09.2023 by Bochkanov Sergey
+*************************************************************************/
+void hessianpoplatestifpossible(xbfgshessian* hess, ae_state *_state);
+
+
+/*************************************************************************
+Multiplies internally stored model (and all internally stored corrections)
+by S.
+
+This function works only with the following Hessian modes:
+* direct BFGS
+* low-rank LBFGS
+
+Any attempt to call it for other Hessian type will result in exception.
+
+INPUT PARAMETERS:
+    Hess            -   Hessian state
+    S               -   scale factor
+
+  -- ALGLIB --
+     Copyright 05.06.2023 by Bochkanov Sergey
+*************************************************************************/
+void hessianmultiplyby(xbfgshessian* hess, double s, ae_state *_state);
 
 
 /*************************************************************************
@@ -1295,6 +1517,139 @@ void hessiangetmatrix(xbfgshessian* hess,
      ae_bool isupper,
      /* Real    */ ae_matrix* h,
      ae_state *_state);
+
+
+/*************************************************************************
+Get Hessian matrix in a low-rank format D + C'*S*C where D is  a  diagonal
+matrix, C is a low rank matrix, S is a matrix of +1 and -1.
+
+This function works only with the following Hessian modes:
+* low-rank LBFGS (needs k*N operations)
+
+Any attempt to call it for other Hessian type will result in an exception.
+
+IMPORTANT: thus function uses original formulas  from  'REPRESENTATIONS OF
+           QUASI-NEWTON MATRICES AND THEIR USE IN LIMITED MEMORY  METHODS'
+           which produce a positive definite D+C'*S*C.
+           However, only  the  final  result  is  positive  definite.  Any
+           partial update D+G'*U*G, where G/U are subsets of C/S,  is  NOT
+           guaranteed to be positive definite. Lack  of  these  guarantees
+           usually destabilizes interior point low rank  QP   solvers  and
+           other algorithms which rely on positive definiteness of partial
+           updates.
+           Use HessianGetLowRankStabilized() if you need robust updates.
+
+INPUT PARAMETERS:
+    Hess            -   Hessian state
+    D               -   possibly preallocated array, reused if large enough
+    CorrC           -   possibly preallocated array, reused if large enough
+    CorrS           -   possibly preallocated array, reused if large enough
+    
+OUTPUT PARAMETERS:
+    D               -   array[N], diagonal matrix
+    CorrC           -   array[CorrK,N], low rank correction
+    CorrS           -   array[CorrK], signs
+    CorrK           -   correction rank, CorrK>=0
+
+  -- ALGLIB --
+     Copyright 28.11.2022 by Bochkanov Sergey
+*************************************************************************/
+void hessiangetlowrank(xbfgshessian* hess,
+     /* Real    */ ae_vector* d,
+     /* Real    */ ae_matrix* corrc,
+     /* Real    */ ae_vector* corrs,
+     ae_int_t* corrk,
+     ae_state *_state);
+
+
+/*************************************************************************
+Get LBFGS memory contents:
+* steps S
+* gradient changes Y
+* diagonal scaling Sigma
+
+The function guarantees that for each k we have (Sk,Yk)>0, however it does
+NOT guarantee that all steps are stored and that steps are stored  as  is.
+It may modify S and Y in order to improve conditioning, and  it  may  skip
+some update pairs if it decides to do so.
+
+This function works only with the following Hessian modes:
+* low-rank LBFGS
+
+Any attempt to call it for other Hessian type will result in an exception.
+
+INPUT PARAMETERS:
+    Hess            -   Hessian state
+    S               -   possibly preallocated array, reused if large enough
+    Y               -   possibly preallocated array, reused if large enough
+    
+OUTPUT PARAMETERS:
+    Sigma           -   Hessian diagonal magnitude, Sigma>0
+    S               -   array[UpdCnt,N], steps stored (latest steps are
+                        stored at the end)
+    Y               -   array[UpdCnt,N], gradient changes
+    UpdCnt          -   updates count
+
+  -- ALGLIB --
+     Copyright 28.11.2022 by Bochkanov Sergey
+*************************************************************************/
+void hessiangetlowrankmemory(xbfgshessian* hess,
+     double* sigma,
+     /* Real    */ ae_matrix* s,
+     /* Real    */ ae_matrix* y,
+     ae_int_t* updcnt,
+     ae_state *_state);
+
+
+/*************************************************************************
+Get Hessian matrix in a low-rank format D + C'*S*C where D is  a  diagonal
+matrix, C is a low rank matrix, S is a matrix of +1 and -1.
+
+This is a stabilized version of a low rank representation which guarantees
+that both complete update C'*S*C of D and any partial update are  positive
+definite. It is more expensive  than  HessianGetLowRank()  because  a  KxK
+symmetric eigenproblem has to be solved in order to compute robust update.
+
+Unlike non-stabilized version, this function produces  C  with  orthogonal
+rows (rows are mutually orthogonal, although not normalized and  can  even
+be zero).
+
+This function works only with the following Hessian modes:
+* low-rank LBFGS
+
+Any attempt to call it for other Hessian type will result in an exception.
+
+INPUT PARAMETERS:
+    Hess            -   Hessian state
+    D               -   possibly preallocated array, reused if large enough
+    CorrC           -   possibly preallocated array, reused if large enough
+    CorrS           -   possibly preallocated array, reused if large enough
+    
+OUTPUT PARAMETERS:
+    D               -   array[N], diagonal matrix
+    CorrC           -   array[CorrK,N], low rank correction
+    CorrS           -   array[CorrK], signs
+    CorrK           -   correction rank, CorrK>=0
+
+  -- ALGLIB --
+     Copyright 06.06.2023 by Bochkanov Sergey
+*************************************************************************/
+void hessiangetlowrankstabilized(xbfgshessian* hess,
+     /* Real    */ ae_vector* d,
+     /* Real    */ ae_matrix* corrc,
+     /* Real    */ ae_vector* corrs,
+     ae_int_t* corrk,
+     ae_state *_state);
+
+
+/*************************************************************************
+Returns maximum rank of the models returned by the HessianGetLowRank()
+function.
+
+  -- ALGLIB --
+     Copyright 28.11.2022 by Bochkanov Sergey
+*************************************************************************/
+ae_int_t hessiangetmaxrank(const xbfgshessian* hess, ae_state *_state);
 
 
 /*************************************************************************
@@ -1393,6 +1748,9 @@ INPUT PARAMETERS:
     NLQuadratic     -   scale of the quadratic term of nonlinear constraints
     NLQuartic       -   scale of the quadratic term of nonlinear constraints
 
+NOTE: this function does NOT set Lagrange multipliers because it does not
+      know them.
+
   -- ALGLIB --
      Copyright 04.03.2023 by Bochkanov Sergey
 *************************************************************************/
@@ -1403,6 +1761,80 @@ void motfcreaterandomunknown(ae_int_t n,
      ae_int_t taskkind,
      double nlquadratic,
      double nlquartic,
+     hqrndstate* rs,
+     multiobjectivetestfunction* problem,
+     ae_state *_state);
+
+
+/*************************************************************************
+Creates random multiobjective test problem with known answer and Lagrange
+multipliers
+
+INPUT PARAMETERS:
+    N               -   vars cnt, N>=3
+    NLQuadratic     -   scale of the quadratic term of nonlinear constraints
+    NLQuartic       -   scale of the quartic term of nonlinear constraints
+
+  -- ALGLIB --
+     Copyright 04.03.2023 by Bochkanov Sergey
+*************************************************************************/
+void motfcreate1knownanswer(ae_int_t n,
+     double nlquadratic,
+     double nlquartic,
+     hqrndstate* rs,
+     multiobjectivetestfunction* problem,
+     ae_state *_state);
+
+
+/*************************************************************************
+Returns the size of the METAHEURISTIC-U1 collection
+
+  -- ALGLIB --
+     Copyright 04.03.2023 by Bochkanov Sergey
+*************************************************************************/
+ae_int_t motfgetmetaheuristicu1size(ae_state *_state);
+
+
+/*************************************************************************
+Returns the size of the METAHEURISTIC-U2 collection
+
+  -- ALGLIB --
+     Copyright 04.03.2023 by Bochkanov Sergey
+*************************************************************************/
+ae_int_t motfgetmetaheuristicu2size(ae_state *_state);
+
+
+/*************************************************************************
+Creates a single-objective test problem from the METAHEURISTIC-U1 collection
+
+INPUT PARAMETERS:
+    ProblemIdx      -   a value from [0,MOTFGetMetaheuristicU1Size)
+    RS              -   RNG, ignored in the current version because
+                        all problems are deterministic, but may be used
+                        later
+
+  -- ALGLIB --
+     Copyright 04.03.2023 by Bochkanov Sergey
+*************************************************************************/
+void motfcreatemetaheuristicu1(ae_int_t problemidx,
+     hqrndstate* rs,
+     multiobjectivetestfunction* problem,
+     ae_state *_state);
+
+
+/*************************************************************************
+Creates a single-objective test problem from the METAHEURISTIC-U2 collection
+
+INPUT PARAMETERS:
+    ProblemIdx      -   a value from [0,MOTFGetMetaheuristicU2Size)
+    RS              -   RNG, ignored in the current version because
+                        all problems are deterministic, but may be used
+                        later
+
+  -- ALGLIB --
+     Copyright 04.03.2023 by Bochkanov Sergey
+*************************************************************************/
+void motfcreatemetaheuristicu2(ae_int_t problemidx,
      hqrndstate* rs,
      multiobjectivetestfunction* problem,
      ae_state *_state);
@@ -1485,6 +1917,173 @@ Resets trust region growth factor to its default state.
 void trustradresetmomentum(double* growthfactor,
      double mingrowthfactor,
      ae_state *_state);
+
+
+/*************************************************************************
+Initialize V-F-J structure by allocating uninitialized fields
+*************************************************************************/
+void vfjallocdense(ae_int_t n,
+     ae_int_t m,
+     varsfuncjac* s,
+     ae_state *_state);
+
+
+/*************************************************************************
+Initialize V-F-J structure by allocating uninitialized fields
+*************************************************************************/
+void vfjallocsparse(ae_int_t n,
+     ae_int_t m,
+     varsfuncjac* s,
+     ae_state *_state);
+
+
+/*************************************************************************
+Initialize V-F-J structure from user-supplied data
+*************************************************************************/
+void vfjinitfromdense(/* Real    */ const ae_vector* x,
+     ae_int_t n,
+     /* Real    */ const ae_vector* fi,
+     ae_int_t m,
+     /* Real    */ const ae_matrix* jac,
+     varsfuncjac* s,
+     ae_state *_state);
+
+
+/*************************************************************************
+Copy V-F-J structure
+*************************************************************************/
+void vfjcopy(const varsfuncjac* src, varsfuncjac* dst, ae_state *_state);
+
+
+/*************************************************************************
+Initialize criteria with default settings
+*************************************************************************/
+void critinitdefault(nlpstoppingcriteria* crit, ae_state *_state);
+
+
+/*************************************************************************
+Copy criteria
+*************************************************************************/
+void critcopy(const nlpstoppingcriteria* src,
+     nlpstoppingcriteria* dst,
+     ae_state *_state);
+
+
+/*************************************************************************
+Overwrites stopping CONDITIONS (not TOLERANCES) by values  passed  by  the
+user.
+
+Future versions of the structure may introduce additional conditions, these
+condifitons will be set to zero by this version-1 function.
+*************************************************************************/
+void critsetcondv1(nlpstoppingcriteria* crit,
+     double epsf,
+     double epsx,
+     ae_int_t maxits,
+     ae_state *_state);
+
+
+/*************************************************************************
+Returns the value of the EpsF stopping condition:
+* if user specified nonzero value, it will be returned
+* if user specified zero value of EpsF, but non-zero value for  any  other
+  condition or tolerance, zero will be returned
+* if user specified zero value of EpsF and zero values for all  other
+  conditions and tolerances, a default value will be returned
+*************************************************************************/
+double critgetepsf(const nlpstoppingcriteria* crit, ae_state *_state);
+
+
+/*************************************************************************
+Returns the value of the EpsX stopping condition:
+* if user specified nonzero value, it will be returned
+* if user specified zero value of EpsX, but non-zero value for  any  other
+  condition or tolerance, zero will be returned
+* if user specified zero value of EpsX and zero values for all  other
+  conditions and tolerances, a default value will be returned
+*************************************************************************/
+double critgetepsx(const nlpstoppingcriteria* crit, ae_state *_state);
+
+
+/*************************************************************************
+Returns the value of the EpsX stopping condition:
+* if user specified nonzero value, it will be returned
+* if user specified zero value of EpsX, but non-zero value for  any  other
+  condition or tolerance, zero will be returned
+* if user specified zero value of EpsX and zero values for all  other
+  conditions and tolerances, a default value will be returned
+*************************************************************************/
+double critgetepsxwithdefault(const nlpstoppingcriteria* crit,
+     double defval,
+     ae_state *_state);
+
+
+/*************************************************************************
+Returns the value of the MaxIts stopping condition:
+* the value specified by the user (either zero or nonzero) will be returned
+*************************************************************************/
+ae_int_t critgetmaxits(const nlpstoppingcriteria* crit, ae_state *_state);
+
+
+/*************************************************************************
+Initializes line search using bisection
+
+NOTES:
+* MaxIts>=2 is required
+*************************************************************************/
+void linesearchinitbisect(double f0,
+     double g0,
+     double alpha1,
+     double alphamax,
+     double c1,
+     double c2,
+     ae_bool strongwolfecond,
+     ae_int_t maxits,
+     ae_bool dotrace,
+     ae_int_t tracelevel,
+     linesearchstate* state,
+     ae_state *_state);
+
+
+/*************************************************************************
+Performs iteration.
+
+After the end it stores the best  step  to  State.AlphaSol.  The  function
+warrants that either:
+* AlphaSol is the last Alpha tried
+* AlphaSol=0, which means that a non-descent direction was specified.
+  In the latter case no search was performed.
+
+The function also sets TerminationType field  to  a  value  which  roughly
+corresponds to ones returned by MCSRCH:
+* 0 for non-descent direction
+* 1 for search ended with the sufficient decrease condition and the
+    curvature condition satisfied
+* 3 for iteration budget being exhausted, stopping at the best point so far
+* 5 for a step being at the upper bound
+*************************************************************************/
+ae_bool linesearchiteration(linesearchstate* state, ae_state *_state);
+
+
+/*************************************************************************
+Create a filter for NLP solver
+*************************************************************************/
+void nlpfinit(double maxh, nlpfilter* s, ae_state *_state);
+
+
+/*************************************************************************
+Check point for acceptance
+*************************************************************************/
+ae_bool nlpfisacceptable(const nlpfilter* s,
+     double f,
+     double h,
+     ae_state *_state);
+
+
+/*************************************************************************
+Append point, if acceptable. Behavior is undefined for unacceptable points.
+*************************************************************************/
+void nlpfappend(nlpfilter* s, double f, double h, ae_state *_state);
 void _precbuflbfgs_init(void* _p, ae_state *_state, ae_bool make_automatic);
 void _precbuflbfgs_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
 void _precbuflbfgs_clear(void* _p);
@@ -1497,6 +2096,14 @@ void _xbfgshessian_init(void* _p, ae_state *_state, ae_bool make_automatic);
 void _xbfgshessian_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
 void _xbfgshessian_clear(void* _p);
 void _xbfgshessian_destroy(void* _p);
+void _varsfuncjac_init(void* _p, ae_state *_state, ae_bool make_automatic);
+void _varsfuncjac_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
+void _varsfuncjac_clear(void* _p);
+void _varsfuncjac_destroy(void* _p);
+void _nlpstoppingcriteria_init(void* _p, ae_state *_state, ae_bool make_automatic);
+void _nlpstoppingcriteria_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
+void _nlpstoppingcriteria_clear(void* _p);
+void _nlpstoppingcriteria_destroy(void* _p);
 void _smoothnessmonitor_init(void* _p, ae_state *_state, ae_bool make_automatic);
 void _smoothnessmonitor_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
 void _smoothnessmonitor_clear(void* _p);
@@ -1505,6 +2112,14 @@ void _multiobjectivetestfunction_init(void* _p, ae_state *_state, ae_bool make_a
 void _multiobjectivetestfunction_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
 void _multiobjectivetestfunction_clear(void* _p);
 void _multiobjectivetestfunction_destroy(void* _p);
+void _linesearchstate_init(void* _p, ae_state *_state, ae_bool make_automatic);
+void _linesearchstate_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
+void _linesearchstate_clear(void* _p);
+void _linesearchstate_destroy(void* _p);
+void _nlpfilter_init(void* _p, ae_state *_state, ae_bool make_automatic);
+void _nlpfilter_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
+void _nlpfilter_clear(void* _p);
+void _nlpfilter_destroy(void* _p);
 
 
 /*$ End $*/

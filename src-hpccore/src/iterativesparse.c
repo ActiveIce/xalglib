@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -1007,6 +1007,23 @@ void sparsesolverrequesttermination(sparsesolverstate* state,
 
 
 /*************************************************************************
+Reset report fields
+
+  -- ALGLIB --
+     Copyright 26.12.2017 by Bochkanov Sergey
+*************************************************************************/
+void initsparsesolverreport(sparsesolverreport* rep, ae_state *_state)
+{
+
+
+    rep->terminationtype = 0;
+    rep->nmv = 0;
+    rep->iterationscount = 0;
+    rep->r2 = (double)(0);
+}
+
+
+/*************************************************************************
 Reverse communication sparse iteration subroutine
 
   -- ALGLIB --
@@ -1284,6 +1301,38 @@ static void iterativesparse_clearreportfields(sparsesolverstate* state,
     state->repnmv = 0;
     state->repterminationtype = 0;
     state->repr2 = (double)(0);
+}
+
+
+void _sparsesolverreport_init(void* _p, ae_state *_state, ae_bool make_automatic)
+{
+    sparsesolverreport *p = (sparsesolverreport*)_p;
+    ae_touch_ptr((void*)p);
+}
+
+
+void _sparsesolverreport_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic)
+{
+    sparsesolverreport       *dst = (sparsesolverreport*)_dst;
+    const sparsesolverreport *src = (const sparsesolverreport*)_src;
+    dst->terminationtype = src->terminationtype;
+    dst->nmv = src->nmv;
+    dst->iterationscount = src->iterationscount;
+    dst->r2 = src->r2;
+}
+
+
+void _sparsesolverreport_clear(void* _p)
+{
+    sparsesolverreport *p = (sparsesolverreport*)_p;
+    ae_touch_ptr((void*)p);
+}
+
+
+void _sparsesolverreport_destroy(void* _p)
+{
+    sparsesolverreport *p = (sparsesolverreport*)_p;
+    ae_touch_ptr((void*)p);
 }
 
 

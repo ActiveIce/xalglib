@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -29,23 +29,37 @@
 #include "tsort.h"
 #include "sparse.h"
 #include "ablas.h"
-#include "dlu.h"
-#include "sptrf.h"
-#include "apstruct.h"
-#include "amdordering.h"
-#include "spchol.h"
-#include "creflections.h"
-#include "matgen.h"
 #include "rotations.h"
-#include "trfac.h"
-#include "directsparsesolvers.h"
 #include "hblas.h"
+#include "creflections.h"
 #include "sblas.h"
 #include "ortfac.h"
 #include "fbls.h"
+#include "matgen.h"
 
 
 /*$ Declarations $*/
+
+
+/*************************************************************************
+This structure is a sparse solver report (both direct and iterative solvers
+use this structure).
+
+Following fields can be accessed by users:
+* TerminationType (specific error codes depend on the solver  being  used,
+  with positive values ALWAYS signaling  that something useful is returned
+  in X, and negative values ALWAYS meaning critical failures.
+* NMV - number of matrix-vector products performed (0 for direct solvers)
+* IterationsCount - inner iterations count (0 for direct solvers)
+* R2 - squared residual
+*************************************************************************/
+typedef struct
+{
+    ae_int_t terminationtype;
+    ae_int_t nmv;
+    ae_int_t iterationscount;
+    double r2;
+} sparsesolverreport;
 
 
 /*************************************************************************
@@ -738,6 +752,19 @@ NOTE: solver clears termination flag on its start, it means that  if  some
 *************************************************************************/
 void sparsesolverrequesttermination(sparsesolverstate* state,
      ae_state *_state);
+
+
+/*************************************************************************
+Reset report fields
+
+  -- ALGLIB --
+     Copyright 26.12.2017 by Bochkanov Sergey
+*************************************************************************/
+void initsparsesolverreport(sparsesolverreport* rep, ae_state *_state);
+void _sparsesolverreport_init(void* _p, ae_state *_state, ae_bool make_automatic);
+void _sparsesolverreport_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
+void _sparsesolverreport_clear(void* _p);
+void _sparsesolverreport_destroy(void* _p);
 void _sparsesolverstate_init(void* _p, ae_state *_state, ae_bool make_automatic);
 void _sparsesolverstate_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
 void _sparsesolverstate_clear(void* _p);

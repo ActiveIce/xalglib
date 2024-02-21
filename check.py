@@ -382,6 +382,19 @@ def nlcfunc2_jac(x, fi, jac, param):
     jac[2][2] = 0.0
     return
 
+def nlcfunc2_fvec(x, fi, param):
+    #
+    # this callback calculates
+    #
+    #     f0(x0,x1,x2) = x0+x1
+    #     f1(x0,x1,x2) = x2-exp(x0)
+    #     f2(x0,x1,x2) = x0^2+x1^2-1
+    #
+    fi[0] = x[0]+x[1]
+    fi[1] = x[2]-math.exp(x[0])
+    fi[2] = x[0]*x[0] + x[1]*x[1] - 1.0
+    return
+
 def nsfunc1_jac(x, fi, jac, param):
     #
     # this callback calculates
@@ -1952,77 +1965,6 @@ try:
 
 
     #
-    # TEST solvesks_d_1
-    #      Solving positive definite sparse system using Skyline (SKS) solver
-    #
-    _TestResult = True
-    for _spoil_scenario in range(-1,4):
-        try:
-            #
-            # This example demonstrates creation/initialization of the sparse matrix
-            # in the SKS (Skyline) storage format and solution using SKS-based direct
-            # solver.
-            #
-            # First, we have to create matrix and initialize it. Matrix is created
-            # in the SKS format, using fixed bandwidth initialization function.
-            # Several points should be noted:
-            #
-            # 1. SKS sparse storage format also allows variable bandwidth matrices;
-            #    we just do not want to overcomplicate this example.
-            #
-            # 2. SKS format requires you to specify matrix geometry prior to
-            #    initialization of its elements with sparseset(). If you specified
-            #    bandwidth=1, you can not change your mind afterwards and call
-            #    sparseset() for non-existent elements.
-            # 
-            # 3. Because SKS solver need just one triangle of SPD matrix, we can
-            #    omit initialization of the lower triangle of our matrix.
-            #
-            n = 4
-            bandwidth = 1
-            s = xalglib.sparsecreatesksband(n, n, bandwidth)
-            xalglib.sparseset(s, 0, 0, 2.0)
-            xalglib.sparseset(s, 0, 1, 1.0)
-            xalglib.sparseset(s, 1, 1, 3.0)
-            xalglib.sparseset(s, 1, 2, 1.0)
-            xalglib.sparseset(s, 2, 2, 3.0)
-            xalglib.sparseset(s, 2, 3, 1.0)
-            xalglib.sparseset(s, 3, 3, 2.0)
-
-            #
-            # Now we have symmetric positive definite 4x4 system width bandwidth=1:
-            #
-            #     [ 2 1     ]   [ x0]]   [  4 ]
-            #     [ 1 3 1   ]   [ x1 ]   [ 10 ]
-            #     [   1 3 1 ] * [ x2 ] = [ 15 ]
-            #     [     1 2 ]   [ x3 ]   [ 11 ]
-            #
-            # After successful creation we can call SKS solver.
-            #
-            b = [4,10,15,11]
-            if _spoil_scenario==0:
-                spoil_vec_by_nan(b)
-            if _spoil_scenario==1:
-                spoil_vec_by_posinf(b)
-            if _spoil_scenario==2:
-                spoil_vec_by_neginf(b)
-            if _spoil_scenario==3:
-                spoil_vec_by_deleting_element(b)
-            isuppertriangle = True
-            x, rep = xalglib.sparsespdsolvesks(s, isuppertriangle, b)
-            _TestResult = _TestResult and doc_print_test(x, [1.0000, 2.0000, 3.0000, 4.0000], "real_vector", 0.00005)
-            _TestResult = _TestResult and (_spoil_scenario==-1)
-        except (RuntimeError, ValueError):
-            _TestResult = _TestResult and (_spoil_scenario!=-1)
-        except:
-            raise
-    if not _TestResult:
-        sys.stdout.write("solvesks_d_1                     FAILED\n")
-        sys.stdout.flush()
-    _TotalResult = _TotalResult and _TestResult
-
-
-    #
     # TEST lincg_d_1
     #      Solution of sparse linear systems with CG
     #
@@ -2209,6 +2151,208 @@ try:
             raise
     if not _TestResult:
         sys.stdout.write("linlsqr_d_1                      FAILED\n")
+        sys.stdout.flush()
+    _TotalResult = _TotalResult and _TestResult
+
+
+    #
+    # TEST solvesks_d_1
+    #      Solving low profile positive definite sparse systems with Skyline (SKS) solver
+    #
+    _TestResult = True
+    for _spoil_scenario in range(-1,4):
+        try:
+            #
+            # This example demonstrates creation/initialization of the sparse matrix
+            # in the SKS (Skyline) storage format and solution using SKS-based direct
+            # solver.
+            #
+            # NOTE: the SKS solver is intended for 'easy' tasks, i.e. low-profile positive
+            #       definite systems (e.g. matrices with average bandwidth as low as 3),
+            #       where it can avoid some overhead associated with more powerful supernodal
+            #       Cholesky solver with AMD ordering.
+            #
+            #       It is recommended to use more powerful solvers for more difficult problems:
+            #       * sparsespdsolve() for larger sparse positive definite systems
+            #       * sparsesolve() for general (nonsymmetric) linear systems
+            #
+            # First, we have to create matrix and initialize it. Matrix is created
+            # in the SKS format, using fixed bandwidth initialization function.
+            # Several points should be noted:
+            #
+            # 1. SKS sparse storage format also allows variable bandwidth matrices;
+            #    we just do not want to overcomplicate this example.
+            #
+            # 2. SKS format requires you to specify matrix geometry prior to
+            #    initialization of its elements with sparseset(). If you specified
+            #    bandwidth=1, you can not change your mind afterwards and call
+            #    sparseset() for non-existent elements.
+            # 
+            # 3. Because SKS solver need just one triangle of SPD matrix, we can
+            #    omit initialization of the lower triangle of our matrix.
+            #
+            n = 4
+            bandwidth = 1
+            s = xalglib.sparsecreatesksband(n, n, bandwidth)
+            xalglib.sparseset(s, 0, 0, 2.0)
+            xalglib.sparseset(s, 0, 1, 1.0)
+            xalglib.sparseset(s, 1, 1, 3.0)
+            xalglib.sparseset(s, 1, 2, 1.0)
+            xalglib.sparseset(s, 2, 2, 3.0)
+            xalglib.sparseset(s, 2, 3, 1.0)
+            xalglib.sparseset(s, 3, 3, 2.0)
+
+            #
+            # Now we have symmetric positive definite 4x4 system width bandwidth=1:
+            #
+            #     [ 2 1     ]   [ x0]]   [  4 ]
+            #     [ 1 3 1   ]   [ x1 ]   [ 10 ]
+            #     [   1 3 1 ] * [ x2 ] = [ 15 ]
+            #     [     1 2 ]   [ x3 ]   [ 11 ]
+            #
+            # After successful creation we can call SKS solver.
+            #
+            b = [4,10,15,11]
+            if _spoil_scenario==0:
+                spoil_vec_by_nan(b)
+            if _spoil_scenario==1:
+                spoil_vec_by_posinf(b)
+            if _spoil_scenario==2:
+                spoil_vec_by_neginf(b)
+            if _spoil_scenario==3:
+                spoil_vec_by_deleting_element(b)
+            isuppertriangle = True
+            x, rep = xalglib.sparsespdsolvesks(s, isuppertriangle, b)
+            _TestResult = _TestResult and doc_print_test(x, [1.0000, 2.0000, 3.0000, 4.0000], "real_vector", 0.00005)
+            _TestResult = _TestResult and (_spoil_scenario==-1)
+        except (RuntimeError, ValueError):
+            _TestResult = _TestResult and (_spoil_scenario!=-1)
+        except:
+            raise
+    if not _TestResult:
+        sys.stdout.write("solvesks_d_1                     FAILED\n")
+        sys.stdout.flush()
+    _TotalResult = _TotalResult and _TestResult
+
+
+    #
+    # TEST sparse_solve_cholesky
+    #      Solving positive definite sparse linear systems with the supernodal Cholesky solver
+    #
+    _TestResult = True
+    for _spoil_scenario in range(-1,4):
+        try:
+            #
+            # This example demonstrates creation/initialization of a sparse matrix and linear
+            # system solution using Cholesky-based direct solver. This solver can handle any
+            # problem sizes - from several tens of variables to millions of variables.
+            #
+            # First, we create a sparse matrix in the flexible hash table-based storage format,
+            # initialize it and convert to the CRS format. Because the matrix is symmetric,
+            # it is enough to specify only one triangle. The example below initializes the
+            # lower one.
+            #
+            n = 4
+            s = xalglib.sparsecreate(n, n, 0)
+            xalglib.sparseset(s, 0, 0, 2.0)
+            xalglib.sparseset(s, 1, 0, 1.0)
+            xalglib.sparseset(s, 1, 1, 3.0)
+            xalglib.sparseset(s, 2, 1, 1.0)
+            xalglib.sparseset(s, 2, 2, 3.0)
+            xalglib.sparseset(s, 3, 2, 1.0)
+            xalglib.sparseset(s, 3, 3, 2.0)
+
+            #
+            # Now we have symmetric positive definite 4x4 system
+            #
+            #     [ 2 1     ]   [ x0]]   [  4 ]
+            #     [ 1 3 1   ]   [ x1 ]   [ 10 ]
+            #     [   1 3 1 ] * [ x2 ] = [ 15 ]
+            #     [     1 2 ]   [ x3 ]   [ 11 ]
+            #
+            # Now, it is time to call the solver.
+            #
+            b = [4,10,15,11]
+            if _spoil_scenario==0:
+                spoil_vec_by_nan(b)
+            if _spoil_scenario==1:
+                spoil_vec_by_posinf(b)
+            if _spoil_scenario==2:
+                spoil_vec_by_neginf(b)
+            if _spoil_scenario==3:
+                spoil_vec_by_deleting_element(b)
+            isuppertriangle = False
+            x, rep = xalglib.sparsespdsolve(s, isuppertriangle, b)
+            _TestResult = _TestResult and doc_print_test(x, [1.0000, 2.0000, 3.0000, 4.0000], "real_vector", 0.00005)
+            _TestResult = _TestResult and (_spoil_scenario==-1)
+        except (RuntimeError, ValueError):
+            _TestResult = _TestResult and (_spoil_scenario!=-1)
+        except:
+            raise
+    if not _TestResult:
+        sys.stdout.write("sparse_solve_cholesky            FAILED\n")
+        sys.stdout.flush()
+    _TotalResult = _TotalResult and _TestResult
+
+
+    #
+    # TEST sparse_solve
+    #      Solving general sparse linear systems
+    #
+    _TestResult = True
+    for _spoil_scenario in range(-1,4):
+        try:
+            #
+            # This example demonstrates creation/initialization of a sparse matrix and linear
+            # system solution using a direct solver. This solver can handle any problem sizes
+            # - from several tens of variables to millions of variables.
+            #
+            # First, we create a sparse matrix in the flexible hash table-based storage format,
+            # initialize it and convert to the CRS format.
+            #
+            n = 4
+            s = xalglib.sparsecreate(n, n, 0)
+            xalglib.sparseset(s, 0, 0, 2.0)
+            xalglib.sparseset(s, 0, 1, 1.0)
+            xalglib.sparseset(s, 1, 0, 1.0)
+            xalglib.sparseset(s, 1, 1, 3.0)
+            xalglib.sparseset(s, 1, 2, -1.0)
+            xalglib.sparseset(s, 2, 2, 3.0)
+            xalglib.sparseset(s, 2, 3, 1.0)
+            xalglib.sparseset(s, 3, 2, 1.0)
+            xalglib.sparseset(s, 3, 3, 2.0)
+
+            #
+            # Now we have symmetric positive definite 4x4 system
+            #
+            #     [ 2 1     ]   [ x0]]   [ 3 ]
+            #     [ 1 3 -1  ]   [ x1 ]   [ 2 ]
+            #     [     3 1 ] * [ x2 ] = [ 8 ]
+            #     [     1 2 ]   [ x3 ]   [ 6 ]
+            #
+            # Now, it is time to call the solver. The sparsesolve() function supports several
+            # solvers, our recommendation is to choose the default one. In the current version
+            # it is a supernodal solver with static pivoting, followed by the iterative refinement.
+            #
+            b = [3,2,8,6]
+            if _spoil_scenario==0:
+                spoil_vec_by_nan(b)
+            if _spoil_scenario==1:
+                spoil_vec_by_posinf(b)
+            if _spoil_scenario==2:
+                spoil_vec_by_neginf(b)
+            if _spoil_scenario==3:
+                spoil_vec_by_deleting_element(b)
+            solvertype = 0
+            x, rep = xalglib.sparsesolve(s, b, solvertype)
+            _TestResult = _TestResult and doc_print_test(x, [1.0000, 1.0000, 2.0000, 2.0000], "real_vector", 0.00005)
+            _TestResult = _TestResult and (_spoil_scenario==-1)
+        except (RuntimeError, ValueError):
+            _TestResult = _TestResult and (_spoil_scenario!=-1)
+        except:
+            raise
+    if not _TestResult:
+        sys.stdout.write("sparse_solve                     FAILED\n")
         sys.stdout.flush()
     _TotalResult = _TotalResult and _TestResult
 
@@ -2449,10 +2593,23 @@ try:
             # * initial point x=[0,0]
             # * unit scale being set for all variables (see minlbfgssetscale for more info)
             # * stopping criteria set to "terminate after short enough step"
-            # * OptGuard integrity check being used to check problem statement
-            #   for some common errors like nonsmoothness or bad analytic gradient
             #
-            # First, we create optimizer object and tune its properties
+            # First, we create optimizer object and tune its properties.
+            #
+            # IMPORTANT: the  LBFGS  optimizer  supports  parallel parallel numerical
+            #            differentiation  ('callback   parallelism').  This  feature,
+            #            which  is  present  in  commercial  ALGLIB  editions greatly
+            #            accelerates optimization with numerical  differentiation  of
+            #            an expensive target functions.
+            #
+            #            Callback parallelism is usually  beneficial when computing a
+            #            numerical gradient requires more than several  milliseconds.
+            #            This particular  example,  of  course,  is  not  suited  for
+            #            callback parallelism.
+            #
+            #            See ALGLIB Reference Manual, 'Working with commercial version'
+            #            section,  and  comments  on  minlbfgsoptimize() function for
+            #            more information.
             #
             x = [0,0]
             if _spoil_scenario==0:
@@ -2495,45 +2652,11 @@ try:
             xalglib.minlbfgssetscale(state, s)
 
             #
-            # Activate OptGuard integrity checking.
-            #
-            # OptGuard monitor helps to catch common coding and problem statement
-            # issues, like:
-            # * discontinuity of the target function (C0 continuity violation)
-            # * nonsmoothness of the target function (C1 continuity violation)
-            # * erroneous analytic gradient, i.e. one inconsistent with actual
-            #   change in the target/constraints
-            #
-            # OptGuard is essential for early prototyping stages because such
-            # problems often result in premature termination of the optimizer
-            # which is really hard to distinguish from the correct termination.
-            #
-            # IMPORTANT: GRADIENT VERIFICATION IS PERFORMED BY MEANS OF NUMERICAL
-            #            DIFFERENTIATION. DO NOT USE IT IN PRODUCTION CODE!!!!!!!
-            #
-            #            Other OptGuard checks add moderate overhead, but anyway
-            #            it is better to turn them off when they are not needed.
-            #
-            xalglib.minlbfgsoptguardsmoothness(state)
-            xalglib.minlbfgsoptguardgradient(state, 0.001)
-
-            #
             # Optimize and examine results.
             #
             xalglib.minlbfgsoptimize_g(state, function1_grad)
             x, rep = xalglib.minlbfgsresults(state)
             _TestResult = _TestResult and doc_print_test(x, [-3,3], "real_vector", 0.005)
-
-            #
-            # Check that OptGuard did not report errors
-            #
-            # NOTE: want to test OptGuard? Try breaking the gradient - say, add
-            #       1.0 to some of its components.
-            #
-            ogrep = xalglib.minlbfgsoptguardresults(state)
-            _TestResult = _TestResult and doc_print_test(ogrep.badgradsuspected, False, "bool")
-            _TestResult = _TestResult and doc_print_test(ogrep.nonc0suspected, False, "bool")
-            _TestResult = _TestResult and doc_print_test(ogrep.nonc1suspected, False, "bool")
             _TestResult = _TestResult and (_spoil_scenario==-1)
         except (RuntimeError, ValueError):
             _TestResult = _TestResult and (_spoil_scenario!=-1)
@@ -2666,8 +2789,26 @@ try:
     for _spoil_scenario in range(-1,15):
         try:
             #
-            # This example demonstrates minimization of f(x,y) = 100*(x+3)^4+(y-3)^4
+            # This example demonstrates minimization of
+            #
+            #     f(x,y) = 100*(x+3)^4+(y-3)^4
+            #
             # using numerical differentiation to calculate gradient.
+            #
+            # IMPORTANT: the  LBFGS  optimizer  supports  parallel parallel numerical
+            #            differentiation  ('callback   parallelism').  This  feature,
+            #            which  is  present  in  commercial  ALGLIB  editions greatly
+            #            accelerates optimization with numerical  differentiation  of
+            #            an expensive target functions.
+            #
+            #            Callback parallelism is usually  beneficial when computing a
+            #            numerical gradient requires more than several  milliseconds.
+            #            This particular  example,  of  course,  is  not  suited  for
+            #            callback parallelism.
+            #
+            #            See ALGLIB Reference Manual, 'Working with commercial version'
+            #            section,  and  comments  on  minlbfgsoptimize() function for
+            #            more information.
             #
             x = [0,0]
             if _spoil_scenario==0:
@@ -3194,26 +3335,25 @@ try:
     #      Unconstrained dense quadratic programming
     #
     _TestResult = True
-    for _spoil_scenario in range(-1,14):
+    for _spoil_scenario in range(-1,10):
         try:
             #
             # This example demonstrates minimization of F(x0,x1) = x0^2 + x1^2 -6*x0 - 4*x1
             #
             # Exact solution is [x0,x1] = [3,2]
             #
-            # We provide algorithm with starting point, although in this case
-            # (dense matrix, no constraints) it can work without such information.
-            #
-            # Several QP solvers are tried: QuickQP, BLEIC, DENSE-AUL.
-            #
             # IMPORTANT: this solver minimizes  following  function:
+            #
             #     f(x) = 0.5*x'*A*x + b'*x.
+            #
             # Note that quadratic term has 0.5 before it. So if you want to minimize
             # quadratic function, you should rewrite it in such way that quadratic term
             # is multiplied by 0.5 too.
             #
             # For example, our function is f(x)=x0^2+x1^2+..., but we rewrite it as 
+            #
             #     f(x) = 0.5*(2*x0^2+2*x1^2) + .... 
+            #
             # and pass diag(2,2) as quadratic term - NOT diag(1,1)!
             #
             a = [[2,0],[0,2]]
@@ -3230,34 +3370,24 @@ try:
                 spoil_vec_by_neginf(b)
             if _spoil_scenario==5:
                 spoil_vec_by_deleting_element(b)
-            x0 = [0,1]
-            if _spoil_scenario==6:
-                spoil_vec_by_nan(x0)
-            if _spoil_scenario==7:
-                spoil_vec_by_posinf(x0)
-            if _spoil_scenario==8:
-                spoil_vec_by_neginf(x0)
-            if _spoil_scenario==9:
-                spoil_vec_by_deleting_element(x0)
             s = [1,1]
-            if _spoil_scenario==10:
+            if _spoil_scenario==6:
                 spoil_vec_by_nan(s)
-            if _spoil_scenario==11:
+            if _spoil_scenario==7:
                 spoil_vec_by_posinf(s)
-            if _spoil_scenario==12:
+            if _spoil_scenario==8:
                 spoil_vec_by_neginf(s)
-            if _spoil_scenario==13:
+            if _spoil_scenario==9:
                 spoil_vec_by_deleting_element(s)
             isupper = True
 
-            # create solver, set quadratic/linear terms
+            # create the solver, set quadratic/linear terms
             state = xalglib.minqpcreate(2)
             xalglib.minqpsetquadraticterm(state, a, isupper)
             xalglib.minqpsetlinearterm(state, b)
-            xalglib.minqpsetstartingpoint(state, x0)
 
-            # Set scale of the parameters.
-            # It is strongly recommended that you set scale of your variables.
+            # Set the scale of the parameters.
+            # It is strongly recommended that you set the scale of your variables.
             # Knowing their scales is essential for evaluation of stopping criteria
             # and for preconditioning of the algorithm steps.
             # You can find more information on scaling at http://www.alglib.net/optimization/scaling.php
@@ -3267,45 +3397,27 @@ try:
             xalglib.minqpsetscale(state, s)
 
             #
-            # Solve problem with QuickQP solver.
+            # Solve problem with the sparse interior-point method (sparse IPM) solver.
             #
-            # This solver is intended for medium and large-scale problems with box
-            # constraints (general linear constraints are not supported), but it can
-            # also be efficiently used on unconstrained problems.
+            # This solver is intended for large-scale sparse problems with box and linear
+            # constraints, but it will work on such a toy problem too.
             #
             # Default stopping criteria are used, Newton phase is active.
             #
-            xalglib.minqpsetalgoquickqp(state, 0.0, 0.0, 0.0, 0, True)
+            xalglib.minqpsetalgosparseipm(state, 0.0)
             xalglib.minqpoptimize(state)
             x, rep = xalglib.minqpresults(state)
             _TestResult = _TestResult and doc_print_test(x, [3,2], "real_vector", 0.005)
 
             #
-            # Solve problem with BLEIC-based QP solver.
+            # Solve problem with dense IPM solver.
             #
-            # This solver is intended for problems with moderate (up to 50) number
-            # of general linear constraints and unlimited number of box constraints.
-            # Of course, unconstrained problems can be solved too.
-            #
-            # Default stopping criteria are used.
-            #
-            xalglib.minqpsetalgobleic(state, 0.0, 0.0, 0.0, 0)
-            xalglib.minqpoptimize(state)
-            x, rep = xalglib.minqpresults(state)
-            _TestResult = _TestResult and doc_print_test(x, [3,2], "real_vector", 0.005)
-
-            #
-            # Solve problem with DENSE-AUL solver.
-            #
-            # This solver is optimized for problems with up to several thousands of
-            # variables and large amount of general linear constraints. Problems with
-            # less than 50 general linear constraints can be efficiently solved with
-            # BLEIC, problems with box-only constraints can be solved with QuickQP.
-            # However, DENSE-AUL will work in any (including unconstrained) case.
+            # This solver is optimized for problems with dense linear constraints and/or
+            # dense quadratic term.
             #
             # Default stopping criteria are used.
             #
-            xalglib.minqpsetalgodenseaul(state, 1.0e-9, 1.0e+4, 5)
+            xalglib.minqpsetalgodenseipm(state, 0.0)
             xalglib.minqpoptimize(state)
             x, rep = xalglib.minqpresults(state)
             _TestResult = _TestResult and doc_print_test(x, [3,2], "real_vector", 0.005)
@@ -3322,30 +3434,29 @@ try:
 
     #
     # TEST minqp_d_bc1
-    #      Bound constrained dense quadratic programming
+    #      Box constrained dense quadratic programming
     #
     _TestResult = True
-    for _spoil_scenario in range(-1,18):
+    for _spoil_scenario in range(-1,14):
         try:
             #
             # This example demonstrates minimization of F(x0,x1) = x0^2 + x1^2 -6*x0 - 4*x1
-            # subject to bound constraints 0<=x0<=2.5, 0<=x1<=2.5
+            # subject to Box constraints 0<=x0<=2.5, 0<=x1<=2.5
             #
             # Exact solution is [x0,x1] = [2.5,2]
             #
-            # We provide algorithm with starting point. With such small problem good starting
-            # point is not really necessary, but with high-dimensional problem it can save us
-            # a lot of time.
-            #
-            # Several QP solvers are tried: QuickQP, BLEIC, DENSE-AUL.
-            #
             # IMPORTANT: this solver minimizes  following  function:
+            #
             #     f(x) = 0.5*x'*A*x + b'*x.
+            #
             # Note that quadratic term has 0.5 before it. So if you want to minimize
             # quadratic function, you should rewrite it in such way that quadratic term
             # is multiplied by 0.5 too.
+            #
             # For example, our function is f(x)=x0^2+x1^2+..., but we rewrite it as 
+            #
             #     f(x) = 0.5*(2*x0^2+2*x1^2) + ....
+            #
             # and pass diag(2,2) as quadratic term - NOT diag(1,1)!
             #
             a = [[2,0],[0,2]]
@@ -3362,33 +3473,24 @@ try:
                 spoil_vec_by_neginf(b)
             if _spoil_scenario==5:
                 spoil_vec_by_deleting_element(b)
-            x0 = [0,1]
-            if _spoil_scenario==6:
-                spoil_vec_by_nan(x0)
-            if _spoil_scenario==7:
-                spoil_vec_by_posinf(x0)
-            if _spoil_scenario==8:
-                spoil_vec_by_neginf(x0)
-            if _spoil_scenario==9:
-                spoil_vec_by_deleting_element(x0)
             s = [1,1]
-            if _spoil_scenario==10:
+            if _spoil_scenario==6:
                 spoil_vec_by_nan(s)
-            if _spoil_scenario==11:
+            if _spoil_scenario==7:
                 spoil_vec_by_posinf(s)
-            if _spoil_scenario==12:
+            if _spoil_scenario==8:
                 spoil_vec_by_neginf(s)
-            if _spoil_scenario==13:
+            if _spoil_scenario==9:
                 spoil_vec_by_deleting_element(s)
             bndl = [0.0,0.0]
-            if _spoil_scenario==14:
+            if _spoil_scenario==10:
                 spoil_vec_by_nan(bndl)
-            if _spoil_scenario==15:
+            if _spoil_scenario==11:
                 spoil_vec_by_deleting_element(bndl)
             bndu = [2.5,2.5]
-            if _spoil_scenario==16:
+            if _spoil_scenario==12:
                 spoil_vec_by_nan(bndu)
-            if _spoil_scenario==17:
+            if _spoil_scenario==13:
                 spoil_vec_by_deleting_element(bndu)
             isupper = True
 
@@ -3396,7 +3498,6 @@ try:
             state = xalglib.minqpcreate(2)
             xalglib.minqpsetquadraticterm(state, a, isupper)
             xalglib.minqpsetlinearterm(state, b)
-            xalglib.minqpsetstartingpoint(state, x0)
             xalglib.minqpsetbc(state, bndl, bndu)
 
             # Set scale of the parameters.
@@ -3410,44 +3511,27 @@ try:
             xalglib.minqpsetscale(state, s)
 
             #
-            # Solve problem with QuickQP solver.
+            # Solve problem with the sparse interior-point method (sparse IPM) solver.
             #
-            # This solver is intended for medium and large-scale problems with box
-            # constraints (general linear constraints are not supported).
+            # This solver is intended for large-scale sparse problems with box and linear
+            # constraints, but it will work on such a toy problem too.
             #
             # Default stopping criteria are used, Newton phase is active.
             #
-            xalglib.minqpsetalgoquickqp(state, 0.0, 0.0, 0.0, 0, True)
-            xalglib.minqpoptimize(state)
-            x, rep = xalglib.minqpresults(state)
-            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 4, "int")
-            _TestResult = _TestResult and doc_print_test(x, [2.5,2], "real_vector", 0.005)
-
-            #
-            # Solve problem with BLEIC-based QP solver.
-            #
-            # This solver is intended for problems with moderate (up to 50) number
-            # of general linear constraints and unlimited number of box constraints.
-            #
-            # Default stopping criteria are used.
-            #
-            xalglib.minqpsetalgobleic(state, 0.0, 0.0, 0.0, 0)
+            xalglib.minqpsetalgosparseipm(state, 0.0)
             xalglib.minqpoptimize(state)
             x, rep = xalglib.minqpresults(state)
             _TestResult = _TestResult and doc_print_test(x, [2.5,2], "real_vector", 0.005)
 
             #
-            # Solve problem with DENSE-AUL solver.
+            # Solve problem with dense IPM solver.
             #
-            # This solver is optimized for problems with up to several thousands of
-            # variables and large amount of general linear constraints. Problems with
-            # less than 50 general linear constraints can be efficiently solved with
-            # BLEIC, problems with box-only constraints can be solved with QuickQP.
-            # However, DENSE-AUL will work in any (including unconstrained) case.
+            # This solver is optimized for problems with dense linear constraints and/or
+            # dense quadratic term.
             #
             # Default stopping criteria are used.
             #
-            xalglib.minqpsetalgodenseaul(state, 1.0e-9, 1.0e+4, 5)
+            xalglib.minqpsetalgodenseipm(state, 0.0)
             xalglib.minqpoptimize(state)
             x, rep = xalglib.minqpresults(state)
             _TestResult = _TestResult and doc_print_test(x, [2.5,2], "real_vector", 0.005)
@@ -3476,12 +3560,17 @@ try:
             # Exact solution is [x0,x1] = [1.5,0.5]
             #
             # IMPORTANT: this solver minimizes  following  function:
+            #
             #     f(x) = 0.5*x'*A*x + b'*x.
+            #
             # Note that quadratic term has 0.5 before it. So if you want to minimize
             # quadratic function, you should rewrite it in such way that quadratic term
             # is multiplied by 0.5 too.
+            #
             # For example, our function is f(x)=x0^2+x1^2+..., but we rewrite it as 
+            #
             #     f(x) = 0.5*(2*x0^2+2*x1^2) + ....
+            #
             # and pass diag(2,2) as quadratic term - NOT diag(1,1)!
             #
             a = [[2,0],[0,2]]
@@ -3534,46 +3623,30 @@ try:
             xalglib.minqpsetscale(state, s)
 
             #
-            # Solve problem with BLEIC-based QP solver.
+            # Solve problem with the sparse interior-point method (sparse IPM) solver.
             #
-            # This solver is intended for problems with moderate (up to 50) number
-            # of general linear constraints and unlimited number of box constraints.
+            # This solver is intended for large-scale sparse problems with box and linear
+            # constraints, but it will work on such a toy problem too.
+            #
+            # Default stopping criteria are used, Newton phase is active.
+            #
+            xalglib.minqpsetalgosparseipm(state, 0.0)
+            xalglib.minqpoptimize(state)
+            x, rep = xalglib.minqpresults(state)
+            _TestResult = _TestResult and doc_print_test(x, [1.5,0.5], "real_vector", 0.005)
+
+            #
+            # Solve problem with dense IPM solver.
+            #
+            # This solver is optimized for problems with dense linear constraints and/or
+            # dense quadratic term.
             #
             # Default stopping criteria are used.
             #
-            xalglib.minqpsetalgobleic(state, 0.0, 0.0, 0.0, 0)
+            xalglib.minqpsetalgodenseipm(state, 0.0)
             xalglib.minqpoptimize(state)
             x, rep = xalglib.minqpresults(state)
-            _TestResult = _TestResult and doc_print_test(x, [1.500,0.500], "real_vector", 0.05)
-
-            #
-            # Solve problem with DENSE-AUL solver.
-            #
-            # This solver is optimized for problems with up to several thousands of
-            # variables and large amount of general linear constraints. Problems with
-            # less than 50 general linear constraints can be efficiently solved with
-            # BLEIC, problems with box-only constraints can be solved with QuickQP.
-            # However, DENSE-AUL will work in any (including unconstrained) case.
-            #
-            # Default stopping criteria are used.
-            #
-            xalglib.minqpsetalgodenseaul(state, 1.0e-9, 1.0e+4, 5)
-            xalglib.minqpoptimize(state)
-            x, rep = xalglib.minqpresults(state)
-            _TestResult = _TestResult and doc_print_test(x, [1.500,0.500], "real_vector", 0.05)
-
-            #
-            # Solve problem with QuickQP solver.
-            #
-            # This solver is intended for medium and large-scale problems with box
-            # constraints, and...
-            #
-            # ...Oops! It does not support general linear constraints, -5 returned as completion code!
-            #
-            xalglib.minqpsetalgoquickqp(state, 0.0, 0.0, 0.0, 0, True)
-            xalglib.minqpoptimize(state)
-            x, rep = xalglib.minqpresults(state)
-            _TestResult = _TestResult and doc_print_test(rep.terminationtype, -5, "int")
+            _TestResult = _TestResult and doc_print_test(x, [1.5,0.5], "real_vector", 0.005)
             _TestResult = _TestResult and (_spoil_scenario==-1)
         except (RuntimeError, ValueError):
             _TestResult = _TestResult and (_spoil_scenario!=-1)
@@ -3661,15 +3734,27 @@ try:
             xalglib.minqpsetscale(state, s)
 
             #
-            # Solve problem with BLEIC-based QP solver.
+            # Solve problem with the sparse interior-point method (sparse IPM) solver.
             #
-            # This solver is intended for problems with moderate (up to 50) number
-            # of general linear constraints and unlimited number of box constraints.
-            # It also supports sparse problems.
+            # This solver is intended for large-scale sparse problems with box and linear
+            # constraints, but it will work on such a toy problem too.
+            #
+            # Default stopping criteria are used, Newton phase is active.
+            #
+            xalglib.minqpsetalgosparseipm(state, 0.0)
+            xalglib.minqpoptimize(state)
+            x, rep = xalglib.minqpresults(state)
+            _TestResult = _TestResult and doc_print_test(x, [3,2], "real_vector", 0.005)
+
+            #
+            # Solve problem with dense IPM solver.
+            #
+            # This solver is optimized for problems with dense linear constraints and/or
+            # dense quadratic term.
             #
             # Default stopping criteria are used.
             #
-            xalglib.minqpsetalgobleic(state, 0.0, 0.0, 0.0, 0)
+            xalglib.minqpsetalgodenseipm(state, 0.0)
             xalglib.minqpoptimize(state)
             x, rep = xalglib.minqpresults(state)
             _TestResult = _TestResult and doc_print_test(x, [3,2], "real_vector", 0.005)
@@ -3697,9 +3782,9 @@ try:
             # subject to constraints x0,x1 in [1.0,2.0]
             # Exact solution is [x0,x1] = [2,2].
             #
-            # Non-convex problems are harded to solve than convex ones, and they
-            # may have more than one local minimum. However, ALGLIB solves may deal
-            # with such problems (altough they do not guarantee convergence to
+            # Non-convex problems are harder to solve than convex ones, and they
+            # may have more than one local minimum. However, ALGLIB solvers may deal
+            # with such problems (although they do not guarantee convergence to
             # global minimum).
             #
             # IMPORTANT: this solver minimizes  following  function:
@@ -3769,7 +3854,6 @@ try:
             #
             # This solver is intended for problems with moderate (up to 50) number
             # of general linear constraints and unlimited number of box constraints.
-            #
             # It may solve non-convex problems as long as they are bounded from
             # below under constraints.
             #
@@ -3783,15 +3867,11 @@ try:
             #
             # Solve problem with DENSE-AUL solver.
             #
-            # This solver is optimized for problems with up to several thousands of
+            # This solver is optimized for nonconvex problems with up to several thousands of
             # variables and large amount of general linear constraints. Problems with
             # less than 50 general linear constraints can be efficiently solved with
             # BLEIC, problems with box-only constraints can be solved with QuickQP.
             # However, DENSE-AUL will work in any (including unconstrained) case.
-            #
-            # Algorithm convergence is guaranteed only for convex case, but you may
-            # expect that it will work for non-convex problems too (because near the
-            # solution they are locally convex).
             #
             # Default stopping criteria are used.
             #
@@ -3845,12 +3925,35 @@ try:
             #     f0(x0,x1) = 10*(x0+3)^2
             #     f1(x0,x1) = (x1-3)^2
             #
-            # using "V" mode of the Levenberg-Marquardt optimizer.
+            # using "V" mode of the Levenberg-Marquardt optimizer (function values only,
+            # no Jacobian information). The optimization algorithm uses function vector
             #
-            # Optimization algorithm uses:
-            # * function vector f[] = {f1,f2}
+            #     f[] = {f1,f2}
             #
             # No other information (Jacobian, gradient, etc.) is needed.
+            #
+            # IMPORTANT: the  MINLM  optimizer  supports  parallel parallel numerical
+            #            differentiation  ('callback   parallelism').  This  feature,
+            #            which  is present  in  commercial  ALGLIB  editions, greatly
+            #            accelerates optimization with numerical  differentiation  of
+            #            an expensive target functions.
+            #
+            #            Callback parallelism is usually  beneficial when computing a
+            #            numerical gradient requires more than several  milliseconds.
+            #            This particular  example,  of  course,  is  not  suited  for
+            #            callback parallelism.
+            #
+            #            If  you  solve  a  curve fitting problem, i.e. the  function
+            #            vector is actually the same function computed  at  different
+            #            points of a data points space, then it may be better to  use
+            #            an LSFIT curve fitting solver, which offers more fine-grained
+            #            parallelism due to knowledge of the  problem  structure.  In
+            #            particular, it can accelerate both numerical differentiation
+            #            and problems with user-supplied gradients.
+            #
+            #            See ALGLIB Reference Manual, 'Working with commercial version'
+            #            section,  and  comments  on   minlmoptimize()  function  for
+            #            more information.
             #
             x = [0,0]
             if _spoil_scenario==0:
@@ -3924,11 +4027,32 @@ try:
             #     f0(x0,x1) = 10*(x0+3)^2
             #     f1(x0,x1) = (x1-3)^2
             #
-            # using "VJ" mode of the Levenberg-Marquardt optimizer.
+            # using "VJ" mode of the Levenberg-Marquardt optimizer.  The optimization
+            # algorithm uses the  function  vector  f[] = {f1,f2}  and  the  Jacobian
+            # matrix J = {dfi/dxj}, both of them provided by user.
             #
-            # Optimization algorithm uses:
-            # * function vector f[] = {f1,f2}
-            # * Jacobian matrix J = {dfi/dxj}.
+            # IMPORTANT: the   MINLM   optimizer  supports     parallel     numerical
+            #            differentiation  ('callback   parallelism').  This  feature,
+            #            which  is present  in  commercial  ALGLIB  editions, greatly
+            #            accelerates optimization with numerical  differentiation  of
+            #            an expensive target functions.
+            #
+            #            Callback parallelism is usually  beneficial when computing a
+            #            numerical gradient requires more than several  milliseconds.
+            #            This particular  example,  of  course,  is  not  suited  for
+            #            callback parallelism.
+            #
+            #            If  you  solve  a  curve fitting problem, i.e. the  function
+            #            vector is actually the same function computed  at  different
+            #            points of a data points space, then it may be better to  use
+            #            an LSFIT curve fitting solver, which offers more fine-grained
+            #            parallelism due to knowledge of the  problem  structure.  In
+            #            particular, it can accelerate both numerical differentiation
+            #            and problems with user-supplied gradients.
+            #
+            #            See ALGLIB Reference Manual, 'Working with commercial version'
+            #            section,  and  comments  on   minlmoptimize()  function  for
+            #            more information.
             #
             x = [0,0]
             if _spoil_scenario==0:
@@ -3964,21 +4088,6 @@ try:
             xalglib.minlmsetscale(state, s)
 
             #
-            # Activate OptGuard integrity checking.
-            #
-            # OptGuard monitor helps to detect erroneous analytic Jacobian,
-            # i.e. one inconsistent with actual change in the target function.
-            #
-            # OptGuard is essential for early prototyping stages because such
-            # problems often result in premature termination of the optimizer
-            # which is really hard to distinguish from the correct termination.
-            #
-            # IMPORTANT: JACOBIAN VERIFICATION IS PERFORMED BY MEANS OF NUMERICAL
-            #            DIFFERENTIATION, THUS DO NOT USE IT IN PRODUCTION CODE!
-            #
-            xalglib.minlmoptguardgradient(state, 0.001)
-
-            #
             # Optimize
             #
             xalglib.minlmoptimize_vj(state, function1_fvec, function1_jac)
@@ -3988,19 +4097,6 @@ try:
             #
             x, rep = xalglib.minlmresults(state)
             _TestResult = _TestResult and doc_print_test(x, [-3,+3], "real_vector", 0.005)
-
-            #
-            # Check that OptGuard did not report errors
-            #
-            # NOTE: want to test OptGuard? Try breaking the Jacobian - say, add
-            #       1.0 to some of its components.
-            #
-            # NOTE: unfortunately, specifics of LM optimization do not allow us
-            #       to detect errors like nonsmoothness (like we do with other
-            #       optimizers). So, only Jacobian correctness is verified.
-            #
-            ogrep = xalglib.minlmoptguardresults(state)
-            _TestResult = _TestResult and doc_print_test(ogrep.badgradsuspected, False, "bool")
             _TestResult = _TestResult and (_spoil_scenario==-1)
         except (RuntimeError, ValueError):
             _TestResult = _TestResult and (_spoil_scenario!=-1)
@@ -4008,58 +4104,6 @@ try:
             raise
     if not _TestResult:
         sys.stdout.write("minlm_d_vj                       FAILED\n")
-        sys.stdout.flush()
-    _TotalResult = _TotalResult and _TestResult
-
-
-    #
-    # TEST minlm_d_fgh
-    #      Nonlinear Hessian-based optimization for general functions
-    #
-    _TestResult = True
-    for _spoil_scenario in range(-1,6):
-        try:
-            #
-            # This example demonstrates minimization of F(x0,x1) = 100*(x0+3)^4+(x1-3)^4
-            # using "FGH" mode of the Levenberg-Marquardt optimizer.
-            #
-            # F is treated like a monolitic function without internal structure,
-            # i.e. we do NOT represent it as a sum of squares.
-            #
-            # Optimization algorithm uses:
-            # * function value F(x0,x1)
-            # * gradient G={dF/dxi}
-            # * Hessian H={d2F/(dxi*dxj)}
-            #
-            x = [0,0]
-            if _spoil_scenario==0:
-                spoil_vec_by_nan(x)
-            if _spoil_scenario==1:
-                spoil_vec_by_posinf(x)
-            if _spoil_scenario==2:
-                spoil_vec_by_neginf(x)
-            epsx = 0.0000000001
-            if _spoil_scenario==3:
-                epsx = float("nan")
-            if _spoil_scenario==4:
-                epsx = float("+inf")
-            if _spoil_scenario==5:
-                epsx = float("-inf")
-            maxits = 0
-
-            state = xalglib.minlmcreatefgh(x)
-            xalglib.minlmsetcond(state, epsx, maxits)
-            xalglib.minlmoptimize_fgh(state, function1_func, function1_grad, function1_hess)
-            x, rep = xalglib.minlmresults(state)
-
-            _TestResult = _TestResult and doc_print_test(x, [-3,+3], "real_vector", 0.005)
-            _TestResult = _TestResult and (_spoil_scenario==-1)
-        except (RuntimeError, ValueError):
-            _TestResult = _TestResult and (_spoil_scenario!=-1)
-        except:
-            raise
-    if not _TestResult:
-        sys.stdout.write("minlm_d_fgh                      FAILED\n")
         sys.stdout.flush()
     _TotalResult = _TotalResult and _TestResult
 
@@ -4077,17 +4121,37 @@ try:
             #     f0(x0,x1) = 10*(x0+3)^2
             #     f1(x0,x1) = (x1-3)^2
             #
-            # with boundary constraints
+            # with box constraints
             #
             #     -1 <= x0 <= +1
             #     -1 <= x1 <= +1
             #
-            # using "V" mode of the Levenberg-Marquardt optimizer.
+            # using "V" mode of the Levenberg-Marquardt optimizer.  The  optimization
+            # algorithm uses function  vector  f[] = {f1,f2}.  No  other  information
+            # (Jacobian, gradient, etc.) is needed.
             #
-            # Optimization algorithm uses:
-            # * function vector f[] = {f1,f2}
+            # IMPORTANT: the  MINLM  optimizer  supports  parallel parallel numerical
+            #            differentiation  ('callback   parallelism').  This  feature,
+            #            which  is present  in  commercial  ALGLIB  editions, greatly
+            #            accelerates optimization with numerical  differentiation  of
+            #            an expensive target functions.
             #
-            # No other information (Jacobian, gradient, etc.) is needed.
+            #            Callback parallelism is usually  beneficial when computing a
+            #            numerical gradient requires more than several  milliseconds.
+            #            This particular  example,  of  course,  is  not  suited  for
+            #            callback parallelism.
+            #
+            #            If  you  solve  a  curve fitting problem, i.e. the  function
+            #            vector is actually the same function computed  at  different
+            #            points of a data points space, then it may be better to  use
+            #            an LSFIT curve fitting solver, which offers more fine-grained
+            #            parallelism due to knowledge of the  problem  structure.  In
+            #            particular, it can accelerate both numerical differentiation
+            #            and problems with user-supplied gradients.
+            #
+            #            See ALGLIB Reference Manual, 'Working with commercial version'
+            #            section,  and  comments  on   minlmoptimize()  function  for
+            #            more information.
             #
             x = [0,0]
             if _spoil_scenario==0:
@@ -4204,7 +4268,7 @@ try:
             # restart optimizer using minlmrestartfrom()
             #
             # we can use different starting point, different function,
-            # different stopping conditions, but problem size
+            # different stopping conditions, but the problem size
             # must remain unchanged.
             #
             x = [4,4]
@@ -4225,82 +4289,6 @@ try:
             raise
     if not _TestResult:
         sys.stdout.write("minlm_d_restarts                 FAILED\n")
-        sys.stdout.flush()
-    _TotalResult = _TotalResult and _TestResult
-
-
-    #
-    # TEST minlm_t_1
-    #      Nonlinear least squares optimization, FJ scheme (obsolete, but supported)
-    #
-    _TestResult = True
-    for _spoil_scenario in range(-1,6):
-        try:
-            x = [0,0]
-            if _spoil_scenario==0:
-                spoil_vec_by_nan(x)
-            if _spoil_scenario==1:
-                spoil_vec_by_posinf(x)
-            if _spoil_scenario==2:
-                spoil_vec_by_neginf(x)
-            epsx = 0.0000000001
-            if _spoil_scenario==3:
-                epsx = float("nan")
-            if _spoil_scenario==4:
-                epsx = float("+inf")
-            if _spoil_scenario==5:
-                epsx = float("-inf")
-            maxits = 0
-            state = xalglib.minlmcreatefj(2, x)
-            xalglib.minlmsetcond(state, epsx, maxits)
-            xalglib.minlmoptimize_fj(state, function1_func, function1_jac)
-            x, rep = xalglib.minlmresults(state)
-            _TestResult = _TestResult and doc_print_test(x, [-3,+3], "real_vector", 0.005)
-            _TestResult = _TestResult and (_spoil_scenario==-1)
-        except (RuntimeError, ValueError):
-            _TestResult = _TestResult and (_spoil_scenario!=-1)
-        except:
-            raise
-    if not _TestResult:
-        sys.stdout.write("minlm_t_1                        FAILED\n")
-        sys.stdout.flush()
-    _TotalResult = _TotalResult and _TestResult
-
-
-    #
-    # TEST minlm_t_2
-    #      Nonlinear least squares optimization, FGJ scheme (obsolete, but supported)
-    #
-    _TestResult = True
-    for _spoil_scenario in range(-1,6):
-        try:
-            x = [0,0]
-            if _spoil_scenario==0:
-                spoil_vec_by_nan(x)
-            if _spoil_scenario==1:
-                spoil_vec_by_posinf(x)
-            if _spoil_scenario==2:
-                spoil_vec_by_neginf(x)
-            epsx = 0.0000000001
-            if _spoil_scenario==3:
-                epsx = float("nan")
-            if _spoil_scenario==4:
-                epsx = float("+inf")
-            if _spoil_scenario==5:
-                epsx = float("-inf")
-            maxits = 0
-            state = xalglib.minlmcreatefgj(2, x)
-            xalglib.minlmsetcond(state, epsx, maxits)
-            xalglib.minlmoptimize_fgj(state, function1_func, function1_grad, function1_jac)
-            x, rep = xalglib.minlmresults(state)
-            _TestResult = _TestResult and doc_print_test(x, [-3,+3], "real_vector", 0.005)
-            _TestResult = _TestResult and (_spoil_scenario==-1)
-        except (RuntimeError, ValueError):
-            _TestResult = _TestResult and (_spoil_scenario!=-1)
-        except:
-            raise
-    if not _TestResult:
-        sys.stdout.write("minlm_t_2                        FAILED\n")
         sys.stdout.flush()
     _TotalResult = _TotalResult and _TestResult
 
@@ -4639,6 +4627,158 @@ try:
 
 
     #
+    # TEST mindf_gdemo_auto
+    #      Nonlinearly constrained differential evolution
+    #
+    _TestResult = True
+    for _spoil_scenario in range(-1,18):
+        try:
+            #
+            # This example demonstrates minimization of
+            #
+            #     f(x0,x1) = x0+x1
+            #
+            # subject to nonlinear constraints
+            #
+            #    x0^2 + x1^2 - 1 <= 0
+            #    x2-exp(x0) = 0
+            #
+            x0 = [0,0,0]
+            if _spoil_scenario==0:
+                spoil_vec_by_nan(x0)
+            if _spoil_scenario==1:
+                spoil_vec_by_posinf(x0)
+            if _spoil_scenario==2:
+                spoil_vec_by_neginf(x0)
+            s = [1,1,1]
+            if _spoil_scenario==3:
+                spoil_vec_by_nan(s)
+            if _spoil_scenario==4:
+                spoil_vec_by_posinf(s)
+            if _spoil_scenario==5:
+                spoil_vec_by_neginf(s)
+
+            #
+            # Create optimizer object
+            #
+            state = xalglib.mindfcreate(x0)
+            xalglib.mindfsetscale(state, s)
+
+            #
+            # Choose  one  of  nonlinear  programming  solvers  supported  by  MINDF
+            # optimizer.
+            #
+            # This example shows how to use GDEMO (Generalized Differential Evolution,
+            # MultiObjective) solver working in a single-objective mode. This solver
+            # uses an adaptive choice of DE parameters (crossover, weight and strategy),
+            # automatically choosing the most appropriate settings during the optimization.
+            #
+            # Thus, the only tunable parameters are iterations count and population size.
+            # The latter one can be omitted, the solver will use a default size in this
+            # case.
+            #
+            maxits = 200
+            xalglib.mindfsetalgogdemo(state, maxits)
+
+            #
+            # Set nonlinear constraints.
+            #
+            # ALGLIB  supports  any  combination  of  box,  linear  and  nonlinear
+            # constraints. This specific example uses only nonlinear ones.
+            #
+            # Since  version  4.01,  ALGLIB  supports  the  most  general  form of
+            # nonlinear constraints: two-sided   constraints  NL<=C(x)<=NU,   with
+            # elements being possibly infinite (means that this specific bound  is
+            # ignored). It includes equality constraints,  upper/lower  inequality
+            # constraints, range constraints. In particular, a pair of constraints
+            #
+            #        x2-exp(x0)       = 0
+            #        x0^2 + x1^2 - 1 <= 0
+            #
+            # can be specified by passing NL=[0,-INF], NU=[0,0] to mindfsetnlc2().
+            # Constraining functions themselves are passed as a part  of a problem
+            # target vector (see below).
+            #
+            #
+            # Unlike smooth optimizers like SQP which naturally include linear and
+            # nonlinear constraints into the  algorithm,  derivative-free  methods
+            # often need special strategies to deal with them, with each  strategy
+            # having its own limitations:
+            #
+            # * an L2 penalty,  which  has  good  global  constraint   enforcement
+            #   properties, but usually allows some moderate constraint violation
+            #
+            # * an L1 penalty, which has potential to enforce constraints exactly,
+            #   but has somewhat weaker ability to move iterations from  far  away
+            #   points closer to the feasible area. It also  has  somewhat  harder
+            #   numerical properties, needing more iterations to converge.
+            #
+            # * a combined L1/L2 penalty, which is a good compromise
+            #
+            # The code below sets constraints bounds and tells the solver  to  use
+            # a mixed L1/L2 penalized strategy.
+            #
+            # NOTE: box constraints require no special handling.
+            #
+            nl = [0,-float("inf")]
+            if _spoil_scenario==6:
+                spoil_vec_by_nan(nl)
+            if _spoil_scenario==7:
+                spoil_vec_by_adding_element(nl)
+            if _spoil_scenario==8:
+                spoil_vec_by_deleting_element(nl)
+            nu = [0,0]
+            if _spoil_scenario==9:
+                spoil_vec_by_nan(nu)
+            if _spoil_scenario==10:
+                spoil_vec_by_adding_element(nu)
+            if _spoil_scenario==11:
+                spoil_vec_by_deleting_element(nu)
+            rho1 = 5
+            if _spoil_scenario==12:
+                rho1 = float("nan")
+            if _spoil_scenario==13:
+                rho1 = float("+inf")
+            if _spoil_scenario==14:
+                rho1 = float("-inf")
+            rho2 = 5
+            if _spoil_scenario==15:
+                rho2 = float("nan")
+            if _spoil_scenario==16:
+                rho2 = float("+inf")
+            if _spoil_scenario==17:
+                rho2 = float("-inf")
+            xalglib.mindfsetnlc2(state, nl, nu)
+            xalglib.mindfsetgdemopenalty(state, rho1, rho2)
+
+            #
+            # Optimize and test results.
+            #
+            # The optimizer object accepts vector function  with  its  first  component
+            # being a target and subsequent components being nonlinear constraints.
+            #
+            # So, our vector function has the following form
+            #
+            #     {f0,f1,f2} = { x0+x1 , x2-exp(x0) , x0^2+x1^2-1 }
+            #
+            # with f0 being target function, f1 being equality constraint "f1=0",
+            # f2 being inequality constraint "f2<=0".
+            #
+            xalglib.mindfoptimize_v(state, nlcfunc2_fvec)
+            x1, rep = xalglib.mindfresults(state)
+            _TestResult = _TestResult and doc_print_test(x1, [-0.70710,-0.70710,0.49306], "real_vector", 0.005)
+            _TestResult = _TestResult and (_spoil_scenario==-1)
+        except (RuntimeError, ValueError):
+            _TestResult = _TestResult and (_spoil_scenario!=-1)
+        except:
+            raise
+    if not _TestResult:
+        sys.stdout.write("mindf_gdemo_auto                 FAILED\n")
+        sys.stdout.flush()
+    _TotalResult = _TotalResult and _TestResult
+
+
+    #
     # TEST minlp_basic
     #      Basic linear programming example
     #
@@ -4757,11 +4897,157 @@ try:
 
 
     #
+    # TEST nls_derivative_free
+    #      Nonlinear least squares optimization using derivative-free algorithms
+    #
+    _TestResult = True
+    for _spoil_scenario in range(-1,13):
+        try:
+            #
+            # This example demonstrates minimization of F(x0,x1) = f0^2+f1^2, where 
+            #
+            #     f0(x0,x1) = 10*(x0+3)^2
+            #     f1(x0,x1) = (x1-3)^2
+            #
+            # subject to box constraints
+            #
+            #     -1 <= x0 <= +1
+            #     -1 <= x1 <= +1
+            #
+            # using DFO mode of the NLS optimizer.
+            #
+            # IMPORTANT: the  NLS  optimizer   supports   parallel  model  evaluation
+            #            ('callback parallelism'). This feature, which  is present in
+            #            commercial ALGLIB editions, greatly accelerates optimization
+            #            when  using  a  solver  which  issues  batch  requests, i.e.
+            #            multiple requests  for  target values, which can be computed
+            #            independently by different threads.
+            #
+            #            Callback parallelism is usually  beneficial when  processing
+            #            a  batch  request  requires  more than several milliseconds.
+            #            This particular  example,  of  course,  is  not  suited  for
+            #            callback parallelism.
+            #
+            #            It  also  requires  the  solver  which  issues  requests  in
+            #            convenient batches, e.g. 2PS solver.
+            #
+            #            See ALGLIB Reference Manual, 'Working with commercial version'
+            #            section,  and  comments  on  nlsoptimize() function for more
+            #            information.
+            #
+            x = [0,0]
+            if _spoil_scenario==0:
+                spoil_vec_by_nan(x)
+            if _spoil_scenario==1:
+                spoil_vec_by_posinf(x)
+            if _spoil_scenario==2:
+                spoil_vec_by_neginf(x)
+            s = [1,1]
+            if _spoil_scenario==3:
+                spoil_vec_by_nan(s)
+            if _spoil_scenario==4:
+                spoil_vec_by_posinf(s)
+            if _spoil_scenario==5:
+                spoil_vec_by_neginf(s)
+            bndl = [-1,-1]
+            if _spoil_scenario==6:
+                spoil_vec_by_nan(bndl)
+            if _spoil_scenario==7:
+                spoil_vec_by_deleting_element(bndl)
+            bndu = [+1,+1]
+            if _spoil_scenario==8:
+                spoil_vec_by_nan(bndu)
+            if _spoil_scenario==9:
+                spoil_vec_by_deleting_element(bndu)
+            epsx = 0.0000001
+            if _spoil_scenario==10:
+                epsx = float("nan")
+            if _spoil_scenario==11:
+                epsx = float("+inf")
+            if _spoil_scenario==12:
+                epsx = float("-inf")
+            maxits = 0
+
+            #
+            # Create optimizer, tell it to:
+            # * use derivative-free mode
+            # * use unit scale for all variables (s is a unit vector)
+            # * stop after short enough step (less than epsx)
+            #
+            state = xalglib.nlscreatedfo(2, x)
+            xalglib.nlssetcond(state, epsx, maxits)
+            xalglib.nlssetscale(state, s)
+            xalglib.nlssetbc(state, bndl, bndu)
+
+            #
+            # Choose a derivative-free nonlinear least squares algorithm. ALGLIB
+            # supports the following solvers:
+            #
+            # * DFO-LSA  - a modified version of DFO-LS (Cartis, Fiala, Marteau,
+            #   Roberts), with "A" standing for ALGLIB in order to distinguish it
+            #   from the original version. This algorithm achieves the smallest
+            #   function evaluations count, but has relatively high iteration
+            #   overhead and no callback parallelism potential (it issues target
+            #   evaluation requests one by one, so they can not be parallelized).
+            #   Recommended for expensive targets with no parallelism support.
+            #
+            # * 2PS (two-point stencil) - an easily parallelized algorithm
+            #   developed by ALGLIB Project. It needs about 3x-4x more target
+            #   evaluations than DFO-LSA (the ratio has no strong dependence on
+            #   the problem size), however it issues target evaluation requests
+            #   in large batches, so they can be computed in parallel. Additionally
+            #   it has low iteration overhead, so it can be better suited for
+            #   problems with cheap targets that DFO-LSA.
+            #
+            # Both solvers demonstrate quadratic convergence similarly to the
+            # Levenberg-Marquardt method.
+            #
+            # The summary is:
+            # * expensive target, no parallelism => DFO-LSA 
+            # * expensive target, parallel callbacks => 2PS
+            # * inexpensive target => most likely 2PS, maybe DFO-LSA
+            #
+            # The code below sets the algorithm to be DFO-LSA, then switches
+            # it to 2PS.
+            #
+            xalglib.nlssetalgodfolsa(state)
+            xalglib.nlssetalgo2ps(state)
+
+            #
+            # Solve the problem.
+            #
+            # The code below does not use parallelism. If you want to activate
+            # callback parallelism, use commercial edition of ALGLIB and pass
+            # alglib::parallelcallbacks as an additional parameter to nlsoptimize().
+            #
+            # Callback parallelism is intended for expensive problems where one
+            # batch (~N target evaluations) takes tens and hundreds of milliseconds
+            # to compute.
+            #
+            xalglib.nlsoptimize_v(state, function1_fvec)
+
+            #
+            # Test optimization results
+            #
+            x, rep = xalglib.nlsresults(state)
+            _TestResult = _TestResult and doc_print_test(x, [-1,+1], "real_vector", 0.005)
+            _TestResult = _TestResult and (_spoil_scenario==-1)
+        except (RuntimeError, ValueError):
+            _TestResult = _TestResult and (_spoil_scenario!=-1)
+        except:
+            raise
+    if not _TestResult:
+        sys.stdout.write("nls_derivative_free              FAILED\n")
+        sys.stdout.flush()
+    _TotalResult = _TotalResult and _TestResult
+
+
+    #
     # TEST minnlc_d_inequality
     #      Nonlinearly constrained optimization (inequality constraints)
     #
     _TestResult = True
-    for _spoil_scenario in range(-1,9):
+    for _spoil_scenario in range(-1,15):
         try:
             #
             # This example demonstrates minimization of
@@ -4772,9 +5058,24 @@ try:
             #
             #    x0>=0, x1>=0
             #
-            # and nonlinear inequality constraint
+            # and a nonlinear inequality constraint
             #
             #    x0^2 + x1^2 - 1 <= 0
+            #
+            # IMPORTANT: the   MINNLC   optimizer    supports    parallel   numerical
+            #            differentiation  ('callback   parallelism').  This  feature,
+            #            which  is present  in  commercial  ALGLIB  editions, greatly
+            #            accelerates optimization with numerical  differentiation  of
+            #            an expensive target functions.
+            #
+            #            Callback parallelism is usually  beneficial when computing a
+            #            numerical gradient requires more than several  milliseconds.
+            #            This particular  example,  of  course,  is  not  suited  for
+            #            callback parallelism.
+            #
+            #            See ALGLIB Reference Manual, 'Working with commercial version'
+            #            section,  and  comments  on   minlmoptimize()  function  for
+            #            more information.
             #
             x0 = [0,0]
             if _spoil_scenario==0:
@@ -4798,8 +5099,6 @@ try:
             if _spoil_scenario==8:
                 epsx = float("-inf")
             maxits = 0
-            bndl = [0,0]
-            bndu = [float("inf"),float("inf")]
 
             #
             # Create optimizer object and tune its settings:
@@ -4814,83 +5113,76 @@ try:
             xalglib.minnlcsetscale(state, s)
 
             #
-            # Choose one of the nonlinear programming solvers supported by minnlc
-            # optimizer:
-            # * SQP - sequential quadratic programming NLP solver
-            # * AUL - augmented Lagrangian NLP solver
-            # * SLP - successive linear programming NLP solver
+            # Choose  one  of  nonlinear  programming  solvers  supported  by  MINNLC
+            # optimizer.
             #
-            # Different solvers have different properties:
-            # * SQP needs less function evaluations than any other solver, but it
-            #   has much higher iteration cost than other solvers (a QP subproblem
-            #   has to be solved during each step)
-            # * AUL solver has cheaper iterations, but needs more target function
-            #   evaluations
-            # * SLP is the most robust solver provided by ALGLIB, but it performs
-            #   order of magnitude more iterations than SQP.
+            # As of ALGLIB 4.01, the default (and recommended)  option  is to  use  a
+            # large-scale filter-based SQP solver, which can utilize sparsity of  the
+            # problem and uses a limited-memory BFGS update in order to  be  able  to
+            # deal with thousands of variables.
             #
-            # In the code below we set solver to be AUL but then override it with SLP,
-            # and then with SQP, so the effective choice is to use SLP. We recommend
-            # you to use SQP at least for early prototyping stages, and then switch
-            # to AUL if possible.
+            # Other options include:
+            # * SQP-BFGS (the same filter SQP solver relying on a dense BFGS  update,
+            #   not intended for anything beyond 100 variables)
+            # * AUL2 solver (a large-scale augmented  Lagrangian  solver for problems
+            #   with  cheap  target  functions)
+            # * SL1QP and SL1QP-BFGS legacy solvers which are similar to filter-based
+            #   SQP/SQP-BFGS, but use a less  robust  L1  merit  function  to  handle
+            #   constraints
+            # * SLP a legacy  sequential  linear  programming  solver,  scales  badly
+            #   beyond several tens of variables).
             #
-            rho = 1000.0
-            outerits = 5
-            xalglib.minnlcsetalgoaul(state, rho, outerits)
-            xalglib.minnlcsetalgoslp(state)
             xalglib.minnlcsetalgosqp(state)
 
             #
             # Set constraints:
             #
-            # 1. boundary constraints are passed with minnlcsetbc() call
+            # 1. box constraints are passed with minnlcsetbc() call. The  solver also
+            #    supports linear constraints with minnlcsetlc().
             #
-            # 2. nonlinear constraints are more tricky - you can not "pack" general
-            #    nonlinear function into double precision array. That's why
-            #    minnlcsetnlc() does not accept constraints itself - only constraint
-            #    counts are passed: first parameter is number of equality constraints,
-            #    second one is number of inequality constraints.
+            # 2. nonlinear constraints are more tricky - you can not "pack" a general
+            #    nonlinear  function  into  a  double  precision  array.  That's  why
+            #    minnlcsetnlc2() does not accept constraints itself - only constraint
+            #    bounds are passed.
             #
-            #    As for constraining functions - these functions are passed as part
-            #    of problem Jacobian (see below).
+            #    Since  version  4.01,  ALGLIB  supports  the  most  general  form of
+            #    nonlinear constraints: two-sided   constraints  NL<=C(x)<=NU,   with
+            #    elements being possibly infinite (means that this specific bound  is
+            #    ignored). It includes equality constraints,  upper/lower  inequality
+            #    constraints, range constraints. In particular, the constraint
             #
-            # NOTE: MinNLC optimizer supports arbitrary combination of boundary, general
-            #       linear and general nonlinear constraints. This example does not
-            #       show how to work with general linear constraints, but you can
-            #       easily find it in documentation on minnlcsetlc() function.
+            #        x0^2 + x1^2 - 1 <= 0
             #
+            #    can be specified by passing NL=[-INF], NU=[0] to minnlcsetnlc2().
+            #
+            #    Constraining functions themselves are passed as part  of  a  problem
+            #    Jacobian (see below).
+            #
+            bndl = [0,0]
+            bndu = [float("inf"),float("inf")]
+            nl = [-float("inf")]
+            if _spoil_scenario==9:
+                spoil_vec_by_nan(nl)
+            if _spoil_scenario==10:
+                spoil_vec_by_adding_element(nl)
+            if _spoil_scenario==11:
+                spoil_vec_by_deleting_element(nl)
+            nu = [0]
+            if _spoil_scenario==12:
+                spoil_vec_by_nan(nu)
+            if _spoil_scenario==13:
+                spoil_vec_by_adding_element(nu)
+            if _spoil_scenario==14:
+                spoil_vec_by_deleting_element(nu)
             xalglib.minnlcsetbc(state, bndl, bndu)
-            xalglib.minnlcsetnlc(state, 0, 1)
-
-            #
-            # Activate OptGuard integrity checking.
-            #
-            # OptGuard monitor helps to catch common coding and problem statement
-            # issues, like:
-            # * discontinuity of the target/constraints (C0 continuity violation)
-            # * nonsmoothness of the target/constraints (C1 continuity violation)
-            # * erroneous analytic Jacobian, i.e. one inconsistent with actual
-            #   change in the target/constraints
-            #
-            # OptGuard is essential for early prototyping stages because such
-            # problems often result in premature termination of the optimizer
-            # which is really hard to distinguish from the correct termination.
-            #
-            # IMPORTANT: GRADIENT VERIFICATION IS PERFORMED BY MEANS OF NUMERICAL
-            #            DIFFERENTIATION, THUS DO NOT USE IT IN PRODUCTION CODE!
-            #
-            #            Other OptGuard checks add moderate overhead, but anyway
-            #            it is better to turn them off when they are not needed.
-            #
-            xalglib.minnlcoptguardsmoothness(state)
-            xalglib.minnlcoptguardgradient(state, 0.001)
+            xalglib.minnlcsetnlc2(state, nl, nu)
 
             #
             # Optimize and test results.
             #
             # Optimizer object accepts vector function and its Jacobian, with first
             # component (Jacobian row) being target function, and next components
-            # (Jacobian rows) being nonlinear equality and inequality constraints.
+            # (Jacobian rows) being nonlinear constraints.
             #
             # So, our vector function has form
             #
@@ -4903,23 +5195,11 @@ try:
             #         [ 2*x0  2*x1 ]
             #
             # with f0 being target function, f1 being constraining function. Number
-            # of equality/inequality constraints is specified by minnlcsetnlc(),
-            # with equality ones always being first, inequality ones being last.
+            # of equality/inequality constraints is specified by minnlcsetnlc2().
             #
             xalglib.minnlcoptimize_j(state, nlcfunc1_jac)
             x1, rep = xalglib.minnlcresults(state)
             _TestResult = _TestResult and doc_print_test(x1, [1.0000,0.0000], "real_vector", 0.005)
-
-            #
-            # Check that OptGuard did not report errors
-            #
-            # NOTE: want to test OptGuard? Try breaking the Jacobian - say, add
-            #       1.0 to some of its components.
-            #
-            ogrep = xalglib.minnlcoptguardresults(state)
-            _TestResult = _TestResult and doc_print_test(ogrep.badgradsuspected, False, "bool")
-            _TestResult = _TestResult and doc_print_test(ogrep.nonc0suspected, False, "bool")
-            _TestResult = _TestResult and doc_print_test(ogrep.nonc1suspected, False, "bool")
             _TestResult = _TestResult and (_spoil_scenario==-1)
         except (RuntimeError, ValueError):
             _TestResult = _TestResult and (_spoil_scenario!=-1)
@@ -4936,7 +5216,7 @@ try:
     #      Nonlinearly constrained optimization (equality constraints)
     #
     _TestResult = True
-    for _spoil_scenario in range(-1,9):
+    for _spoil_scenario in range(-1,15):
         try:
             #
             # This example demonstrates minimization of
@@ -4947,7 +5227,22 @@ try:
             #
             #    x0^2 + x1^2 - 1 = 0
             #
-            x0 = [0,0]
+            # IMPORTANT: the   MINNLC   optimizer    supports    parallel   numerical
+            #            differentiation  ('callback   parallelism').  This  feature,
+            #            which  is present  in  commercial  ALGLIB  editions, greatly
+            #            accelerates optimization with numerical  differentiation  of
+            #            an expensive target functions.
+            #
+            #            Callback parallelism is usually  beneficial when computing a
+            #            numerical gradient requires more than several  milliseconds.
+            #            This particular  example,  of  course,  is  not  suited  for
+            #            callback parallelism.
+            #
+            #            See ALGLIB Reference Manual, 'Working with commercial version'
+            #            section,  and  comments  on   minlmoptimize()  function  for
+            #            more information.
+            #
+            x0 = [1,1]
             if _spoil_scenario==0:
                 spoil_vec_by_nan(x0)
             if _spoil_scenario==1:
@@ -4980,82 +5275,58 @@ try:
             xalglib.minnlcsetscale(state, s)
 
             #
-            # Choose one of the nonlinear programming solvers supported by minnlc
-            # optimizer:
-            # * SLP - successive linear programming NLP solver
-            # * AUL - augmented Lagrangian NLP solver
+            # Choose  one  of  nonlinear  programming  solvers  supported  by  MINNLC
+            # optimizer.
             #
-            # Different solvers have different properties:
-            # * SLP is the most robust solver provided by ALGLIB: it can solve both
-            #   convex and nonconvex optimization problems, it respects box and
-            #   linear constraints (after you find feasible point it won't move away
-            #   from the feasible area) and tries to respect nonlinear constraints
-            #   as much as possible. It also usually needs less function evaluations
-            #   to converge than AUL.
-            #   However, it solves LP subproblems at each iterations which adds
-            #   significant overhead to its running time. Sometimes it can be as much
-            #   as 7x times slower than AUL.
-            # * AUL solver is less robust than SLP - it can violate box and linear
-            #   constraints at any moment, and it is intended for convex optimization
-            #   problems (although in many cases it can deal with nonconvex ones too).
-            #   Also, unlike SLP it needs some tuning (penalty factor and number of
-            #   outer iterations).
-            #   However, it is often much faster than the current version of SLP.
+            # As of ALGLIB 4.01, the default (and recommended)  option  is to  use  a
+            # large-scale filter-based SQP solver, which can utilize sparsity of  the
+            # problem and uses a limited-memory BFGS update in order to  be  able  to
+            # deal with thousands of variables.
             #
-            # In the code below we set solver to be AUL but then override it with SLP,
-            # so the effective choice is to use SLP. We recommend you to use SLP at
-            # least for early prototyping stages.
+            # Other options include:
+            # * SQP-BFGS (the same filter SQP solver relying on a dense BFGS  update,
+            #   not intended for anything beyond 100 variables)
+            # * AUL2 solver (a large-scale augmented  Lagrangian  solver for problems
+            #   with  cheap  target  functions)
+            # * SL1QP and SL1QP-BFGS legacy solvers which are similar to filter-based
+            #   SQP/SQP-BFGS, but use a less  robust  L1  merit  function  to  handle
+            #   constraints
+            # * SLP a legacy  sequential  linear  programming  solver,  scales  badly
+            #   beyond several tens of variables).
             #
-            # You can comment out line with SLP if you want to solve your problem with
-            # AUL solver.
-            #
-            rho = 1000.0
-            outerits = 5
-            xalglib.minnlcsetalgoaul(state, rho, outerits)
-            xalglib.minnlcsetalgoslp(state)
+            xalglib.minnlcsetalgosqp(state)
 
             #
             # Set constraints:
             #
-            # Nonlinear constraints are tricky - you can not "pack" general
-            # nonlinear function into double precision array. That's why
-            # minnlcsetnlc() does not accept constraints itself - only constraint
-            # counts are passed: first parameter is number of equality constraints,
-            # second one is number of inequality constraints.
+            # Since  version  4.01,  ALGLIB  supports  the  most  general  form of
+            # nonlinear constraints: two-sided   constraints  NL<=C(x)<=NU,   with
+            # elements being possibly infinite (means that this specific bound  is
+            # ignored). It includes equality constraints,  upper/lower  inequality
+            # constraints, range constraints. In particular, the constraint
             #
-            # As for constraining functions - these functions are passed as part
-            # of problem Jacobian (see below).
+            #        x0^2 + x1^2 - 1 = 0
             #
-            # NOTE: MinNLC optimizer supports arbitrary combination of boundary, general
-            #       linear and general nonlinear constraints. This example does not
-            #       show how to work with general linear constraints, but you can
-            #       easily find it in documentation on minnlcsetbc() and
-            #       minnlcsetlc() functions.
+            # can be specified by passing NL=[0], NU=[0] to minnlcsetnlc2().
             #
-            xalglib.minnlcsetnlc(state, 1, 0)
-
+            # Constraining functions themselves are passed as part  of  a  problem
+            # Jacobian (see below).
             #
-            # Activate OptGuard integrity checking.
-            #
-            # OptGuard monitor helps to catch common coding and problem statement
-            # issues, like:
-            # * discontinuity of the target/constraints (C0 continuity violation)
-            # * nonsmoothness of the target/constraints (C1 continuity violation)
-            # * erroneous analytic Jacobian, i.e. one inconsistent with actual
-            #   change in the target/constraints
-            #
-            # OptGuard is essential for early prototyping stages because such
-            # problems often result in premature termination of the optimizer
-            # which is really hard to distinguish from the correct termination.
-            #
-            # IMPORTANT: GRADIENT VERIFICATION IS PERFORMED BY MEANS OF NUMERICAL
-            #            DIFFERENTIATION, THUS DO NOT USE IT IN PRODUCTION CODE!
-            #
-            #            Other OptGuard checks add moderate overhead, but anyway
-            #            it is better to turn them off when they are not needed.
-            #
-            xalglib.minnlcoptguardsmoothness(state)
-            xalglib.minnlcoptguardgradient(state, 0.001)
+            nl = [0]
+            if _spoil_scenario==9:
+                spoil_vec_by_nan(nl)
+            if _spoil_scenario==10:
+                spoil_vec_by_adding_element(nl)
+            if _spoil_scenario==11:
+                spoil_vec_by_deleting_element(nl)
+            nu = [0]
+            if _spoil_scenario==12:
+                spoil_vec_by_nan(nu)
+            if _spoil_scenario==13:
+                spoil_vec_by_adding_element(nu)
+            if _spoil_scenario==14:
+                spoil_vec_by_deleting_element(nu)
+            xalglib.minnlcsetnlc2(state, nl, nu)
 
             #
             # Optimize and test results.
@@ -5075,23 +5346,11 @@ try:
             #         [ 2*x0  2*x1 ]
             #
             # with f0 being target function, f1 being constraining function. Number
-            # of equality/inequality constraints is specified by minnlcsetnlc(),
-            # with equality ones always being first, inequality ones being last.
+            # of equality/inequality constraints is specified by minnlcsetnlc2().
             #
             xalglib.minnlcoptimize_j(state, nlcfunc1_jac)
             x1, rep = xalglib.minnlcresults(state)
             _TestResult = _TestResult and doc_print_test(x1, [0.70710,-0.70710], "real_vector", 0.005)
-
-            #
-            # Check that OptGuard did not report errors
-            #
-            # NOTE: want to test OptGuard? Try breaking the Jacobian - say, add
-            #       1.0 to some of its components.
-            #
-            ogrep = xalglib.minnlcoptguardresults(state)
-            _TestResult = _TestResult and doc_print_test(ogrep.badgradsuspected, False, "bool")
-            _TestResult = _TestResult and doc_print_test(ogrep.nonc0suspected, False, "bool")
-            _TestResult = _TestResult and doc_print_test(ogrep.nonc1suspected, False, "bool")
             _TestResult = _TestResult and (_spoil_scenario==-1)
         except (RuntimeError, ValueError):
             _TestResult = _TestResult and (_spoil_scenario!=-1)
@@ -5107,8 +5366,9 @@ try:
     # TEST minnlc_d_mixed
     #      Nonlinearly constrained optimization with mixed equality/inequality constraints
     #
+    sys.stdout.write("50/162\n")
     _TestResult = True
-    for _spoil_scenario in range(-1,9):
+    for _spoil_scenario in range(-1,15):
         try:
             #
             # This example demonstrates minimization of
@@ -5122,6 +5382,21 @@ try:
             # and nonlinear equality constraint
             #
             #    x2-exp(x0) = 0
+            #
+            # IMPORTANT: the   MINNLC   optimizer    supports    parallel   numerical
+            #            differentiation  ('callback   parallelism').  This  feature,
+            #            which  is present  in  commercial  ALGLIB  editions, greatly
+            #            accelerates optimization with numerical  differentiation  of
+            #            an expensive target functions.
+            #
+            #            Callback parallelism is usually  beneficial when computing a
+            #            numerical gradient requires more than several  milliseconds.
+            #            This particular  example,  of  course,  is  not  suited  for
+            #            callback parallelism.
+            #
+            #            See ALGLIB Reference Manual, 'Working with commercial version'
+            #            section,  and  comments  on   minlmoptimize()  function  for
+            #            more information.
             #
             x0 = [0,0,0]
             if _spoil_scenario==0:
@@ -5158,82 +5433,59 @@ try:
             xalglib.minnlcsetstpmax(state, 10.0)
 
             #
-            # Choose one of the nonlinear programming solvers supported by minnlc
-            # optimizer:
-            # * SLP - successive linear programming NLP solver
-            # * AUL - augmented Lagrangian NLP solver
+            # Choose  one  of  nonlinear  programming  solvers  supported  by  MINNLC
+            # optimizer.
             #
-            # Different solvers have different properties:
-            # * SLP is the most robust solver provided by ALGLIB: it can solve both
-            #   convex and nonconvex optimization problems, it respects box and
-            #   linear constraints (after you find feasible point it won't move away
-            #   from the feasible area) and tries to respect nonlinear constraints
-            #   as much as possible. It also usually needs less function evaluations
-            #   to converge than AUL.
-            #   However, it solves LP subproblems at each iterations which adds
-            #   significant overhead to its running time. Sometimes it can be as much
-            #   as 7x times slower than AUL.
-            # * AUL solver is less robust than SLP - it can violate box and linear
-            #   constraints at any moment, and it is intended for convex optimization
-            #   problems (although in many cases it can deal with nonconvex ones too).
-            #   Also, unlike SLP it needs some tuning (penalty factor and number of
-            #   outer iterations).
-            #   However, it is often much faster than the current version of SLP.
+            # As of ALGLIB 4.01, the default (and recommended)  option  is to  use  a
+            # large-scale filter-based SQP solver, which can utilize sparsity of  the
+            # problem and uses a limited-memory BFGS update in order to  be  able  to
+            # deal with thousands of variables.
             #
-            # In the code below we set solver to be AUL but then override it with SLP,
-            # so the effective choice is to use SLP. We recommend you to use SLP at
-            # least for early prototyping stages.
+            # Other options include:
+            # * SQP-BFGS (the same filter SQP solver relying on a dense BFGS  update,
+            #   not intended for anything beyond 100 variables)
+            # * AUL2 solver (a large-scale augmented  Lagrangian  solver for problems
+            #   with  cheap  target  functions)
+            # * SL1QP and SL1QP-BFGS legacy solvers which are similar to filter-based
+            #   SQP/SQP-BFGS, but use a less  robust  L1  merit  function  to  handle
+            #   constraints
+            # * SLP a legacy  sequential  linear  programming  solver,  scales  badly
+            #   beyond several tens of variables).
             #
-            # You can comment out line with SLP if you want to solve your problem with
-            # AUL solver.
-            #
-            rho = 1000.0
-            outerits = 5
-            xalglib.minnlcsetalgoaul(state, rho, outerits)
-            xalglib.minnlcsetalgoslp(state)
+            xalglib.minnlcsetalgosqp(state)
 
             #
             # Set constraints:
             #
-            # Nonlinear constraints are tricky - you can not "pack" general
-            # nonlinear function into double precision array. That's why
-            # minnlcsetnlc() does not accept constraints itself - only constraint
-            # counts are passed: first parameter is number of equality constraints,
-            # second one is number of inequality constraints.
+            # Since  version  4.01,  ALGLIB  supports  the  most  general  form of
+            # nonlinear constraints: two-sided   constraints  NL<=C(x)<=NU,   with
+            # elements being possibly infinite (means that this specific bound  is
+            # ignored). It includes equality constraints,  upper/lower  inequality
+            # constraints, range constraints. In particular, a pair of constraints
             #
-            # As for constraining functions - these functions are passed as part
-            # of problem Jacobian (see below).
+            #        x2-exp(x0)       = 0
+            #        x0^2 + x1^2 - 1 <= 0
             #
-            # NOTE: MinNLC optimizer supports arbitrary combination of boundary, general
-            #       linear and general nonlinear constraints. This example does not
-            #       show how to work with boundary or general linear constraints, but you
-            #       can easily find it in documentation on minnlcsetbc() and
-            #       minnlcsetlc() functions.
+            # can be specified by passing NL=[0,-INF], NU=[0,0] to minnlcsetnlc2().
             #
-            xalglib.minnlcsetnlc(state, 1, 1)
-
+            # Constraining functions themselves are passed as part  of  a  problem
+            # Jacobian (see below).
             #
-            # Activate OptGuard integrity checking.
-            #
-            # OptGuard monitor helps to catch common coding and problem statement
-            # issues, like:
-            # * discontinuity of the target/constraints (C0 continuity violation)
-            # * nonsmoothness of the target/constraints (C1 continuity violation)
-            # * erroneous analytic Jacobian, i.e. one inconsistent with actual
-            #   change in the target/constraints
-            #
-            # OptGuard is essential for early prototyping stages because such
-            # problems often result in premature termination of the optimizer
-            # which is really hard to distinguish from the correct termination.
-            #
-            # IMPORTANT: GRADIENT VERIFICATION IS PERFORMED BY MEANS OF NUMERICAL
-            #            DIFFERENTIATION, THUS DO NOT USE IT IN PRODUCTION CODE!
-            #
-            #            Other OptGuard checks add moderate overhead, but anyway
-            #            it is better to turn them off when they are not needed.
-            #
-            xalglib.minnlcoptguardsmoothness(state)
-            xalglib.minnlcoptguardgradient(state, 0.001)
+            nl = [0,-float("inf")]
+            if _spoil_scenario==9:
+                spoil_vec_by_nan(nl)
+            if _spoil_scenario==10:
+                spoil_vec_by_adding_element(nl)
+            if _spoil_scenario==11:
+                spoil_vec_by_deleting_element(nl)
+            nu = [0,0]
+            if _spoil_scenario==12:
+                spoil_vec_by_nan(nu)
+            if _spoil_scenario==13:
+                spoil_vec_by_adding_element(nu)
+            if _spoil_scenario==14:
+                spoil_vec_by_deleting_element(nu)
+            xalglib.minnlcsetnlc2(state, nl, nu)
 
             #
             # Optimize and test results.
@@ -5253,24 +5505,11 @@ try:
             #         [ 2*x0    2*x1      0 ]
             #
             # with f0 being target function, f1 being equality constraint "f1=0",
-            # f2 being inequality constraint "f2<=0". Number of equality/inequality
-            # constraints is specified by minnlcsetnlc(), with equality ones always
-            # being first, inequality ones being last.
+            # f2 being inequality constraint "f2<=0".
             #
             xalglib.minnlcoptimize_j(state, nlcfunc2_jac)
             x1, rep = xalglib.minnlcresults(state)
             _TestResult = _TestResult and doc_print_test(x1, [-0.70710,-0.70710,0.49306], "real_vector", 0.005)
-
-            #
-            # Check that OptGuard did not report errors
-            #
-            # NOTE: want to test OptGuard? Try breaking the Jacobian - say, add
-            #       1.0 to some of its components.
-            #
-            ogrep = xalglib.minnlcoptguardresults(state)
-            _TestResult = _TestResult and doc_print_test(ogrep.badgradsuspected, False, "bool")
-            _TestResult = _TestResult and doc_print_test(ogrep.nonc0suspected, False, "bool")
-            _TestResult = _TestResult and doc_print_test(ogrep.nonc1suspected, False, "bool")
             _TestResult = _TestResult and (_spoil_scenario==-1)
         except (RuntimeError, ValueError):
             _TestResult = _TestResult and (_spoil_scenario!=-1)
@@ -5286,7 +5525,6 @@ try:
     # TEST minmo_biobjective
     #      Unconstrained biobjective optimization
     #
-    sys.stdout.write("50/162\n")
     _TestResult = True
     for _spoil_scenario in range(-1,4):
         try:
@@ -8474,6 +8712,7 @@ try:
     # TEST spline1d_d_cubic
     #      Cubic spline interpolation
     #
+    sys.stdout.write("100/162\n")
     _TestResult = True
     for _spoil_scenario in range(-1,10):
         try:
@@ -8544,7 +8783,6 @@ try:
     # TEST spline1d_d_monotone
     #      Monotone interpolation
     #
-    sys.stdout.write("100/162\n")
     _TestResult = True
     for _spoil_scenario in range(-1,10):
         try:
@@ -8777,13 +9015,26 @@ try:
     for _spoil_scenario in range(-1,24):
         try:
             #
-            # In this example we demonstrate exponential fitting
-            # by f(x) = exp(-c*x^2)
-            # using function value only.
+            # In this example we demonstrate exponential fitting by
             #
-            # Gradient is estimated using combination of numerical differences
-            # and secant updates. diffstep variable stores differentiation step 
-            # (we have to tell algorithm what step to use).
+            #     f(x) = exp(-c*x^2)
+            #
+            # using numerical differentiation.
+            #
+            # IMPORTANT: the LSFIT optimizer supports parallel model  evaluation  and
+            #            parallel numerical differentiation ('callback parallelism').
+            #            This feature, which is present in commercial ALGLIB editions
+            #            greatly  accelerates  fits  with   large   datasets   and/or
+            #            expensive target functions.
+            #
+            #            Callback parallelism is usually  beneficial  when  a  single
+            #            pass over the entire  dataset  requires  more  than  several
+            #            milliseconds. This particular example,  of  course,  is  not
+            #            suited for callback parallelism.
+            #
+            #            See ALGLIB Reference Manual, 'Working with commercial version'
+            #            section,  and  comments  on  lsfitfit()  function  for  more
+            #            information.
             #
             x = [[-1],[-0.8],[-0.6],[-0.4],[-0.2],[0],[0.2],[0.4],[0.6],[0.8],[1.0]]
             if _spoil_scenario==0:
@@ -8880,9 +9131,26 @@ try:
     for _spoil_scenario in range(-1,21):
         try:
             #
-            # In this example we demonstrate exponential fitting
-            # by f(x) = exp(-c*x^2)
+            # In this example we demonstrate exponential fitting by
+            #
+            #     f(x) = exp(-c*x^2)
+            #
             # using function value and gradient (with respect to c).
+            #
+            # IMPORTANT: the LSFIT optimizer supports parallel model  evaluation  and
+            #            parallel numerical differentiation ('callback parallelism').
+            #            This feature, which is present in commercial ALGLIB editions
+            #            greatly  accelerates  fits  with   large   datasets   and/or
+            #            expensive target functions.
+            #
+            #            Callback parallelism is usually  beneficial  when  a  single
+            #            pass over the entire  dataset  requires  more  than  several
+            #            milliseconds. This particular example,  of  course,  is  not
+            #            suited for callback parallelism.
+            #
+            #            See ALGLIB Reference Manual, 'Working with commercial version'
+            #            section,  and  comments  on  lsfitfit()  function  for  more
+            #            information.
             #
             x = [[-1],[-0.8],[-0.6],[-0.4],[-0.2],[0],[0.2],[0.4],[0.6],[0.8],[1.0]]
             if _spoil_scenario==0:
@@ -8925,7 +9193,7 @@ try:
             #
             # Fitting without weights
             #
-            state = xalglib.lsfitcreatefg(x, y, c, True)
+            state = xalglib.lsfitcreatefg(x, y, c)
             xalglib.lsfitsetcond(state, epsx, maxits)
             xalglib.lsfitfit_fg(state, function_cx_1_func, function_cx_1_grad)
             c, rep = xalglib.lsfitresults(state)
@@ -8947,7 +9215,7 @@ try:
                 spoil_vec_by_adding_element(w)
             if _spoil_scenario==20:
                 spoil_vec_by_deleting_element(w)
-            state = xalglib.lsfitcreatewfg(x, y, w, c, True)
+            state = xalglib.lsfitcreatewfg(x, y, w, c)
             xalglib.lsfitsetcond(state, epsx, maxits)
             xalglib.lsfitfit_fg(state, function_cx_1_func, function_cx_1_grad)
             c, rep = xalglib.lsfitresults(state)
@@ -8965,98 +9233,6 @@ try:
 
 
     #
-    # TEST lsfit_d_nlfgh
-    #      Nonlinear fitting using gradient and Hessian
-    #
-    _TestResult = True
-    for _spoil_scenario in range(-1,21):
-        try:
-            #
-            # In this example we demonstrate exponential fitting
-            # by f(x) = exp(-c*x^2)
-            # using function value, gradient and Hessian (with respect to c)
-            #
-            x = [[-1],[-0.8],[-0.6],[-0.4],[-0.2],[0],[0.2],[0.4],[0.6],[0.8],[1.0]]
-            if _spoil_scenario==0:
-                spoil_mat_by_nan(x)
-            if _spoil_scenario==1:
-                spoil_mat_by_posinf(x)
-            if _spoil_scenario==2:
-                spoil_mat_by_neginf(x)
-            if _spoil_scenario==3:
-                spoil_mat_by_deleting_row(x)
-            if _spoil_scenario==4:
-                spoil_mat_by_deleting_col(x)
-            y = [0.223130, 0.382893, 0.582748, 0.786628, 0.941765, 1.000000, 0.941765, 0.786628, 0.582748, 0.382893, 0.223130]
-            if _spoil_scenario==5:
-                spoil_vec_by_nan(y)
-            if _spoil_scenario==6:
-                spoil_vec_by_posinf(y)
-            if _spoil_scenario==7:
-                spoil_vec_by_neginf(y)
-            if _spoil_scenario==8:
-                spoil_vec_by_adding_element(y)
-            if _spoil_scenario==9:
-                spoil_vec_by_deleting_element(y)
-            c = [0.3]
-            if _spoil_scenario==10:
-                spoil_vec_by_nan(c)
-            if _spoil_scenario==11:
-                spoil_vec_by_posinf(c)
-            if _spoil_scenario==12:
-                spoil_vec_by_neginf(c)
-            epsx = 0.000001
-            if _spoil_scenario==13:
-                epsx = float("nan")
-            if _spoil_scenario==14:
-                epsx = float("+inf")
-            if _spoil_scenario==15:
-                epsx = float("-inf")
-            maxits = 0
-
-            #
-            # Fitting without weights
-            #
-            state = xalglib.lsfitcreatefgh(x, y, c)
-            xalglib.lsfitsetcond(state, epsx, maxits)
-            xalglib.lsfitfit_fgh(state, function_cx_1_func, function_cx_1_grad, function_cx_1_hess)
-            c, rep = xalglib.lsfitresults(state)
-            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 2, "int")
-            _TestResult = _TestResult and doc_print_test(c, [1.5], "real_vector", 0.05)
-
-            #
-            # Fitting with weights
-            # (you can change weights and see how it changes result)
-            #
-            w = [1,1,1,1,1,1,1,1,1,1,1]
-            if _spoil_scenario==16:
-                spoil_vec_by_nan(w)
-            if _spoil_scenario==17:
-                spoil_vec_by_posinf(w)
-            if _spoil_scenario==18:
-                spoil_vec_by_neginf(w)
-            if _spoil_scenario==19:
-                spoil_vec_by_adding_element(w)
-            if _spoil_scenario==20:
-                spoil_vec_by_deleting_element(w)
-            state = xalglib.lsfitcreatewfgh(x, y, w, c)
-            xalglib.lsfitsetcond(state, epsx, maxits)
-            xalglib.lsfitfit_fgh(state, function_cx_1_func, function_cx_1_grad, function_cx_1_hess)
-            c, rep = xalglib.lsfitresults(state)
-            _TestResult = _TestResult and doc_print_test(rep.terminationtype, 2, "int")
-            _TestResult = _TestResult and doc_print_test(c, [1.5], "real_vector", 0.05)
-            _TestResult = _TestResult and (_spoil_scenario==-1)
-        except (RuntimeError, ValueError):
-            _TestResult = _TestResult and (_spoil_scenario!=-1)
-        except:
-            raise
-    if not _TestResult:
-        sys.stdout.write("lsfit_d_nlfgh                    FAILED\n")
-        sys.stdout.flush()
-    _TotalResult = _TotalResult and _TestResult
-
-
-    #
     # TEST lsfit_d_nlfb
     #      Bound contstrained nonlinear fitting using function value only
     #
@@ -9065,17 +9241,30 @@ try:
         try:
             #
             # In this example we demonstrate exponential fitting by
+            #
             #     f(x) = exp(-c*x^2)
-            # subject to bound constraints
+            #
+            # subject to box constraints
+            #
             #     0.0 <= c <= 1.0
-            # using function value only.
             #
-            # Gradient is estimated using combination of numerical differences
-            # and secant updates. diffstep variable stores differentiation step 
-            # (we have to tell algorithm what step to use).
+            # using function value only. An unconstrained solution is c=1.5, but because of
+            # constraints we should get c=1.0 (at the boundary).
             #
-            # Unconstrained solution is c=1.5, but because of constraints we should
-            # get c=1.0 (at the boundary).
+            # IMPORTANT: the LSFIT optimizer supports parallel model  evaluation  and
+            #            parallel numerical differentiation ('callback parallelism').
+            #            This feature, which is present in commercial ALGLIB editions
+            #            greatly  accelerates  fits  with   large   datasets   and/or
+            #            expensive target functions.
+            #
+            #            Callback parallelism is usually  beneficial  when  a  single
+            #            pass over the entire  dataset  requires  more  than  several
+            #            milliseconds. This particular example,  of  course,  is  not
+            #            suited for callback parallelism.
+            #
+            #            See ALGLIB Reference Manual, 'Working with commercial version'
+            #            section,  and  comments  on  lsfitfit()  function  for  more
+            #            information.
             #
             x = [[-1],[-0.8],[-0.6],[-0.4],[-0.2],[0],[0.2],[0.4],[0.6],[0.8],[1.0]]
             if _spoil_scenario==0:
@@ -9158,12 +9347,16 @@ try:
         try:
             #
             # In this example we demonstrate fitting by
+            #
             #     f(x) = c[0]*(1+c[1]*((x-1999)^c[2]-1))
-            # subject to bound constraints
+            #
+            # subject to box constraints
+            #
             #     -INF  < c[0] < +INF
             #      -10 <= c[1] <= +10
             #      0.1 <= c[2] <= 2.0
-            # Data we want to fit are time series of Japan national debt
+            #
+            # The data we want to fit are time series of Japan national debt
             # collected from 2000 to 2008 measured in USD (dollars, not
             # millions of dollars).
             #
@@ -9181,6 +9374,21 @@ try:
             #
             # You can try commenting out lsfitsetscale() call - and you will 
             # see that algorithm will fail to converge.
+            #
+            # IMPORTANT: the LSFIT optimizer supports parallel model  evaluation  and
+            #            parallel numerical differentiation ('callback parallelism').
+            #            This feature, which is present in commercial ALGLIB editions
+            #            greatly  accelerates  fits  with   large   datasets   and/or
+            #            expensive target functions.
+            #
+            #            Callback parallelism is usually  beneficial  when  a  single
+            #            pass over the entire  dataset  requires  more  than  several
+            #            milliseconds. This particular example,  of  course,  is  not
+            #            suited for callback parallelism.
+            #
+            #            See ALGLIB Reference Manual, 'Working with commercial version'
+            #            section,  and  comments  on  lsfitfit()  function  for  more
+            #            information.
             #
             x = [[2000],[2001],[2002],[2003],[2004],[2005],[2006],[2007],[2008]]
             if _spoil_scenario==0:

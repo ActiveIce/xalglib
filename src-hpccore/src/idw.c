@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -22,9 +22,107 @@ static double idw_w0 = 1.0;
 static double idw_meps = 1.0E-50;
 static ae_int_t idw_defaultnlayers = 16;
 static double idw_defaultlambda0 = 0.3333;
+static ae_int_t idw_idwbatchsize = 128;
+static void idw_idwgridcalc2rec(const idwmodel* s,
+     /* Real    */ const ae_vector* x0,
+     ae_int_t begin0,
+     ae_int_t end0,
+     ae_int_t n0,
+     /* Real    */ const ae_vector* x1,
+     ae_int_t begin1,
+     ae_int_t end1,
+     ae_int_t n1,
+     /* Boolean */ const ae_vector* flagy,
+     ae_bool sparsey,
+     ae_shared_pool* cbpool,
+     ae_bool isrootcall,
+     double evalcost,
+     /* Real    */ ae_vector* y,
+     ae_state *_state);
+void _spawn_idw_idwgridcalc2rec(const idwmodel* s,
+    /* Real    */ const ae_vector* x0,
+    ae_int_t begin0,
+    ae_int_t end0,
+    ae_int_t n0,
+    /* Real    */ const ae_vector* x1,
+    ae_int_t begin1,
+    ae_int_t end1,
+    ae_int_t n1,
+    /* Boolean */ const ae_vector* flagy,
+    ae_bool sparsey,
+    ae_shared_pool* cbpool,
+    ae_bool isrootcall,
+    double evalcost,
+    /* Real    */ ae_vector* y, ae_task_group *_group, ae_bool smp_enabled, ae_state *_state);
+#if defined(_ALGLIB_HAS_WORKSTEALING)
+void _task_idw_idwgridcalc2rec(ae_task_data *_data, ae_state *_state);
+#endif
+ae_bool _trypexec_idw_idwgridcalc2rec(const idwmodel* s,
+    /* Real    */ const ae_vector* x0,
+    ae_int_t begin0,
+    ae_int_t end0,
+    ae_int_t n0,
+    /* Real    */ const ae_vector* x1,
+    ae_int_t begin1,
+    ae_int_t end1,
+    ae_int_t n1,
+    /* Boolean */ const ae_vector* flagy,
+    ae_bool sparsey,
+    ae_shared_pool* cbpool,
+    ae_bool isrootcall,
+    double evalcost,
+    /* Real    */ ae_vector* y, ae_state *_state);
 static void idw_errormetricsviacalc(idwbuilder* state,
      idwmodel* model,
      idwreport* rep,
+     ae_state *_state);
+static void idw_mstabrec(idwbuilder* state,
+     double rcur,
+     double lambdacur,
+     ae_int_t layeridx,
+     ae_shared_pool* mbpool,
+     ae_int_t idx0,
+     ae_int_t idx1,
+     ae_bool isrootcall,
+     double querycost,
+     double totalcost,
+     /* Real    */ ae_matrix* layers,
+     ae_state *_state);
+void _spawn_idw_mstabrec(idwbuilder* state,
+    double rcur,
+    double lambdacur,
+    ae_int_t layeridx,
+    ae_shared_pool* mbpool,
+    ae_int_t idx0,
+    ae_int_t idx1,
+    ae_bool isrootcall,
+    double querycost,
+    double totalcost,
+    /* Real    */ ae_matrix* layers, ae_task_group *_group, ae_bool smp_enabled, ae_state *_state);
+#if defined(_ALGLIB_HAS_WORKSTEALING)
+void _task_idw_mstabrec(ae_task_data *_data, ae_state *_state);
+#endif
+ae_bool _trypexec_idw_mstabrec(idwbuilder* state,
+    double rcur,
+    double lambdacur,
+    ae_int_t layeridx,
+    ae_shared_pool* mbpool,
+    ae_int_t idx0,
+    ae_int_t idx1,
+    ae_bool isrootcall,
+    double querycost,
+    double totalcost,
+    /* Real    */ ae_matrix* layers, ae_state *_state);
+static void idw_mstabbasecase(idwbuilder* state,
+     double rcur,
+     double lambdacur,
+     ae_int_t layeridx,
+     mstabbuffer* buf,
+     ae_int_t idx0,
+     ae_int_t idx1,
+     double querycost,
+     double totalcost,
+     /* Real    */ ae_matrix* layers,
      ae_state *_state);
 
 
@@ -158,6 +256,7 @@ void idwbuildercreate(ae_int_t nx,
     state->lambda0 = idw_defaultlambda0;
     state->lambdalast = (double)(0);
     state->lambdadecay = 1.0;
+    state->debugprofile = ae_false;
     
     /*
      * Other parameters, not used but initialized
@@ -170,6 +269,11 @@ void idwbuildercreate(ae_int_t nx,
     state->npoints = 0;
     state->nx = nx;
     state->ny = ny;
+    
+    /*
+     * Initial progress is zero
+     */
+    state->mprogress = (double)(0);
 }
 
 
@@ -277,6 +381,16 @@ Thus, IDW-MSTAB is  a  good  "default"  option  if  you  want  to  perform
 scattered multidimensional interpolation. Although it has  its  drawbacks,
 it is easy to use and robust, which makes it a good first step.
 
+  ! COMMERCIAL EDITION OF ALGLIB:
+  ! 
+  ! Commercial Edition of ALGLIB includes following important improvements
+  ! of this function:
+  ! * high-performance native backend with same C# interface (C# version)
+  ! * multithreading support (C++ and C# versions)
+  ! 
+  ! We recommend you to read 'Working with commercial version' section  of
+  ! ALGLIB Reference Manual in order to find out how to  use  performance-
+  ! related features provided by commercial edition of ALGLIB.
 
 INPUT PARAMETERS:
     State   -   builder object
@@ -1001,6 +1115,17 @@ void idwtscalcbuf(const idwmodel* s,
 This function fits IDW model to the dataset using current IDW construction
 algorithm. A model being built and fitting report are returned.
 
+  ! COMMERCIAL EDITION OF ALGLIB:
+  ! 
+  ! Commercial Edition of ALGLIB includes following important improvements
+  ! of this function:
+  ! * high-performance native backend with same C# interface (C# version)
+  ! * multithreading support (C++ and C# versions)
+  ! 
+  ! We recommend you to read 'Working with commercial version' section  of
+  ! ALGLIB Reference Manual in order to find out how to  use  performance-
+  ! related features provided by commercial edition of ALGLIB.
+
 INPUT PARAMETERS:
     State   -   builder object
 
@@ -1022,24 +1147,36 @@ void idwfit(idwbuilder* state,
      idwreport* rep,
      ae_state *_state)
 {
+    ae_frame _frame_block;
     ae_int_t i;
-    ae_int_t i0;
     ae_int_t j;
-    ae_int_t k;
     ae_int_t layeridx;
-    ae_int_t srcidx;
     double v;
-    double vv;
     ae_int_t npoints;
     ae_int_t nx;
     ae_int_t ny;
-    double rcur;
-    double lambdacur;
     double rss;
     double tss;
+    mstabbuffer mbuffer;
+    ae_shared_pool mbpool;
+    ae_vector layerrad;
+    ae_vector layerlambda;
+    ae_vector querycosts;
+    double totalcost;
 
+    ae_frame_make(_state, &_frame_block);
+    memset(&mbuffer, 0, sizeof(mbuffer));
+    memset(&mbpool, 0, sizeof(mbpool));
+    memset(&layerrad, 0, sizeof(layerrad));
+    memset(&layerlambda, 0, sizeof(layerlambda));
+    memset(&querycosts, 0, sizeof(querycosts));
     _idwmodel_clear(model);
     _idwreport_clear(rep);
+    _mstabbuffer_init(&mbuffer, _state, ae_true);
+    ae_shared_pool_init(&mbpool, _state, ae_true);
+    ae_vector_init(&layerrad, 0, DT_REAL, _state, ae_true);
+    ae_vector_init(&layerlambda, 0, DT_REAL, _state, ae_true);
+    ae_vector_init(&querycosts, 0, DT_REAL, _state, ae_true);
 
     nx = state->nx;
     ny = state->ny;
@@ -1052,6 +1189,7 @@ void idwfit(idwbuilder* state,
     rep->avgerror = (double)(0);
     rep->maxerror = (double)(0);
     rep->r2 = 1.0;
+    state->mprogress = (double)(0);
     
     /*
      * Quick exit for empty dataset
@@ -1074,7 +1212,10 @@ void idwfit(idwbuilder* state,
         model->lambdadecay = (double)(1);
         model->shepardp = (double)(2);
         model->npoints = 0;
+        model->debugprofile = ae_false;
         idwcreatecalcbuffer(model, &model->buffer, _state);
+        state->mprogress = 1.0;
+        ae_frame_leave(_state);
         return;
     }
     
@@ -1160,6 +1301,7 @@ void idwfit(idwbuilder* state,
         model->lambdalast = (double)(0);
         model->lambdadecay = (double)(1);
         model->shepardp = state->shepardp;
+        model->debugprofile = ae_false;
         
         /*
          * Copy dataset
@@ -1184,6 +1326,8 @@ void idwfit(idwbuilder* state,
          */
         idwcreatecalcbuffer(model, &model->buffer, _state);
         idw_errormetricsviacalc(state, model, rep, _state);
+        state->mprogress = 1.0;
+        ae_frame_leave(_state);
         return;
     }
     
@@ -1206,6 +1350,7 @@ void idwfit(idwbuilder* state,
         model->lambdalast = (double)(0);
         model->lambdadecay = (double)(1);
         model->shepardp = (double)(0);
+        model->debugprofile = ae_false;
         
         /*
          * Build kd-tree search structure
@@ -1230,6 +1375,8 @@ void idwfit(idwbuilder* state,
          */
         idwcreatecalcbuffer(model, &model->buffer, _state);
         idw_errormetricsviacalc(state, model, rep, _state);
+        state->mprogress = 1.0;
+        ae_frame_leave(_state);
         return;
     }
     
@@ -1253,6 +1400,7 @@ void idwfit(idwbuilder* state,
         model->lambdadecay = 1.0;
         model->lambdalast = idw_meps;
         model->shepardp = (double)(0);
+        model->debugprofile = ae_false;
         
         /*
          * Build kd-tree search structure,
@@ -1278,58 +1426,74 @@ void idwfit(idwbuilder* state,
         kdtreebuildtagged(&state->tmpxy, &state->tmptags, npoints, nx, 0, 2, &state->tmptree, _state);
         
         /*
-         * Iteratively build layer by layer
+         * Evaluate per-layer parameters:
+         * * query radius R
+         * * smoothing parameter Lambda
+         * * cost of a R-nn query (the biggest part of the model evaluation)
+         *
+         * Set global fields depending on the profile and cost of computations.
          */
-        rvectorsetlengthatleast(&state->tmpx, nx, _state);
-        rvectorsetlengthatleast(&state->tmpwy, ny, _state);
-        rvectorsetlengthatleast(&state->tmpw, ny, _state);
+        rallocv(state->nlayers, &layerrad, _state);
+        rallocv(state->nlayers, &layerlambda, _state);
+        rallocv(state->nlayers, &querycosts, _state);
+        totalcost = (double)(0);
         for(layeridx=0; layeridx<=state->nlayers-1; layeridx++)
         {
             
             /*
              * Determine layer metrics
              */
-            rcur = model->r0*ae_pow(model->rdecay, (double)(layeridx), _state);
-            lambdacur = model->lambda0*ae_pow(model->lambdadecay, (double)(layeridx), _state);
+            layerrad.ptr.p_double[layeridx] = model->r0*ae_pow(model->rdecay, (double)(layeridx), _state);
+            layerlambda.ptr.p_double[layeridx] = model->lambda0*ae_pow(model->lambdadecay, (double)(layeridx), _state);
             if( layeridx==state->nlayers-1 )
             {
-                lambdacur = model->lambdalast;
+                layerlambda.ptr.p_double[layeridx] = model->lambdalast;
             }
+            querycosts.ptr.p_double[layeridx] = kdtreeapproxrnnquerycost(&state->tmptree, layerrad.ptr.p_double[layeridx], _state);
+            totalcost = totalcost+querycosts.ptr.p_double[layeridx]*(double)npoints;
+        }
+        if( state->debugprofile )
+        {
+            
+            /*
+             * Use debug profile for the model construction
+             */
+            state->mbatchsize = 1+ae_randominteger(3, _state);
+        }
+        else
+        {
+            
+            /*
+             * Use performance profile for the model construction
+             */
+            state->mbatchsize = idw_idwbatchsize;
+        }
+        
+        /*
+         * Prepare temporary buffer for MSTABBasecase
+         */
+        rallocv(nx, &mbuffer.x, _state);
+        rallocv(ny, &mbuffer.w, _state);
+        rallocv(ny, &mbuffer.wy, _state);
+        kdtreecreaterequestbuffer(&state->tmptree, &mbuffer.requestbuffer, _state);
+        
+        /*
+         * Iteratively build layer by layer
+         */
+        for(layeridx=0; layeridx<=state->nlayers-1; layeridx++)
+        {
             
             /*
              * For each point compute residual from fitting with current layer
              */
-            for(i=0; i<=npoints-1; i++)
+            if( npoints>state->mbatchsize&&(ae_fp_greater((double)npoints*querycosts.ptr.p_double[layeridx],smpactivationlevel(_state))||state->debugprofile) )
             {
-                for(j=0; j<=nx-1; j++)
-                {
-                    state->tmpx.ptr.p_double[j] = state->tmplayers.ptr.pp_double[i][j];
-                }
-                k = kdtreequeryrnn(&state->tmptree, &state->tmpx, rcur, ae_true, _state);
-                kdtreequeryresultstags(&state->tmptree, &state->tmptags, _state);
-                kdtreequeryresultsdistances(&state->tmptree, &state->tmpdist, _state);
-                for(j=0; j<=ny-1; j++)
-                {
-                    state->tmpwy.ptr.p_double[j] = (double)(0);
-                    state->tmpw.ptr.p_double[j] = idw_w0;
-                }
-                for(i0=0; i0<=k-1; i0++)
-                {
-                    vv = state->tmpdist.ptr.p_double[i0]/rcur;
-                    vv = vv*vv;
-                    v = ((double)1-vv)*((double)1-vv)/(vv+lambdacur);
-                    srcidx = state->tmptags.ptr.p_int[i0];
-                    for(j=0; j<=ny-1; j++)
-                    {
-                        state->tmpwy.ptr.p_double[j] = state->tmpwy.ptr.p_double[j]+v*state->tmplayers.ptr.pp_double[srcidx][nx+layeridx*ny+j];
-                        state->tmpw.ptr.p_double[j] = state->tmpw.ptr.p_double[j]+v;
-                    }
-                }
-                for(j=0; j<=ny-1; j++)
-                {
-                    v = state->tmplayers.ptr.pp_double[i][nx+layeridx*ny+j];
-                    state->tmplayers.ptr.pp_double[i][nx+(layeridx+1)*ny+j] = v-state->tmpwy.ptr.p_double[j]/state->tmpw.ptr.p_double[j];
-                }
+                ae_shared_pool_set_seed(&mbpool, &mbuffer, (ae_int_t)sizeof(mbuffer), (ae_constructor)_mstabbuffer_init, (ae_copy_constructor)_mstabbuffer_init_copy, (ae_destructor)_mstabbuffer_destroy, _state);
+                idw_mstabrec(state, layerrad.ptr.p_double[layeridx], layerlambda.ptr.p_double[layeridx], layeridx, &mbpool, 0, npoints, ae_true, querycosts.ptr.p_double[layeridx], totalcost, &state->tmplayers, _state);
+            }
+            else
+            {
+                idw_mstabbasecase(state, layerrad.ptr.p_double[layeridx], layerlambda.ptr.p_double[layeridx], layeridx, &mbuffer, 0, npoints, querycosts.ptr.p_double[layeridx], totalcost, &state->tmplayers, _state);
             }
         }
         kdtreebuild(&state->tmplayers, npoints, nx, ny*state->nlayers, 2, &model->tree, _state);
@@ -1357,11 +1521,13 @@ void idwfit(idwbuilder* state,
         rep->rmserror = ae_sqrt(rep->rmserror/(double)(npoints*ny), _state);
         rep->avgerror = rep->avgerror/(double)(npoints*ny);
         rep->r2 = 1.0-rss/coalesce(tss, 1.0, _state);
+        state->mprogress = 1.0;
         
         /*
          * Prepare internal buffer
          */
         idwcreatecalcbuffer(model, &model->buffer, _state);
+        ae_frame_leave(_state);
         return;
     }
     
@@ -1369,6 +1535,355 @@ void idwfit(idwbuilder* state,
      * Unknown algorithm
      */
     ae_assert(ae_false, "IDWFit: integrity check failed, unexpected algorithm", _state);
+    ae_frame_leave(_state);
+}
+
+
+/*************************************************************************
+This function is used to peek into the IDW construction  process from some
+other thread and get the progress indicator. It returns value in [0,1].
+
+IMPORTANT: only MSTAB algorithm supports peeking into progress  indicator.
+           Legacy versions of the Shepard's method do  not support it. You
+           will always get zero as the result.
+
+INPUT PARAMETERS:
+    S           -   RBF model object
+
+RESULT:
+    progress value, in [0,1]
+
+  -- ALGLIB --
+     Copyright 27.11.2023 by Bochkanov Sergey
+*************************************************************************/
+double idwpeekprogress(const idwbuilder* s, ae_state *_state)
+{
+    double result;
+
+
+    result = s->mprogress;
+    return result;
+}
+
+
+/*************************************************************************
+This function calculates values  of  an  IDW  model  at  a  regular  grid,
+which  has  N0*N1 points, with Point[I,J] = (X0[I], X1[J]).  Vector-valued
+IDW models are supported.
+
+This function returns 0.0 when:
+* the model is not initialized
+* NX<>2
+
+  ! COMMERCIAL EDITION OF ALGLIB:
+  ! 
+  ! Commercial Edition of ALGLIB includes following important improvements
+  ! of this function:
+  ! * high-performance native backend with same C# interface (C# version)
+  ! * multithreading support (C++ and C# versions)
+  ! 
+  ! We recommend you to read 'Working with commercial version' section  of
+  ! ALGLIB Reference Manual in order to find out how to  use  performance-
+  ! related features provided by commercial edition of ALGLIB.
+
+NOTE: Parallel  processing  is  implemented only for modern (MSTAB) IDW's.
+
+INPUT PARAMETERS:
+    S       -   IDW model, used in read-only mode, can be  shared  between
+                multiple   invocations  of  this  function  from  multiple
+                threads.
+    
+    X0      -   array of grid nodes, first coordinates, array[N0].
+                Must be ordered by ascending. Exception is generated
+                if the array is not correctly ordered.
+    N0      -   grid size (number of nodes) in the first dimension, N0>=1
+    
+    X1      -   array of grid nodes, second coordinates, array[N1]
+                Must be ordered by ascending. Exception is generated
+                if the array is not correctly ordered.
+    N1      -   grid size (number of nodes) in the second dimension, N1>=1
+
+OUTPUT PARAMETERS:
+    Y       -   function values, array[NY*N0*N1], where NY is a  number of
+                "output" vector values (this  function   supports  vector-
+                valued IDW models). Y is out-variable and  is  reallocated
+                by this function.
+                Y[K+NY*(I0+I1*N0)]=F_k(X0[I0],X1[I1]), for:
+                *  K=0...NY-1
+                * I0=0...N0-1
+                * I1=0...N1-1
+
+NOTE: this function supports weakly ordered grid nodes, i.e. you may  have                
+      X[i]=X[i+1] for some i. It does  not  provide  you  any  performance
+      benefits  due  to   duplication  of  points,  just  convenience  and
+      flexibility.
+      
+NOTE: this  function  is  re-entrant,  i.e.  you  may  use  same  idwmodel
+      structure in multiple threads calling  this function  for  different
+      grids.
+      
+NOTE: if you need function values on some subset  of  regular  grid, which
+      may be described as "several compact and  dense  islands",  you  may
+      use idwgridcalc2vsubset().
+
+  -- ALGLIB --
+     Copyright 24.11.2023 by Bochkanov Sergey
+*************************************************************************/
+void idwgridcalc2v(const idwmodel* s,
+     /* Real    */ const ae_vector* x0,
+     ae_int_t n0,
+     /* Real    */ const ae_vector* x1,
+     ae_int_t n1,
+     /* Real    */ ae_vector* y,
+     ae_state *_state)
+{
+    ae_frame _frame_block;
+    ae_int_t i;
+    ae_vector dummy;
+
+    ae_frame_make(_state, &_frame_block);
+    memset(&dummy, 0, sizeof(dummy));
+    ae_vector_clear(y);
+    ae_vector_init(&dummy, 0, DT_BOOL, _state, ae_true);
+
+    ae_assert(n0>0, "IDWGridCalc2V: invalid value for N0 (N0<=0)!", _state);
+    ae_assert(n1>0, "IDWGridCalc2V: invalid value for N1 (N1<=0)!", _state);
+    ae_assert(x0->cnt>=n0, "IDWGridCalc2V: Length(X0)<N0", _state);
+    ae_assert(x1->cnt>=n1, "IDWGridCalc2V: Length(X1)<N1", _state);
+    ae_assert(isfinitevector(x0, n0, _state), "IDWGridCalc2V: X0 contains infinite or NaN values!", _state);
+    ae_assert(isfinitevector(x1, n1, _state), "IDWGridCalc2V: X1 contains infinite or NaN values!", _state);
+    for(i=0; i<=n0-2; i++)
+    {
+        ae_assert(ae_fp_less_eq(x0->ptr.p_double[i],x0->ptr.p_double[i+1]), "IDWGridCalc2V: X0 is not ordered by ascending", _state);
+    }
+    for(i=0; i<=n1-2; i++)
+    {
+        ae_assert(ae_fp_less_eq(x1->ptr.p_double[i],x1->ptr.p_double[i+1]), "IDWGridCalc2V: X1 is not ordered by ascending", _state);
+    }
+    idwgridcalc2vx(s, x0, n0, x1, n1, &dummy, ae_false, y, _state);
+    ae_frame_leave(_state);
+}
+
+
+/*************************************************************************
+This function calculates values of an  IDW  model  at  some  subset  of  a
+regular grid:
+* the grid has N0*N1 points, with Point[I,J] = (X0[I], X1[J])
+* only values at some subset of the grid are required
+Vector-valued IDW models are supported.
+
+This function returns 0.0 when:
+* the model is not initialized
+* NX<>2
+
+  ! COMMERCIAL EDITION OF ALGLIB:
+  ! 
+  ! Commercial Edition of ALGLIB includes following important improvements
+  ! of this function:
+  ! * high-performance native backend with same C# interface (C# version)
+  ! * multithreading support (C++ and C# versions)
+  ! 
+  ! We recommend you to read 'Working with commercial version' section  of
+  ! ALGLIB Reference Manual in order to find out how to  use  performance-
+  ! related features provided by commercial edition of ALGLIB.
+
+NOTE: Parallel processing is implemented only for modern (MSTAB) IDW's.
+
+INPUT PARAMETERS:
+    S       -   IDW model, used in read-only mode, can be  shared  between
+                multiple   invocations  of  this  function  from  multiple
+                threads.
+    
+    X0      -   array of grid nodes, first coordinates, array[N0].
+                Must be ordered by ascending. Exception is generated
+                if the array is not correctly ordered.
+    N0      -   grid size (number of nodes) in the first dimension, N0>=1
+    
+    X1      -   array of grid nodes, second coordinates, array[N1]
+                Must be ordered by ascending. Exception is generated
+                if the array is not correctly ordered.
+    N1      -   grid size (number of nodes) in the second dimension, N1>=1
+    
+    FlagY   -   array[N0*N1]:
+                * Y[I0+I1*N0] corresponds to node (X0[I0],X1[I1])
+                * it is a "bitmap" array which contains  False  for  nodes
+                  which are NOT calculated, and True for nodes  which  are
+                  required.
+
+OUTPUT PARAMETERS:
+    Y       -   function values, array[NY*N0*N1*N2], where NY is a  number
+                of "output" vector values (this function  supports vector-
+                valued IDW models):
+                * Y[K+NY*(I0+I1*N0)]=F_k(X0[I0],X1[I1]),
+                  for K=0...NY-1, I0=0...N0-1, I1=0...N1-1.
+                * elements of Y[] which correspond  to  FlagY[]=True   are
+                  loaded by model values (which may be  exactly  zero  for
+                  some nodes).
+                * elements of Y[] which correspond to FlagY[]=False MAY be
+                  initialized by zeros OR may  be  calculated.  Generally,
+                  they  are   not   calculated,  but  future  SIMD-capable
+                  versions may compute several elements in a batch.
+
+NOTE: this function supports weakly ordered grid nodes, i.e. you may  have                
+      X[i]=X[i+1] for some i. It does  not  provide  you  any  performance
+      benefits  due  to   duplication  of  points,  just  convenience  and
+      flexibility.
+      
+NOTE: this  function  is  re-entrant,  i.e.  you  may  use  same  idwmodel
+      structure in multiple threads calling  this function  for  different
+      grids.
+
+  -- ALGLIB --
+     Copyright 24.11.2023 by Bochkanov Sergey
+*************************************************************************/
+void idwgridcalc2vsubset(const idwmodel* s,
+     /* Real    */ const ae_vector* x0,
+     ae_int_t n0,
+     /* Real    */ const ae_vector* x1,
+     ae_int_t n1,
+     /* Boolean */ const ae_vector* flagy,
+     /* Real    */ ae_vector* y,
+     ae_state *_state)
+{
+    ae_int_t i;
+
+    ae_vector_clear(y);
+
+    ae_assert(n0>0, "IDWGridCalc2VSubset: invalid value for N0 (N0<=0)!", _state);
+    ae_assert(n1>0, "IDWGridCalc2VSubset: invalid value for N1 (N1<=0)!", _state);
+    ae_assert(x0->cnt>=n0, "IDWGridCalc2VSubset: Length(X0)<N0", _state);
+    ae_assert(x1->cnt>=n1, "IDWGridCalc2VSubset: Length(X1)<N1", _state);
+    ae_assert(flagy->cnt>=n0*n1, "IDWGridCalc2VSubset: Length(FlagY)<N0*N1*N2", _state);
+    ae_assert(isfinitevector(x0, n0, _state), "IDWGridCalc2VSubset: X0 contains infinite or NaN values!", _state);
+    ae_assert(isfinitevector(x1, n1, _state), "IDWGridCalc2VSubset: X1 contains infinite or NaN values!", _state);
+    for(i=0; i<=n0-2; i++)
+    {
+        ae_assert(ae_fp_less_eq(x0->ptr.p_double[i],x0->ptr.p_double[i+1]), "IDWGridCalc2VSubset: X0 is not ordered by ascending", _state);
+    }
+    for(i=0; i<=n1-2; i++)
+    {
+        ae_assert(ae_fp_less_eq(x1->ptr.p_double[i],x1->ptr.p_double[i+1]), "IDWGridCalc2VSubset: X1 is not ordered by ascending", _state);
+    }
+    idwgridcalc2vx(s, x0, n0, x1, n1, flagy, ae_true, y, _state);
+}
+
+
+/*************************************************************************
+This function, depending on SparseY, acts as IDWGridCalc2V (SparseY=False)
+or IDWGridCalc2VSubset (SparseY=True) function.  See  comments  for  these
+functions for more information
+
+  -- ALGLIB --
+     Copyright 04.03.2016 by Bochkanov Sergey
+*************************************************************************/
+void idwgridcalc2vx(const idwmodel* s,
+     /* Real    */ const ae_vector* x0,
+     ae_int_t n0,
+     /* Real    */ const ae_vector* x1,
+     ae_int_t n1,
+     /* Boolean */ const ae_vector* flagy,
+     ae_bool sparsey,
+     /* Real    */ ae_vector* y,
+     ae_state *_state)
+{
+    ae_frame _frame_block;
+    ae_int_t nx;
+    ae_int_t ny;
+    ae_int_t i;
+    ae_int_t k;
+    double rcur;
+    ae_int_t ylen;
+    double evalcost;
+    ae_shared_pool cbpool;
+    idwcalcbuffer *calcbuf;
+    ae_smart_ptr _calcbuf;
+
+    ae_frame_make(_state, &_frame_block);
+    memset(&cbpool, 0, sizeof(cbpool));
+    memset(&_calcbuf, 0, sizeof(_calcbuf));
+    ae_shared_pool_init(&cbpool, _state, ae_true);
+    ae_smart_ptr_init(&_calcbuf, (void**)&calcbuf, _state, ae_true);
+
+    ae_assert(n0>0, "IDWGridCalc2VX: invalid value for N0 (N0<=0)!", _state);
+    ae_assert(n1>0, "IDWGridCalc2VX: invalid value for N1 (N1<=0)!", _state);
+    ae_assert(x0->cnt>=n0, "IDWGridCalc2VX: Length(X0)<N0", _state);
+    ae_assert(x1->cnt>=n1, "IDWGridCalc2VX: Length(X1)<N1", _state);
+    ae_assert(isfinitevector(x0, n0, _state), "IDWGridCalc2VX: X0 contains infinite or NaN values!", _state);
+    ae_assert(isfinitevector(x1, n1, _state), "IDWGridCalc2VX: X1 contains infinite or NaN values!", _state);
+    for(i=0; i<=n0-2; i++)
+    {
+        ae_assert(ae_fp_less_eq(x0->ptr.p_double[i],x0->ptr.p_double[i+1]), "IDWGridCalc2VX: X0 is not ordered by ascending", _state);
+    }
+    for(i=0; i<=n1-2; i++)
+    {
+        ae_assert(ae_fp_less_eq(x1->ptr.p_double[i],x1->ptr.p_double[i+1]), "IDWGridCalc2VX: X1 is not ordered by ascending", _state);
+    }
+    
+    /*
+     * Prepare local variables
+     */
+    nx = s->nx;
+    ny = s->ny;
+    ae_shared_pool_set_seed(&cbpool, &s->buffer, (ae_int_t)sizeof(s->buffer), (ae_constructor)_idwcalcbuffer_init, (ae_copy_constructor)_idwcalcbuffer_init_copy, (ae_destructor)_idwcalcbuffer_destroy, _state);
+    
+    /*
+     * Prepare output array
+     */
+    ylen = ny*n0*n1;
+    ae_vector_set_length(y, ylen, _state);
+    rsetv(ylen, 0.0, y, _state);
+    if( nx!=2 )
+    {
+        ae_frame_leave(_state);
+        return;
+    }
+    
+    /*
+     * Evaluate cost (in CPU cycles) of a single model evaluation.
+     * Very crude approximation is used.
+     */
+    evalcost = (double)(0);
+    ae_assert((s->algotype==0||s->algotype==1)||s->algotype==2, "IDW: integrity check 9144 failed", _state);
+    if( s->algotype==0 )
+    {
+        
+        /*
+         * Original Shepard: single evaluation cost is O(NPoints)
+         */
+        evalcost = evalcost+(double)(s->npoints*(5*nx+5*ny+50));
+    }
+    if( s->algotype==1 )
+    {
+        
+        /*
+         * Modified Shepard: single evaluation cost is mostly kd-tree request
+         */
+        ae_shared_pool_retrieve(&cbpool, &_calcbuf, _state);
+        evalcost = evalcost+kdtreetsapproxrnnquerycost(&s->tree, &calcbuf->requestbuffer, s->r0, _state);
+        ae_shared_pool_recycle(&cbpool, &_calcbuf, _state);
+    }
+    if( s->algotype==2 )
+    {
+        
+        /*
+         * MSTAB: single evaluation cost is a sum of per-layer costs
+         */
+        ae_shared_pool_retrieve(&cbpool, &_calcbuf, _state);
+        rcur = s->r0;
+        for(k=0; k<=s->nlayers-1; k++)
+        {
+            evalcost = evalcost+(kdtreetsapproxrnnquerycost(&s->tree, &calcbuf->requestbuffer, rcur, _state)+(double)50);
+            rcur = rcur*s->rdecay;
+        }
+        ae_shared_pool_recycle(&cbpool, &_calcbuf, _state);
+    }
+    evalcost = coalesce(evalcost, (double)(50), _state);
+    
+    /*
+     * Perform the evaluation
+     */
+    idw_idwgridcalc2rec(s, x0, 0, n0, n0, x1, 0, n1, n1, flagy, sparsey, &cbpool, ae_true, evalcost, y, _state);
+    ae_frame_leave(_state);
 }
 
 
@@ -1510,6 +2025,7 @@ void idwunserialize(ae_serializer* s, idwmodel* model, ae_state *_state)
     ae_serializer_unserialize_double(s, &model->lambdalast, _state);
     ae_serializer_unserialize_double(s, &model->lambdadecay, _state);
     ae_serializer_unserialize_double(s, &model->shepardp, _state);
+    model->debugprofile = ae_false;
     
     /*
      * Algorithm-specific fields
@@ -1532,6 +2048,283 @@ void idwunserialize(ae_serializer* s, idwmodel* model, ae_state *_state)
      * Temporary buffers
      */
     idwcreatecalcbuffer(model, &model->buffer, _state);
+}
+
+
+/*************************************************************************
+This function, depending on SparseY, acts as IDWGridCalc2V (SparseY=False)
+or IDWGridCalc2VSubset (SparseY=True) function.  See  comments  for  these
+functions for more information
+
+  -- ALGLIB --
+     Copyright 04.03.2016 by Bochkanov Sergey
+*************************************************************************/
+static void idw_idwgridcalc2rec(const idwmodel* s,
+     /* Real    */ const ae_vector* x0,
+     ae_int_t begin0,
+     ae_int_t end0,
+     ae_int_t n0,
+     /* Real    */ const ae_vector* x1,
+     ae_int_t begin1,
+     ae_int_t end1,
+     ae_int_t n1,
+     /* Boolean */ const ae_vector* flagy,
+     ae_bool sparsey,
+     ae_shared_pool* cbpool,
+     ae_bool isrootcall,
+     double evalcost,
+     /* Real    */ ae_vector* y,
+     ae_state *_state)
+{
+    ae_frame _frame_block;
+    ae_task_group *_child_tasks = NULL;
+    ae_bool _smp_enabled = ae_false;
+    ae_int_t nx;
+    ae_int_t ny;
+    ae_int_t batchsize;
+    ae_int_t chunksize;
+    ae_int_t i;
+    ae_int_t j;
+    ae_int_t k;
+    ae_bool abovepexeclevel;
+    ae_bool abovespawnlevel;
+    idwcalcbuffer *calcbuf;
+    ae_smart_ptr _calcbuf;
+
+    ae_frame_make(_state, &_frame_block);
+    memset(&_calcbuf, 0, sizeof(_calcbuf));
+    ae_smart_ptr_init(&_calcbuf, (void**)&calcbuf, _state, ae_true);
+
+    nx = s->nx;
+    ny = s->ny;
+    batchsize = icase2(s->debugprofile, 1, idw_idwbatchsize, _state);
+    chunksize = (end0-begin0)*(end1-begin1);
+    ae_assert(nx==2, "IDW: integrity check 5621 failed", _state);
+    
+    /*
+     * Perform parallel execution if needed
+     */
+    abovepexeclevel = ae_fp_greater((double)chunksize*evalcost,smpactivationlevel(_state))||s->debugprofile;
+    if( (isrootcall&&chunksize>batchsize)&&abovepexeclevel )
+    {
+        if( _trypexec_idw_idwgridcalc2rec(s,x0,begin0,end0,n0,x1,begin1,end1,n1,flagy,sparsey,cbpool,isrootcall,evalcost,y, _state) )
+        {
+            ae_sync(_child_tasks, _smp_enabled, ae_true, _state);
+            ae_frame_leave(_state);
+            return;
+        }
+    }
+    
+    /*
+     * Perform subdivision
+     */
+    abovespawnlevel = ae_fp_greater((double)chunksize*evalcost,spawnlevel(_state))||s->debugprofile;
+    if( chunksize>batchsize&&abovespawnlevel )
+    {
+        
+        /*
+         * Subdivision
+         */
+        ae_assert(ae_maxint(end0-begin0, end1-begin1, _state)>1, "IDW: integrity check 6712 failed", _state);
+        ae_set_smp_support(&_child_tasks, &_smp_enabled, ae_true, _state);
+        if( end0-begin0>end1-begin1 )
+        {
+            
+            /*
+             * Split on variable 0
+             */
+            k = begin0+(end0-begin0)/2;
+            _spawn_idw_idwgridcalc2rec(s, x0, begin0, k, n0, x1, begin1, end1, n1, flagy, sparsey, cbpool, ae_false, evalcost, y, _child_tasks, _smp_enabled, _state);
+            idw_idwgridcalc2rec(s, x0, k, end0, n0, x1, begin1, end1, n1, flagy, sparsey, cbpool, ae_false, evalcost, y, _state);
+        }
+        else
+        {
+            k = begin1+(end1-begin1)/2;
+            _spawn_idw_idwgridcalc2rec(s, x0, begin0, end0, n0, x1, begin1, k, n1, flagy, sparsey, cbpool, ae_false, evalcost, y, _child_tasks, _smp_enabled, _state);
+            idw_idwgridcalc2rec(s, x0, begin0, end0, n0, x1, k, end1, n1, flagy, sparsey, cbpool, ae_false, evalcost, y, _state);
+        }
+        ae_sync(_child_tasks, _smp_enabled, ae_true, _state);
+        ae_frame_leave(_state);
+        return;
+    }
+    
+    /*
+     * Basecase code
+     */
+    ae_shared_pool_retrieve(cbpool, &_calcbuf, _state);
+    rallocv(nx, &calcbuf->x, _state);
+    for(i=begin0; i<=end0-1; i++)
+    {
+        for(j=begin1; j<=end1-1; j++)
+        {
+            if( !sparsey||flagy->ptr.p_bool[i+j*n0] )
+            {
+                calcbuf->x.ptr.p_double[0] = x0->ptr.p_double[i];
+                calcbuf->x.ptr.p_double[1] = x1->ptr.p_double[j];
+                idwtscalcbuf(s, calcbuf, &calcbuf->x, &calcbuf->y, _state);
+                for(k=0; k<=ny-1; k++)
+                {
+                    y->ptr.p_double[k+ny*(i+j*n0)] = calcbuf->y.ptr.p_double[k];
+                }
+            }
+        }
+    }
+    ae_shared_pool_recycle(cbpool, &_calcbuf, _state);
+    ae_sync(_child_tasks, _smp_enabled, ae_true, _state);
+    ae_frame_leave(_state);
+}
+
+
+/*************************************************************************
+When called in the multithreaded mode (non-NULL _group), spawns child task.
+Executed serially when called with NULL _group.
+*************************************************************************/
+void _spawn_idw_idwgridcalc2rec(const idwmodel* s,
+    /* Real    */ const ae_vector* x0,
+    ae_int_t begin0,
+    ae_int_t end0,
+    ae_int_t n0,
+    /* Real    */ const ae_vector* x1,
+    ae_int_t begin1,
+    ae_int_t end1,
+    ae_int_t n1,
+    /* Boolean */ const ae_vector* flagy,
+    ae_bool sparsey,
+    ae_shared_pool* cbpool,
+    ae_bool isrootcall,
+    double evalcost,
+    /* Real    */ ae_vector* y,
+    ae_task_group *_group, ae_bool smp_enabled, ae_state *_state)
+{
+    if( _group==NULL || !smp_enabled)
+    {
+        idw_idwgridcalc2rec(s,x0,begin0,end0,n0,x1,begin1,end1,n1,flagy,sparsey,cbpool,isrootcall,evalcost,y, _state);
+        return;
+    }
+#if defined(_ALGLIB_HAS_WORKSTEALING)
+    {
+        ae_task_info *_task;
+        _task = ae_create_task(_group, _state);
+        _task->data.func = _task_idw_idwgridcalc2rec;
+        _task->data.flags = _state->flags;
+        _task->data.parameters[0].value.const_val = s;
+        _task->data.parameters[1].value.const_val = x0;
+        _task->data.parameters[2].value.ival = begin0;
+        _task->data.parameters[3].value.ival = end0;
+        _task->data.parameters[4].value.ival = n0;
+        _task->data.parameters[5].value.const_val = x1;
+        _task->data.parameters[6].value.ival = begin1;
+        _task->data.parameters[7].value.ival = end1;
+        _task->data.parameters[8].value.ival = n1;
+        _task->data.parameters[9].value.const_val = flagy;
+        _task->data.parameters[10].value.bval = sparsey;
+        _task->data.parameters[11].value.val = cbpool;
+        _task->data.parameters[12].value.bval = isrootcall;
+        _task->data.parameters[13].value.dval = evalcost;
+        _task->data.parameters[14].value.val = y;
+        ae_push_task(_task, _state, ae_false);
+    }
+#else
+    abort(); /* critical integrity failure */
+#endif
+}
+
+
+/*************************************************************************
+This method is called when worker thread starts working on a non-root task.
+*************************************************************************/
+#if defined(_ALGLIB_HAS_WORKSTEALING)
+void _task_idw_idwgridcalc2rec(ae_task_data *_data, ae_state *_state)
+{
+    const idwmodel* s;
+    const ae_vector* x0;
+    ae_int_t begin0;
+    ae_int_t end0;
+    ae_int_t n0;
+    const ae_vector* x1;
+    ae_int_t begin1;
+    ae_int_t end1;
+    ae_int_t n1;
+    const ae_vector* flagy;
+    ae_bool sparsey;
+    ae_shared_pool* cbpool;
+    ae_bool isrootcall;
+    double evalcost;
+    ae_vector* y;
+    s = (const idwmodel*)_data->parameters[0].value.const_val;
+    x0 = (const ae_vector*)_data->parameters[1].value.const_val;
+    begin0 = _data->parameters[2].value.ival;
+    end0 = _data->parameters[3].value.ival;
+    n0 = _data->parameters[4].value.ival;
+    x1 = (const ae_vector*)_data->parameters[5].value.const_val;
+    begin1 = _data->parameters[6].value.ival;
+    end1 = _data->parameters[7].value.ival;
+    n1 = _data->parameters[8].value.ival;
+    flagy = (const ae_vector*)_data->parameters[9].value.const_val;
+    sparsey = _data->parameters[10].value.bval;
+    cbpool = (ae_shared_pool*)_data->parameters[11].value.val;
+    isrootcall = _data->parameters[12].value.bval;
+    evalcost = _data->parameters[13].value.dval;
+    y = (ae_vector*)_data->parameters[14].value.val;
+   ae_state_set_flags(_state, _data->flags);
+   idw_idwgridcalc2rec(s,x0,begin0,end0,n0,x1,begin1,end1,n1,flagy,sparsey,cbpool,isrootcall,evalcost,y, _state);
+}
+#endif
+
+
+/*************************************************************************
+Inserts task as root into worker queue if called from non-worker thread, waits for completion and returns true.
+Returns false if ALGLIB is configured for serial execution or we are already in the worker context.
+*************************************************************************/
+ae_bool _trypexec_idw_idwgridcalc2rec(const idwmodel* s,
+    /* Real    */ const ae_vector* x0,
+    ae_int_t begin0,
+    ae_int_t end0,
+    ae_int_t n0,
+    /* Real    */ const ae_vector* x1,
+    ae_int_t begin1,
+    ae_int_t end1,
+    ae_int_t n1,
+    /* Boolean */ const ae_vector* flagy,
+    ae_bool sparsey,
+    ae_shared_pool* cbpool,
+    ae_bool isrootcall,
+    double evalcost,
+    /* Real    */ ae_vector* y,
+    ae_state *_state)
+{
+#if defined(_ALGLIB_HAS_WORKSTEALING)
+    ae_task_info *_task;
+    const char *_e;
+    if( !ae_can_pexec(_state) )
+        return ae_false;
+    _task = ae_create_task(NULL, _state);
+    _task->data.func = _task_idw_idwgridcalc2rec;
+    _task->data.flags = _state->flags;
+    _task->data.parameters[0].value.const_val = s;
+    _task->data.parameters[1].value.const_val = x0;
+    _task->data.parameters[2].value.ival = begin0;
+    _task->data.parameters[3].value.ival = end0;
+    _task->data.parameters[4].value.ival = n0;
+    _task->data.parameters[5].value.const_val = x1;
+    _task->data.parameters[6].value.ival = begin1;
+    _task->data.parameters[7].value.ival = end1;
+    _task->data.parameters[8].value.ival = n1;
+    _task->data.parameters[9].value.const_val = flagy;
+    _task->data.parameters[10].value.bval = sparsey;
+    _task->data.parameters[11].value.val = cbpool;
+    _task->data.parameters[12].value.bval = isrootcall;
+    _task->data.parameters[13].value.dval = evalcost;
+    _task->data.parameters[14].value.val = y;
+    ae_push_root_task(_task);
+    ae_wait_for_event(&_task->done_event);
+    _e = _task->exception;
+    ae_dispose_task(_task);
+    ae_assert(_e==NULL, _e, _state);
+    return ae_true;
+#else
+    return ae_false;
+#endif
 }
 
 
@@ -1608,6 +2401,295 @@ static void idw_errormetricsviacalc(idwbuilder* state,
 }
 
 
+/*************************************************************************
+Basecase for IDW-MSTAB model construction algorithm
+   
+  -- ALGLIB --
+     Copyright 22.10.2018 by Bochkanov Sergey
+*************************************************************************/
+static void idw_mstabrec(idwbuilder* state,
+     double rcur,
+     double lambdacur,
+     ae_int_t layeridx,
+     ae_shared_pool* mbpool,
+     ae_int_t idx0,
+     ae_int_t idx1,
+     ae_bool isrootcall,
+     double querycost,
+     double totalcost,
+     /* Real    */ ae_matrix* layers,
+     ae_state *_state)
+{
+    ae_frame _frame_block;
+    ae_task_group *_child_tasks = NULL;
+    ae_bool _smp_enabled = ae_false;
+    ae_int_t tile0;
+    ae_int_t tile1;
+    mstabbuffer *mbuffer;
+    ae_smart_ptr _mbuffer;
+    ae_bool abovepexeclevel;
+    ae_bool abovespawnlevel;
+
+    ae_frame_make(_state, &_frame_block);
+    memset(&_mbuffer, 0, sizeof(_mbuffer));
+    ae_smart_ptr_init(&_mbuffer, (void**)&mbuffer, _state, ae_true);
+
+    
+    /*
+     * Try parallel execution, if needed
+     */
+    abovepexeclevel = ae_fp_greater((double)(idx1-idx0)*querycost,smpactivationlevel(_state))||state->debugprofile;
+    if( (isrootcall&&idx1-idx0>state->mbatchsize)&&abovepexeclevel )
+    {
+        if( _trypexec_idw_mstabrec(state,rcur,lambdacur,layeridx,mbpool,idx0,idx1,isrootcall,querycost,totalcost,layers, _state) )
+        {
+            ae_sync(_child_tasks, _smp_enabled, ae_true, _state);
+            ae_frame_leave(_state);
+            return;
+        }
+    }
+    
+    /*
+     * Handle basecase or recursively subdivide
+     */
+    abovespawnlevel = ae_fp_greater((double)(idx1-idx0)*querycost,spawnlevel(_state))||state->debugprofile;
+    if( idx1-idx0>state->mbatchsize&&abovespawnlevel )
+    {
+        
+        /*
+         * Subdivision
+         */
+        tiledsplit(idx1-idx0, state->mbatchsize, &tile0, &tile1, _state);
+        ae_set_smp_support(&_child_tasks, &_smp_enabled, ae_true, _state);
+        _spawn_idw_mstabrec(state, rcur, lambdacur, layeridx, mbpool, idx0, idx0+tile0, ae_false, querycost, totalcost, layers, _child_tasks, _smp_enabled, _state);
+        idw_mstabrec(state, rcur, lambdacur, layeridx, mbpool, idx0+tile0, idx1, ae_false, querycost, totalcost, layers, _state);
+        ae_sync(_child_tasks, _smp_enabled, ae_true, _state);
+        ae_frame_leave(_state);
+        return;
+    }
+    
+    /*
+     * Basecase
+     */
+    ae_shared_pool_retrieve(mbpool, &_mbuffer, _state);
+    idw_mstabbasecase(state, rcur, lambdacur, layeridx, mbuffer, idx0, idx1, querycost, totalcost, layers, _state);
+    ae_shared_pool_recycle(mbpool, &_mbuffer, _state);
+    ae_sync(_child_tasks, _smp_enabled, ae_true, _state);
+    ae_frame_leave(_state);
+}
+
+
+/*************************************************************************
+When called in the multithreaded mode (non-NULL _group), spawns child task.
+Executed serially when called with NULL _group.
+*************************************************************************/
+void _spawn_idw_mstabrec(idwbuilder* state,
+    double rcur,
+    double lambdacur,
+    ae_int_t layeridx,
+    ae_shared_pool* mbpool,
+    ae_int_t idx0,
+    ae_int_t idx1,
+    ae_bool isrootcall,
+    double querycost,
+    double totalcost,
+    /* Real    */ ae_matrix* layers,
+    ae_task_group *_group, ae_bool smp_enabled, ae_state *_state)
+{
+    if( _group==NULL || !smp_enabled)
+    {
+        idw_mstabrec(state,rcur,lambdacur,layeridx,mbpool,idx0,idx1,isrootcall,querycost,totalcost,layers, _state);
+        return;
+    }
+#if defined(_ALGLIB_HAS_WORKSTEALING)
+    {
+        ae_task_info *_task;
+        _task = ae_create_task(_group, _state);
+        _task->data.func = _task_idw_mstabrec;
+        _task->data.flags = _state->flags;
+        _task->data.parameters[0].value.val = state;
+        _task->data.parameters[1].value.dval = rcur;
+        _task->data.parameters[2].value.dval = lambdacur;
+        _task->data.parameters[3].value.ival = layeridx;
+        _task->data.parameters[4].value.val = mbpool;
+        _task->data.parameters[5].value.ival = idx0;
+        _task->data.parameters[6].value.ival = idx1;
+        _task->data.parameters[7].value.bval = isrootcall;
+        _task->data.parameters[8].value.dval = querycost;
+        _task->data.parameters[9].value.dval = totalcost;
+        _task->data.parameters[10].value.val = layers;
+        ae_push_task(_task, _state, ae_false);
+    }
+#else
+    abort(); /* critical integrity failure */
+#endif
+}
+
+
+/*************************************************************************
+This method is called when worker thread starts working on a non-root task.
+*************************************************************************/
+#if defined(_ALGLIB_HAS_WORKSTEALING)
+void _task_idw_mstabrec(ae_task_data *_data, ae_state *_state)
+{
+    idwbuilder* state;
+    double rcur;
+    double lambdacur;
+    ae_int_t layeridx;
+    ae_shared_pool* mbpool;
+    ae_int_t idx0;
+    ae_int_t idx1;
+    ae_bool isrootcall;
+    double querycost;
+    double totalcost;
+    ae_matrix* layers;
+    state = (idwbuilder*)_data->parameters[0].value.val;
+    rcur = _data->parameters[1].value.dval;
+    lambdacur = _data->parameters[2].value.dval;
+    layeridx = _data->parameters[3].value.ival;
+    mbpool = (ae_shared_pool*)_data->parameters[4].value.val;
+    idx0 = _data->parameters[5].value.ival;
+    idx1 = _data->parameters[6].value.ival;
+    isrootcall = _data->parameters[7].value.bval;
+    querycost = _data->parameters[8].value.dval;
+    totalcost = _data->parameters[9].value.dval;
+    layers = (ae_matrix*)_data->parameters[10].value.val;
+   ae_state_set_flags(_state, _data->flags);
+   idw_mstabrec(state,rcur,lambdacur,layeridx,mbpool,idx0,idx1,isrootcall,querycost,totalcost,layers, _state);
+}
+#endif
+
+
+/*************************************************************************
+Inserts task as root into worker queue if called from non-worker thread, waits for completion and returns true.
+Returns false if ALGLIB is configured for serial execution or we are already in the worker context.
+*************************************************************************/
+ae_bool _trypexec_idw_mstabrec(idwbuilder* state,
+    double rcur,
+    double lambdacur,
+    ae_int_t layeridx,
+    ae_shared_pool* mbpool,
+    ae_int_t idx0,
+    ae_int_t idx1,
+    ae_bool isrootcall,
+    double querycost,
+    double totalcost,
+    /* Real    */ ae_matrix* layers,
+    ae_state *_state)
+{
+#if defined(_ALGLIB_HAS_WORKSTEALING)
+    ae_task_info *_task;
+    const char *_e;
+    if( !ae_can_pexec(_state) )
+        return ae_false;
+    _task = ae_create_task(NULL, _state);
+    _task->data.func = _task_idw_mstabrec;
+    _task->data.flags = _state->flags;
+    _task->data.parameters[0].value.val = state;
+    _task->data.parameters[1].value.dval = rcur;
+    _task->data.parameters[2].value.dval = lambdacur;
+    _task->data.parameters[3].value.ival = layeridx;
+    _task->data.parameters[4].value.val = mbpool;
+    _task->data.parameters[5].value.ival = idx0;
+    _task->data.parameters[6].value.ival = idx1;
+    _task->data.parameters[7].value.bval = isrootcall;
+    _task->data.parameters[8].value.dval = querycost;
+    _task->data.parameters[9].value.dval = totalcost;
+    _task->data.parameters[10].value.val = layers;
+    ae_push_root_task(_task);
+    ae_wait_for_event(&_task->done_event);
+    _e = _task->exception;
+    ae_dispose_task(_task);
+    ae_assert(_e==NULL, _e, _state);
+    return ae_true;
+#else
+    return ae_false;
+#endif
+}
+
+
+/*************************************************************************
+Basecase for IDW-MSTAB model construction algorithm
+   
+  -- ALGLIB --
+     Copyright 22.10.2018 by Bochkanov Sergey
+*************************************************************************/
+static void idw_mstabbasecase(idwbuilder* state,
+     double rcur,
+     double lambdacur,
+     ae_int_t layeridx,
+     mstabbuffer* buf,
+     ae_int_t idx0,
+     ae_int_t idx1,
+     double querycost,
+     double totalcost,
+     /* Real    */ ae_matrix* layers,
+     ae_state *_state)
+{
+    ae_int_t i;
+    ae_int_t j;
+    ae_int_t k;
+    ae_int_t i0;
+    ae_int_t srcidx;
+    ae_int_t nx;
+    ae_int_t ny;
+    double v;
+    double vv;
+    double localprogress;
+
+
+    nx = state->nx;
+    ny = state->ny;
+    localprogress = 0.0;
+    for(i=idx0; i<=idx1-1; i++)
+    {
+        
+        /*
+         * Build the model
+         */
+        for(j=0; j<=nx-1; j++)
+        {
+            buf->x.ptr.p_double[j] = layers->ptr.pp_double[i][j];
+        }
+        k = kdtreetsqueryrnn(&state->tmptree, &buf->requestbuffer, &buf->x, rcur, ae_true, _state);
+        kdtreetsqueryresultstags(&state->tmptree, &buf->requestbuffer, &buf->tags, _state);
+        kdtreetsqueryresultsdistances(&state->tmptree, &buf->requestbuffer, &buf->dist, _state);
+        for(j=0; j<=ny-1; j++)
+        {
+            buf->wy.ptr.p_double[j] = (double)(0);
+            buf->w.ptr.p_double[j] = idw_w0;
+        }
+        for(i0=0; i0<=k-1; i0++)
+        {
+            vv = buf->dist.ptr.p_double[i0]/rcur;
+            vv = vv*vv;
+            v = ((double)1-vv)*((double)1-vv)/(vv+lambdacur);
+            srcidx = buf->tags.ptr.p_int[i0];
+            for(j=0; j<=ny-1; j++)
+            {
+                buf->wy.ptr.p_double[j] = buf->wy.ptr.p_double[j]+v*layers->ptr.pp_double[srcidx][nx+layeridx*ny+j];
+                buf->w.ptr.p_double[j] = buf->w.ptr.p_double[j]+v;
+            }
+        }
+        for(j=0; j<=ny-1; j++)
+        {
+            v = layers->ptr.pp_double[i][nx+layeridx*ny+j];
+            layers->ptr.pp_double[i][nx+(layeridx+1)*ny+j] = v-buf->wy.ptr.p_double[j]/buf->w.ptr.p_double[j];
+        }
+        
+        /*
+         * Update progress
+         */
+        localprogress = localprogress+querycost/coalesce(totalcost, (double)(1), _state);
+        if( ae_fp_greater_eq(localprogress,0.001)||i==idx1-1 )
+        {
+            rthreadunsafeset(&state->mprogress, boundval(rthreadunsafeget(&state->mprogress, _state)+localprogress, (double)(0), (double)(1), _state), _state);
+            localprogress = 0.0;
+        }
+    }
+}
+
+
 void _idwcalcbuffer_init(void* _p, ae_state *_state, ae_bool make_automatic)
 {
     idwcalcbuffer *p = (idwcalcbuffer*)_p;
@@ -1664,6 +2746,58 @@ void _idwcalcbuffer_destroy(void* _p)
 }
 
 
+void _mstabbuffer_init(void* _p, ae_state *_state, ae_bool make_automatic)
+{
+    mstabbuffer *p = (mstabbuffer*)_p;
+    ae_touch_ptr((void*)p);
+    ae_vector_init(&p->dist, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->x, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->w, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->wy, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->tags, 0, DT_INT, _state, make_automatic);
+    _kdtreerequestbuffer_init(&p->requestbuffer, _state, make_automatic);
+}
+
+
+void _mstabbuffer_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic)
+{
+    mstabbuffer       *dst = (mstabbuffer*)_dst;
+    const mstabbuffer *src = (const mstabbuffer*)_src;
+    ae_vector_init_copy(&dst->dist, &src->dist, _state, make_automatic);
+    ae_vector_init_copy(&dst->x, &src->x, _state, make_automatic);
+    ae_vector_init_copy(&dst->w, &src->w, _state, make_automatic);
+    ae_vector_init_copy(&dst->wy, &src->wy, _state, make_automatic);
+    ae_vector_init_copy(&dst->tags, &src->tags, _state, make_automatic);
+    _kdtreerequestbuffer_init_copy(&dst->requestbuffer, &src->requestbuffer, _state, make_automatic);
+}
+
+
+void _mstabbuffer_clear(void* _p)
+{
+    mstabbuffer *p = (mstabbuffer*)_p;
+    ae_touch_ptr((void*)p);
+    ae_vector_clear(&p->dist);
+    ae_vector_clear(&p->x);
+    ae_vector_clear(&p->w);
+    ae_vector_clear(&p->wy);
+    ae_vector_clear(&p->tags);
+    _kdtreerequestbuffer_clear(&p->requestbuffer);
+}
+
+
+void _mstabbuffer_destroy(void* _p)
+{
+    mstabbuffer *p = (mstabbuffer*)_p;
+    ae_touch_ptr((void*)p);
+    ae_vector_destroy(&p->dist);
+    ae_vector_destroy(&p->x);
+    ae_vector_destroy(&p->w);
+    ae_vector_destroy(&p->wy);
+    ae_vector_destroy(&p->tags);
+    _kdtreerequestbuffer_destroy(&p->requestbuffer);
+}
+
+
 void _idwmodel_init(void* _p, ae_state *_state, ae_bool make_automatic)
 {
     idwmodel *p = (idwmodel*)_p;
@@ -1690,6 +2824,7 @@ void _idwmodel_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool
     dst->lambdalast = src->lambdalast;
     dst->lambdadecay = src->lambdadecay;
     dst->shepardp = src->shepardp;
+    dst->debugprofile = src->debugprofile;
     _kdtree_init_copy(&dst->tree, &src->tree, _state, make_automatic);
     dst->npoints = src->npoints;
     ae_vector_init_copy(&dst->shepardxy, &src->shepardxy, _state, make_automatic);
@@ -1729,9 +2864,6 @@ void _idwbuilder_init(void* _p, ae_state *_state, ae_bool make_automatic)
     ae_matrix_init(&p->tmplayers, 0, 0, DT_REAL, _state, make_automatic);
     ae_vector_init(&p->tmptags, 0, DT_INT, _state, make_automatic);
     ae_vector_init(&p->tmpdist, 0, DT_REAL, _state, make_automatic);
-    ae_vector_init(&p->tmpx, 0, DT_REAL, _state, make_automatic);
-    ae_vector_init(&p->tmpwy, 0, DT_REAL, _state, make_automatic);
-    ae_vector_init(&p->tmpw, 0, DT_REAL, _state, make_automatic);
     _kdtree_init(&p->tmptree, _state, make_automatic);
     ae_vector_init(&p->tmpmean, 0, DT_REAL, _state, make_automatic);
 }
@@ -1751,6 +2883,9 @@ void _idwbuilder_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bo
     dst->lambdalast = src->lambdalast;
     dst->lambdadecay = src->lambdadecay;
     dst->shepardp = src->shepardp;
+    dst->debugprofile = src->debugprofile;
+    dst->mbatchsize = src->mbatchsize;
+    dst->mprogress = src->mprogress;
     ae_vector_init_copy(&dst->xy, &src->xy, _state, make_automatic);
     dst->npoints = src->npoints;
     dst->nx = src->nx;
@@ -1759,9 +2894,6 @@ void _idwbuilder_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bo
     ae_matrix_init_copy(&dst->tmplayers, &src->tmplayers, _state, make_automatic);
     ae_vector_init_copy(&dst->tmptags, &src->tmptags, _state, make_automatic);
     ae_vector_init_copy(&dst->tmpdist, &src->tmpdist, _state, make_automatic);
-    ae_vector_init_copy(&dst->tmpx, &src->tmpx, _state, make_automatic);
-    ae_vector_init_copy(&dst->tmpwy, &src->tmpwy, _state, make_automatic);
-    ae_vector_init_copy(&dst->tmpw, &src->tmpw, _state, make_automatic);
     _kdtree_init_copy(&dst->tmptree, &src->tmptree, _state, make_automatic);
     ae_vector_init_copy(&dst->tmpmean, &src->tmpmean, _state, make_automatic);
 }
@@ -1777,9 +2909,6 @@ void _idwbuilder_clear(void* _p)
     ae_matrix_clear(&p->tmplayers);
     ae_vector_clear(&p->tmptags);
     ae_vector_clear(&p->tmpdist);
-    ae_vector_clear(&p->tmpx);
-    ae_vector_clear(&p->tmpwy);
-    ae_vector_clear(&p->tmpw);
     _kdtree_clear(&p->tmptree);
     ae_vector_clear(&p->tmpmean);
 }
@@ -1795,9 +2924,6 @@ void _idwbuilder_destroy(void* _p)
     ae_matrix_destroy(&p->tmplayers);
     ae_vector_destroy(&p->tmptags);
     ae_vector_destroy(&p->tmpdist);
-    ae_vector_destroy(&p->tmpx);
-    ae_vector_destroy(&p->tmpwy);
-    ae_vector_destroy(&p->tmpw);
     _kdtree_destroy(&p->tmptree);
     ae_vector_destroy(&p->tmpmean);
 }

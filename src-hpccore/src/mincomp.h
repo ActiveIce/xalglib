@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -280,6 +280,12 @@ void minasarestartfrom(minasastate* state,
      /* Real    */ const ae_vector* bndl,
      /* Real    */ const ae_vector* bndu,
      ae_state *_state);
+
+
+/*************************************************************************
+Set V1 reverse communication protocol
+*************************************************************************/
+void minasasetprotocolv1(minasastate* state, ae_state *_state);
 void _minasastate_init(void* _p, ae_state *_state, ae_bool make_automatic);
 void _minasastate_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
 void _minasastate_clear(void* _p);

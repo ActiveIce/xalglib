@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -1183,6 +1183,17 @@ void minnsrestartfrom(minnsstate* state,
 
 
 /*************************************************************************
+Set V1 reverse communication protocol
+*************************************************************************/
+void minnssetprotocolv1(minnsstate* state, ae_state *_state)
+{
+
+
+    state->protocolversion = 1;
+}
+
+
+/*************************************************************************
 Clears request fileds (to be sure that we don't forget to clear something)
 *************************************************************************/
 static void minns_clearrequestfields(minnsstate* state, ae_state *_state)
@@ -1216,6 +1227,7 @@ static void minns_minnsinitinternal(ae_int_t n,
     ae_matrix_init(&c, 0, 0, DT_REAL, _state, ae_true);
     ae_vector_init(&ct, 0, DT_INT, _state, ae_true);
 
+    state->protocolversion = 1;
     state->agsinitstp = 0.2;
     state->agsstattold = ae_sqrt(ae_machineepsilon, _state);
     state->agsshortstpabs = 1.0E-10;
@@ -3170,6 +3182,7 @@ void _minnsstate_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bo
     ae_matrix_init_copy(&dst->cleic, &src->cleic, _state, make_automatic);
     dst->ng = src->ng;
     dst->nh = src->nh;
+    dst->protocolversion = src->protocolversion;
     ae_vector_init_copy(&dst->x, &src->x, _state, make_automatic);
     dst->f = src->f;
     ae_vector_init_copy(&dst->fi, &src->fi, _state, make_automatic);

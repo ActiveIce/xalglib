@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -1468,7 +1468,7 @@ c) actual size can be larger than N, so subsequent grow() calls can return
    without reallocation
 
   -- ALGLIB --
-     Copyright 20.03.2009 by Bochkanov Sergey
+     Copyright 07.06.2023 by Bochkanov Sergey
 *************************************************************************/
 void rgrowv(ae_int_t newn, /* Real    */ ae_vector* x, ae_state *_state);
 

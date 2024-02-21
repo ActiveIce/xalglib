@@ -14,8 +14,8 @@ BEGIN
             VALUE "FileDescription", "ALGLIB native core"
             VALUE "FileVersion", "0.0.0.0"
             VALUE "ProductName", "ALGLIB native core"
-            VALUE "ProductVersion", "4.00.0.0"
-            VALUE "LegalCopyright", "version 4.00.0 built 2023-05-21"
+            VALUE "ProductVersion", "4.01.0.0"
+            VALUE "LegalCopyright", "version 4.01.0 built 2023-12-27"
         END
     END
     BLOCK "VarFileInfo"

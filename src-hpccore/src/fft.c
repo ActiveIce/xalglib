@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -80,7 +80,7 @@ void fftc1d(/* Complex */ ae_vector* a, ae_int_t n, ae_state *_state)
     }
     
     /*
-     * convert input array to the more convinient format
+     * convert input array to the more convenient format
      */
     ae_vector_set_length(&buf, 2*n, _state);
     for(i=0; i<=n-1; i++)
@@ -173,6 +173,9 @@ OUTPUT PARAMETERS
     F   -   DFT of a input array, array[0..N-1]
             F[j] = SUM(A[k]*exp(-2*pi*sqrt(-1)*j*k/N), k = 0..N-1)
 
+NOTE: there is a buffered version  of  this  function, FFTR1DBuf(),  which
+      reuses memory previously allocated for A as much as possible.
+
 NOTE:
     F[] satisfies symmetry property F[k] = conj(F[N-k]),  so just one half
 of  array  is  usually needed. But for convinience subroutine returns full
@@ -184,6 +187,29 @@ other FFT-related subroutines.
      Copyright 01.06.2009 by Bochkanov Sergey
 *************************************************************************/
 void fftr1d(/* Real    */ const ae_vector* a,
+     ae_int_t n,
+     /* Complex */ ae_vector* f,
+     ae_state *_state)
+{
+
+    ae_vector_clear(f);
+
+    ae_assert(n>0, "FFTR1D: incorrect N!", _state);
+    ae_assert(a->cnt>=n, "FFTR1D: Length(A)<N!", _state);
+    ae_assert(isfinitevector(a, n, _state), "FFTR1D: A contains infinite or NAN values!", _state);
+    fftr1dbuf(a, n, f, _state);
+}
+
+
+/*************************************************************************
+1-dimensional real FFT, a buffered function which does not reallocate  F[]
+if its length is enough to store the result  (i.e.  it  reuses  previously
+allocated memory as much as possible).
+
+  -- ALGLIB --
+     Copyright 01.06.2009 by Bochkanov Sergey
+*************************************************************************/
+void fftr1dbuf(/* Real    */ const ae_vector* a,
      ae_int_t n,
      /* Complex */ ae_vector* f,
      ae_state *_state)
@@ -201,13 +227,12 @@ void fftr1d(/* Real    */ const ae_vector* a,
     ae_frame_make(_state, &_frame_block);
     memset(&buf, 0, sizeof(buf));
     memset(&plan, 0, sizeof(plan));
-    ae_vector_clear(f);
     ae_vector_init(&buf, 0, DT_REAL, _state, ae_true);
     _fasttransformplan_init(&plan, _state, ae_true);
 
-    ae_assert(n>0, "FFTR1D: incorrect N!", _state);
-    ae_assert(a->cnt>=n, "FFTR1D: Length(A)<N!", _state);
-    ae_assert(isfinitevector(a, n, _state), "FFTR1D: A contains infinite or NAN values!", _state);
+    ae_assert(n>0, "FFTR1DBuf: incorrect N!", _state);
+    ae_assert(a->cnt>=n, "FFTR1DBuf: Length(A)<N!", _state);
+    ae_assert(isfinitevector(a, n, _state), "FFTR1DBuf: A contains infinite or NAN values!", _state);
     
     /*
      * Special cases:
@@ -218,14 +243,14 @@ void fftr1d(/* Real    */ const ae_vector* a,
      */
     if( n==1 )
     {
-        ae_vector_set_length(f, 1, _state);
+        callocv(1, f, _state);
         f->ptr.p_complex[0] = ae_complex_from_d(a->ptr.p_double[0]);
         ae_frame_leave(_state);
         return;
     }
     if( n==2 )
     {
-        ae_vector_set_length(f, 2, _state);
+        callocv(2, f, _state);
         f->ptr.p_complex[0].x = a->ptr.p_double[0]+a->ptr.p_double[1];
         f->ptr.p_complex[0].y = (double)(0);
         f->ptr.p_complex[1].x = a->ptr.p_double[0]-a->ptr.p_double[1];
@@ -248,7 +273,7 @@ void fftr1d(/* Real    */ const ae_vector* a,
         ae_v_move(&buf.ptr.p_double[0], 1, &a->ptr.p_double[0], 1, ae_v_len(0,n-1));
         ftcomplexfftplan(n2, 1, &plan, _state);
         ftapplyplan(&plan, &buf, 0, 1, _state);
-        ae_vector_set_length(f, n, _state);
+        callocv(n, f, _state);
         for(i=0; i<=n2; i++)
         {
             idx = 2*(i%n2);
@@ -274,7 +299,7 @@ void fftr1d(/* Real    */ const ae_vector* a,
         /*
          * use complex FFT
          */
-        ae_vector_set_length(f, n, _state);
+        callocv(n, f, _state);
         for(i=0; i<=n-1; i++)
         {
             f->ptr.p_complex[i] = ae_complex_from_d(a->ptr.p_double[i]);
@@ -297,6 +322,9 @@ INPUT PARAMETERS
 OUTPUT PARAMETERS
     A   -   inverse DFT of a input array, array[0..N-1]
 
+NOTE: there is a buffered version of this function, FFTR1DInvBuf(),  which
+      reuses memory previously allocated for A as much as possible.
+
 NOTE:
     F[] should satisfy symmetry property F[k] = conj(F[N-k]), so just  one
 half of frequencies array is needed - elements from 0 to floor(N/2).  F[0]
@@ -315,7 +343,6 @@ both.
 If you call this function using reduced arguments list -  "FFTR1DInv(F,A)"
 - you must pass FULL array with N elements (although higher  N/2 are still
 not used) because array size is used to automatically determine FFT length
-
 
   -- ALGLIB --
      Copyright 01.06.2009 by Bochkanov Sergey
@@ -349,6 +376,47 @@ void fftr1dinv(/* Complex */ const ae_vector* f,
     {
         ae_assert(ae_isfinite(f->ptr.p_complex[ae_ifloor((double)n/(double)2, _state)].y, _state), "FFTR1DInv: F contains infinite or NAN values!", _state);
     }
+    fftr1dinvbuf(f, n, a, _state);
+    ae_frame_leave(_state);
+}
+
+
+/*************************************************************************
+1-dimensional real inverse FFT, buffered version, which does not reallocate
+A[] if its length is enough to store the result (i.e. it reuses previously
+allocated memory as much as possible).
+
+  -- ALGLIB --
+     Copyright 01.06.2009 by Bochkanov Sergey
+*************************************************************************/
+void fftr1dinvbuf(/* Complex */ const ae_vector* f,
+     ae_int_t n,
+     /* Real    */ ae_vector* a,
+     ae_state *_state)
+{
+    ae_frame _frame_block;
+    ae_int_t i;
+    ae_vector h;
+    ae_vector fh;
+
+    ae_frame_make(_state, &_frame_block);
+    memset(&h, 0, sizeof(h));
+    memset(&fh, 0, sizeof(fh));
+    ae_vector_init(&h, 0, DT_REAL, _state, ae_true);
+    ae_vector_init(&fh, 0, DT_COMPLEX, _state, ae_true);
+
+    ae_assert(n>0, "FFTR1DInvBuf: incorrect N!", _state);
+    ae_assert(f->cnt>=ae_ifloor((double)n/(double)2, _state)+1, "FFTR1DInvBuf: Length(F)<Floor(N/2)+1!", _state);
+    ae_assert(ae_isfinite(f->ptr.p_complex[0].x, _state), "FFTR1DInvBuf: F contains infinite or NAN values!", _state);
+    for(i=1; i<=ae_ifloor((double)n/(double)2, _state)-1; i++)
+    {
+        ae_assert(ae_isfinite(f->ptr.p_complex[i].x, _state)&&ae_isfinite(f->ptr.p_complex[i].y, _state), "FFTR1DInvBuf: F contains infinite or NAN values!", _state);
+    }
+    ae_assert(ae_isfinite(f->ptr.p_complex[ae_ifloor((double)n/(double)2, _state)].x, _state), "FFTR1DInvBuf: F contains infinite or NAN values!", _state);
+    if( n%2!=0 )
+    {
+        ae_assert(ae_isfinite(f->ptr.p_complex[ae_ifloor((double)n/(double)2, _state)].y, _state), "FFTR1DInvBuf: F contains infinite or NAN values!", _state);
+    }
     
     /*
      * Special case: N=1, FFT is just identity transform.
@@ -356,7 +424,7 @@ void fftr1dinv(/* Complex */ const ae_vector* f,
      */
     if( n==1 )
     {
-        ae_vector_set_length(a, 1, _state);
+        rallocv(1, a, _state);
         a->ptr.p_double[0] = f->ptr.p_complex[0].x;
         ae_frame_leave(_state);
         return;
@@ -370,7 +438,7 @@ void fftr1dinv(/* Complex */ const ae_vector* f,
      * Don't worry, it is really compact and efficient reduction :)
      */
     ae_vector_set_length(&h, n, _state);
-    ae_vector_set_length(a, n, _state);
+    rallocv(n, a, _state);
     h.ptr.p_double[0] = f->ptr.p_complex[0].x;
     for(i=1; i<=ae_ifloor((double)n/(double)2, _state)-1; i++)
     {

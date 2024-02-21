@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -23,6 +23,9 @@
 #include "apserv.h"
 #include "ntheory.h"
 #include "ftbase.h"
+#include "ablasf.h"
+#include "xdebug.h"
+#include "hqrnd.h"
 
 
 /*$ Declarations $*/
@@ -99,6 +102,9 @@ OUTPUT PARAMETERS
     F   -   DFT of a input array, array[0..N-1]
             F[j] = SUM(A[k]*exp(-2*pi*sqrt(-1)*j*k/N), k = 0..N-1)
 
+NOTE: there is a buffered version  of  this  function, FFTR1DBuf(),  which
+      reuses memory previously allocated for A as much as possible.
+
 NOTE:
     F[] satisfies symmetry property F[k] = conj(F[N-k]),  so just one half
 of  array  is  usually needed. But for convinience subroutine returns full
@@ -116,6 +122,20 @@ void fftr1d(/* Real    */ const ae_vector* a,
 
 
 /*************************************************************************
+1-dimensional real FFT, a buffered function which does not reallocate  F[]
+if its length is enough to store the result  (i.e.  it  reuses  previously
+allocated memory as much as possible).
+
+  -- ALGLIB --
+     Copyright 01.06.2009 by Bochkanov Sergey
+*************************************************************************/
+void fftr1dbuf(/* Real    */ const ae_vector* a,
+     ae_int_t n,
+     /* Complex */ ae_vector* f,
+     ae_state *_state);
+
+
+/*************************************************************************
 1-dimensional real inverse FFT.
 
 Algorithm has O(N*logN) complexity for any N (composite or prime).
@@ -126,6 +146,9 @@ INPUT PARAMETERS
 
 OUTPUT PARAMETERS
     A   -   inverse DFT of a input array, array[0..N-1]
+
+NOTE: there is a buffered version of this function, FFTR1DInvBuf(),  which
+      reuses memory previously allocated for A as much as possible.
 
 NOTE:
     F[] should satisfy symmetry property F[k] = conj(F[N-k]), so just  one
@@ -146,11 +169,24 @@ If you call this function using reduced arguments list -  "FFTR1DInv(F,A)"
 - you must pass FULL array with N elements (although higher  N/2 are still
 not used) because array size is used to automatically determine FFT length
 
-
   -- ALGLIB --
      Copyright 01.06.2009 by Bochkanov Sergey
 *************************************************************************/
 void fftr1dinv(/* Complex */ const ae_vector* f,
+     ae_int_t n,
+     /* Real    */ ae_vector* a,
+     ae_state *_state);
+
+
+/*************************************************************************
+1-dimensional real inverse FFT, buffered version, which does not reallocate
+A[] if its length is enough to store the result (i.e. it reuses previously
+allocated memory as much as possible).
+
+  -- ALGLIB --
+     Copyright 01.06.2009 by Bochkanov Sergey
+*************************************************************************/
+void fftr1dinvbuf(/* Complex */ const ae_vector* f,
      ae_int_t n,
      /* Real    */ ae_vector* a,
      ae_state *_state);

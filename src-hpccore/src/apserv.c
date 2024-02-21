@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -45,7 +45,7 @@ void seterrorflagdiff(ae_bool* flag,
 {
 
 
-    ae_set_error_flag(flag, ae_fp_greater(ae_fabs(val-refval, _state),tol*ae_maxreal(ae_fabs(refval, _state), s, _state)), __FILE__, __LINE__, "apserv.ap:238");
+    ae_set_error_flag(flag, ae_fp_greater(ae_fabs(val-refval, _state),tol*ae_maxreal(ae_fabs(refval, _state), s, _state)), __FILE__, __LINE__, "apserv.ap:254");
 }
 
 
@@ -2133,6 +2133,50 @@ void threadunsafeincby(ae_int_t* v, ae_int_t k, ae_state *_state)
 
 
 /*************************************************************************
+This function is used to increment value of a real variable;  name of  the
+function suggests that increment is done in multithreaded setting  in  the
+thread-unsafe manner (optional progress reports which do not need guaranteed
+correctness)
+*************************************************************************/
+void rthreadunsafeincby(double* v, double x, ae_state *_state)
+{
+
+
+    *v = *v+x;
+}
+
+
+/*************************************************************************
+This function is used to set value of a real variable;  name of  the
+function suggests that increment is done in multithreaded setting  in  the
+thread-unsafe manner (optional progress reports which do not need guaranteed
+correctness), although the library may try to use safe options, if available.
+*************************************************************************/
+void rthreadunsafeset(double* v, double x, ae_state *_state)
+{
+
+
+    *v = x;
+}
+
+
+/*************************************************************************
+This function is used to read value of a real variable;  name of  the
+function suggests that read is done in multithreaded setting  in  the
+thread-unsafe manner (optional progress reports which do not need guaranteed
+correctness), although the library may try to use safe options, if available.
+*************************************************************************/
+double rthreadunsafeget(double* v, ae_state *_state)
+{
+    double result;
+
+
+    result = *v;
+    return result;
+}
+
+
+/*************************************************************************
 This function performs two operations:
 1. decrements value of integer variable, if it is positive
 2. explicitly sets variable to zero if it is non-positive
@@ -2169,6 +2213,27 @@ double possign(double x, ae_state *_state)
     else
     {
         result = (double)(-1);
+    }
+    return result;
+}
+
+
+/*************************************************************************
+This function returns +1 or -1 depending on sign of X.
+x=0 results in +1 being returned.
+*************************************************************************/
+ae_int_t ipossign(double x, ae_state *_state)
+{
+    ae_int_t result;
+
+
+    if( ae_fp_greater_eq(x,(double)(0)) )
+    {
+        result = 1;
+    }
+    else
+    {
+        result = -1;
     }
     return result;
 }
@@ -2273,6 +2338,35 @@ ae_int_t imin3(ae_int_t i0, ae_int_t i1, ae_int_t i2, ae_state *_state)
 
 
 /*************************************************************************
+This function returns min(i0,i1,i2,i3)
+*************************************************************************/
+ae_int_t imin4(ae_int_t i0,
+     ae_int_t i1,
+     ae_int_t i2,
+     ae_int_t i3,
+     ae_state *_state)
+{
+    ae_int_t result;
+
+
+    result = i0;
+    if( i1<result )
+    {
+        result = i1;
+    }
+    if( i2<result )
+    {
+        result = i2;
+    }
+    if( i3<result )
+    {
+        result = i3;
+    }
+    return result;
+}
+
+
+/*************************************************************************
 This function returns max(i0,i1)
 *************************************************************************/
 ae_int_t imax2(ae_int_t i0, ae_int_t i1, ae_state *_state)
@@ -2305,6 +2399,35 @@ ae_int_t imax3(ae_int_t i0, ae_int_t i1, ae_int_t i2, ae_state *_state)
     if( i2>result )
     {
         result = i2;
+    }
+    return result;
+}
+
+
+/*************************************************************************
+This function returns max(i0,i1,i2,i3)
+*************************************************************************/
+ae_int_t imax4(ae_int_t i0,
+     ae_int_t i1,
+     ae_int_t i2,
+     ae_int_t i3,
+     ae_state *_state)
+{
+    ae_int_t result;
+
+
+    result = i0;
+    if( i1>result )
+    {
+        result = i1;
+    }
+    if( i2>result )
+    {
+        result = i2;
+    }
+    if( i3>result )
+    {
+        result = i3;
     }
     return result;
 }
@@ -4107,6 +4230,21 @@ void tracespaces(ae_int_t cnt, ae_state *_state)
 
 
 /*************************************************************************
+Outputs specified number of ">" symbols
+*************************************************************************/
+void traceangles(ae_int_t cnt, ae_state *_state)
+{
+    ae_int_t i;
+
+
+    for(i=0; i<=cnt-1; i++)
+    {
+        ae_trace(">");
+    }
+}
+
+
+/*************************************************************************
 Minimum speedup feasible for multithreading
 *************************************************************************/
 double minspeedup(ae_state *_state)
@@ -4253,7 +4391,7 @@ double squantilecounterget(squantilecounter* c,
         if( left==right )
         {
             result = c->elems.ptr.p_double[left];
-            return result;
+            break;
         }
         pivotindex = left+(right-left)/2;
         pivotvalue = c->elems.ptr.p_double[pivotindex];
@@ -4272,7 +4410,7 @@ double squantilecounterget(squantilecounter* c,
         if( pivotindex==k )
         {
             result = c->elems.ptr.p_double[k];
-            return result;
+            break;
         }
         if( k<pivotindex )
         {
@@ -4283,6 +4421,58 @@ double squantilecounterget(squantilecounter* c,
             left = pivotindex+1;
         }
     }
+    return result;
+}
+
+
+/*************************************************************************
+Initialize timer
+*************************************************************************/
+void stimerinit(stimer* t, ae_state *_state)
+{
+
+
+    t->ttotal = 0;
+    t->isrunning = ae_false;
+}
+
+
+/*************************************************************************
+Start measurement
+*************************************************************************/
+void stimerstart(stimer* t, ae_state *_state)
+{
+
+
+    ae_assert(!t->isrunning, "STimerStart: attempt to start already started timer", _state);
+    t->isrunning = ae_true;
+    t->tcurrent = ae_tickcount();
+}
+
+
+/*************************************************************************
+Stop measurement, add time to already accumulated
+*************************************************************************/
+void stimerstop(stimer* t, ae_state *_state)
+{
+
+
+    ae_assert(t->isrunning, "STimerStop: attempt to stop already stopped timer", _state);
+    t->isrunning = ae_false;
+    t->ttotal = t->ttotal+ae_tickcount()-t->tcurrent;
+}
+
+
+/*************************************************************************
+Retrieve time in milliseconds, accuracy unknown
+*************************************************************************/
+double stimergetms(stimer* t, ae_state *_state)
+{
+    double result;
+
+
+    ae_assert(!t->isrunning, "STimerGetMS: attempt to get time from the running timer", _state);
+    result = (double)(t->ttotal);
     return result;
 }
 
@@ -4803,6 +4993,37 @@ void _squantilecounter_destroy(void* _p)
     squantilecounter *p = (squantilecounter*)_p;
     ae_touch_ptr((void*)p);
     ae_vector_destroy(&p->elems);
+}
+
+
+void _stimer_init(void* _p, ae_state *_state, ae_bool make_automatic)
+{
+    stimer *p = (stimer*)_p;
+    ae_touch_ptr((void*)p);
+}
+
+
+void _stimer_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic)
+{
+    stimer       *dst = (stimer*)_dst;
+    const stimer *src = (const stimer*)_src;
+    dst->ttotal = src->ttotal;
+    dst->tcurrent = src->tcurrent;
+    dst->isrunning = src->isrunning;
+}
+
+
+void _stimer_clear(void* _p)
+{
+    stimer *p = (stimer*)_p;
+    ae_touch_ptr((void*)p);
+}
+
+
+void _stimer_destroy(void* _p)
+{
+    stimer *p = (stimer*)_p;
+    ae_touch_ptr((void*)p);
 }
 
 

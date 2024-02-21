@@ -26,17 +26,17 @@
 @call "..\..\vcvars32" || goto lbl_failure
 @call "%mklvars%" ia32    || goto lbl_failure
 @cvtres /machine:x86 /out:alglib32_info.obj alglib_info.res || goto lbl_failure
-@cl /Fealglib400_32hpc.dll /nologo /LD /Ox /wd4996 /we4020 /W3 /DX_FOR_WINDOWS /DAE_CPU=AE_INTEL /DAE_OS=AE_WINDOWS /DAE_MKL /DAE_SMP /I"%MKLROOT%/include" /I. *.c alglib32_info.obj kernels32_sse2.obj kernels32_avx2.obj kernels32_fma.obj mkl_intel_c.lib mkl_sequential.lib mkl_core.lib /link /LIBPATH:"%MKLROOT%\lib\ia32" || goto lbl_failure
-@echo alglib400_32hpc.dll was built
-@move alglib400_32hpc.dll .. || goto lbl_failure
+@cl /Fealglib401_32hpc.dll /nologo /LD /Ox /wd4996 /we4020 /W3 /DX_FOR_WINDOWS /DAE_CPU=AE_INTEL /DAE_OS=AE_WINDOWS /DAE_MKL /DAE_SMP /I"%MKLROOT%/include" /I. *.c alglib32_info.obj kernels32_sse2.obj kernels32_avx2.obj kernels32_fma.obj mkl_intel_c.lib mkl_sequential.lib mkl_core.lib /link /LIBPATH:"%MKLROOT%\lib\ia32" || goto lbl_failure
+@echo alglib401_32hpc.dll was built
+@move alglib401_32hpc.dll .. || goto lbl_failure
 @del /Q alglib32_info.obj
 
 @call "..\..\vcvars64" || goto lbl_failure
 @call "%mklvars%" intel64 || goto lbl_failure
 @cvtres /machine:x64 /out:alglib64_info.obj alglib_info.res >NUL
-@cl /Fealglib400_64hpc.dll /nologo /LD /Ox /wd4996 /we4020 /W3 /DX_FOR_WINDOWS /DAE_CPU=AE_INTEL /DAE_OS=AE_WINDOWS /DAE_MKL /DAE_SMP /DMKL_ILP64 /I"%MKLROOT%/include" /I. *.c alglib64_info.obj kernels64_sse2.obj kernels64_avx2.obj kernels64_fma.obj mkl_intel_ilp64.lib mkl_sequential.lib mkl_core.lib /link /LIBPATH:"%MKLROOT%\lib\intel64" || goto lbl_failure
-@echo alglib400_64hpc.dll was built
-@move alglib400_64hpc.dll .. || goto lbl_failure
+@cl /Fealglib401_64hpc.dll /nologo /LD /Ox /wd4996 /we4020 /W3 /DX_FOR_WINDOWS /DAE_CPU=AE_INTEL /DAE_OS=AE_WINDOWS /DAE_MKL /DAE_SMP /DMKL_ILP64 /I"%MKLROOT%/include" /I. *.c alglib64_info.obj kernels64_sse2.obj kernels64_avx2.obj kernels64_fma.obj mkl_intel_ilp64.lib mkl_sequential.lib mkl_core.lib /link /LIBPATH:"%MKLROOT%\lib\intel64" || goto lbl_failure
+@echo alglib401_64hpc.dll was built
+@move alglib401_64hpc.dll .. || goto lbl_failure
 @del /Q alglib64_info.obj
 
 @cd ..

@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -54,7 +54,10 @@ typedef struct ae_task_group
 ae_int_t ae_cores_count();
 void ae_set_cores_to_use(ae_int_t ncores);
 ae_int_t ae_get_cores_to_use();
+ae_int_t ae_get_cores_to_use_positive();
 ae_bool ae_multithreading_enabled(ae_state *_state);
+ae_bool ae_can_pexec(ae_state *_state);
+ae_bool ae_can_parallelize_callbacks(ae_state *_state);
 void ae_set_smp_support(
     ae_task_group **_child_tasks,
     ae_bool *_smp_enabled,
@@ -369,9 +372,11 @@ typedef struct ae_worker_thread
 ae_int_t ae_cores_count();
 void ae_set_cores_to_use(ae_int_t ncores);
 ae_int_t ae_get_cores_to_use();
+ae_int_t ae_get_cores_to_use_positive();
 void ae_wait_for_event(ae_event *event);
 
 ae_bool ae_can_pexec(ae_state *_state);
+ae_bool ae_can_parallelize_callbacks(ae_state *_state);
 
 ae_task_info* ae_create_task(ae_task_group *parent_group, ae_state *_state);
 void ae_dispose_task(ae_task_info *task);

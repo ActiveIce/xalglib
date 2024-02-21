@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -362,18 +362,35 @@ this subspackage in a loop like below:
 
 INPUT PARAMETERS:
     State       -   solver object
-    MType       -   matrix type:
-                    * 0 for real  symmetric  matrix  (solver  assumes that
-                      matrix  being   processed  is  symmetric;  symmetric
-                      direct eigensolver is used for  smaller  subproblems
-                      arising during solution of larger "full" task)
+    MType       -   matrix type and solver mode:
+    
+                    * 0 =   real symmetric matrix A, products  of the form
+                            A*X are computed. At every step  the  basis of
+                            the  invariant  subspace  is  reorthogonalized
+                            with LQ decomposition  which  makes  the  algo
+                            more robust.
+                            
+                            The first mode introduced in ALGLIB, the  most
+                            precise and robust. However, it is  suboptimal
+                            for easy problems which can be solved  in  3-5
+                            iterations without LQ step.
+                            
+                    * 1 =   real symmetric matrix A, products  of the form
+                            A*X are computed. The  invariant  subspace  is
+                            NOT reorthogonalized,  no  error  checks.  The
+                            solver  stops  after   specified   number   of
+                            iterations which should be small, 5 at most.
+                            
+                            This mode is intended for easy  problems  with
+                            extremely fast convergence.
+                    
                     Future versions of ALGLIB may  introduce  support  for
                     other  matrix   types;   for   now,   only   symmetric
                     eigenproblems are supported.
 
 
   -- ALGLIB --
-     Copyright 16.01.2017 by Bochkanov Sergey
+     Copyright 07.06.2023 by Bochkanov Sergey
 *************************************************************************/
 void eigsubspaceoocstart(eigsubspacestate* state,
      ae_int_t mtype,
@@ -382,13 +399,13 @@ void eigsubspaceoocstart(eigsubspacestate* state,
 
 
     ae_assert(!state->running, "EigSubspaceStart: solver is already running", _state);
-    ae_assert(mtype==0, "EigSubspaceStart: incorrect mtype parameter", _state);
-    ae_vector_set_length(&state->rstate.ia, 7+1, _state);
+    ae_assert(mtype==0||mtype==1, "EigSubspaceStart: incorrect mtype parameter", _state);
+    ae_vector_set_length(&state->rstate.ia, 8+1, _state);
     ae_vector_set_length(&state->rstate.ra, 1+1, _state);
     state->rstate.stage = -1;
     evd_clearrfields(state, _state);
     state->running = ae_true;
-    state->matrixtype = mtype;
+    state->solvermode = mtype;
 }
 
 
@@ -698,6 +715,7 @@ void eigsubspacesolvedenses(eigsubspacestate* state,
     ae_int_t j;
     ae_int_t k;
     double v;
+    ae_int_t prevmode;
     ae_matrix acopy;
 
     ae_frame_make(_state, &_frame_block);
@@ -734,8 +752,9 @@ void eigsubspacesolvedenses(eigsubspacestate* state,
     /*
      * Start iterations
      */
-    state->matrixtype = 0;
-    ae_vector_set_length(&state->rstate.ia, 7+1, _state);
+    prevmode = state->solvermode;
+    state->solvermode = 0;
+    ae_vector_set_length(&state->rstate.ia, 8+1, _state);
     ae_vector_set_length(&state->rstate.ra, 1+1, _state);
     state->rstate.stage = -1;
     evd_clearrfields(state, _state);
@@ -750,6 +769,7 @@ void eigsubspacesolvedenses(eigsubspacestate* state,
         m = state->requestsize;
         rmatrixgemm(n, m, n, 1.0, &acopy, 0, 0, 0, &state->x, 0, 0, 0, 0.0, &state->ax, 0, 0, _state);
     }
+    state->solvermode = prevmode;
     k = state->k;
     ae_vector_set_length(w, k, _state);
     ae_matrix_set_length(z, n, k, _state);
@@ -802,6 +822,7 @@ void eigsubspacesolvesparses(eigsubspacestate* state,
     ae_int_t i;
     ae_int_t j;
     ae_int_t k;
+    ae_int_t prevmode;
 
     ae_vector_clear(w);
     ae_matrix_clear(z);
@@ -809,8 +830,9 @@ void eigsubspacesolvesparses(eigsubspacestate* state,
 
     ae_assert(!state->running, "EigSubspaceSolveSparseS: solver is still running", _state);
     n = state->n;
-    state->matrixtype = 0;
-    ae_vector_set_length(&state->rstate.ia, 7+1, _state);
+    prevmode = state->solvermode;
+    state->solvermode = 0;
+    ae_vector_set_length(&state->rstate.ia, 8+1, _state);
     ae_vector_set_length(&state->rstate.ra, 1+1, _state);
     state->rstate.stage = -1;
     evd_clearrfields(state, _state);
@@ -820,6 +842,7 @@ void eigsubspacesolvesparses(eigsubspacestate* state,
         ae_assert(state->requestsize>0, "EigSubspaceSolveDense: integrity check failed", _state);
         sparsesmm(a, isupper, &state->x, state->requestsize, &state->ax, _state);
     }
+    state->solvermode = prevmode;
     k = state->k;
     ae_vector_set_length(w, k, _state);
     ae_matrix_set_length(z, n, k, _state);
@@ -856,6 +879,7 @@ ae_bool eigsubspaceiteration(eigsubspacestate* state, ae_state *_state)
     double vv;
     double v;
     ae_int_t convcnt;
+    ae_int_t iterationtype;
     ae_bool result;
 
 
@@ -880,6 +904,7 @@ ae_bool eigsubspaceiteration(eigsubspacestate* state, ae_state *_state)
         i1 = state->rstate.ia.ptr.p_int[5];
         j = state->rstate.ia.ptr.p_int[6];
         convcnt = state->rstate.ia.ptr.p_int[7];
+        iterationtype = state->rstate.ia.ptr.p_int[8];
         vv = state->rstate.ra.ptr.p_double[0];
         v = state->rstate.ra.ptr.p_double[1];
     }
@@ -893,12 +918,21 @@ ae_bool eigsubspaceiteration(eigsubspacestate* state, ae_state *_state)
         i1 = 255;
         j = 74;
         convcnt = -788;
-        vv = 809.0;
-        v = 205.0;
+        iterationtype = 809;
+        vv = 205.0;
+        v = -838.0;
     }
     if( state->rstate.stage==0 )
     {
         goto lbl_0;
+    }
+    if( state->rstate.stage==1 )
+    {
+        goto lbl_1;
+    }
+    if( state->rstate.stage==2 )
+    {
+        goto lbl_2;
     }
     
     /*
@@ -914,6 +948,20 @@ ae_bool eigsubspaceiteration(eigsubspacestate* state, ae_state *_state)
      * of the entire solver.
      */
     hqrndseed(453, 463664, &state->rs, _state);
+    
+    /*
+     * Analyze solver mode.
+     *
+     * IterationType:
+     * * 0 for LQ-based reorthogonalization with checks
+     * * 1 for a quick algo without checks or reorthogonalizations
+     */
+    ae_assert(state->solvermode==0||state->solvermode==1, "EigSubspaceIteration: unexpected MatrixType", _state);
+    iterationtype = 0;
+    if( state->solvermode==1 )
+    {
+        iterationtype = 1;
+    }
     
     /*
      * Prepare iteration
@@ -968,11 +1016,19 @@ ae_bool eigsubspaceiteration(eigsubspacestate* state, ae_state *_state)
      * Start iteration
      */
     state->repiterationscount = 0;
+    if( iterationtype!=0 )
+    {
+        goto lbl_3;
+    }
+    
+    /*
+     * Iterations with reorthogonalization and quick checks
+     */
     convcnt = 0;
-lbl_1:
+lbl_5:
     if( !((state->maxits==0||state->repiterationscount<state->maxits)&&convcnt<evd_stepswithintol) )
     {
-        goto lbl_2;
+        goto lbl_6;
     }
     
     /*
@@ -994,7 +1050,7 @@ lbl_0:
      */
     if( ae_fp_greater(state->eps,(double)(0)) )
     {
-        ae_assert(state->matrixtype==0, "integrity check failed", _state);
+        ae_assert(state->solvermode==0, "EigSubspace: integrity check failed", _state);
         rmatrixsetlengthatleast(&state->r, nwork, nwork, _state);
         rmatrixgemm(nwork, nwork, n, 1.0, &state->qcur, 0, 0, 0, &state->ax, 0, 0, 0, 0.0, &state->r, 0, 0, _state);
         if( !smatrixevd(&state->r, nwork, 0, ae_true, &state->wcur, &state->dummy, _state) )
@@ -1045,14 +1101,80 @@ lbl_0:
      * Update iteration index
      */
     state->repiterationscount = state->repiterationscount+1;
-    goto lbl_1;
+    goto lbl_5;
+lbl_6:
+lbl_3:
+    if( iterationtype!=1 )
+    {
+        goto lbl_7;
+    }
+    
+    /*
+     * Quick iterations without reorthogonalization, stopping after prescribed amount of its, no checks.
+     *
+     * First, we perform CNT-1 iterations without any reorthogonalization
+     */
+lbl_9:
+    if( ae_fp_greater_eq((double)(state->repiterationscount),coalesce((double)(state->maxits), (double)(5), _state)-(double)1) )
+    {
+        goto lbl_10;
+    }
+    
+    /*
+     * Update QCur := QNew
+     *
+     * Calculate A*Q', store to QNew
+     */
+    rmatrixtranspose(nwork, n, &state->qnew, 0, 0, &state->x, 0, 0, _state);
+    evd_clearrfields(state, _state);
+    state->requesttype = 0;
+    state->requestsize = nwork;
+    state->rstate.stage = 1;
+    goto lbl_rcomm;
+lbl_1:
+    rmatrixtranspose(n, nwork, &state->ax, 0, 0, &state->qnew, 0, 0, _state);
+    state->repiterationscount = state->repiterationscount+1;
+    goto lbl_9;
+lbl_10:
+    
+    /*
+     * Perform one iteration with reorthogonalization at the end
+     */
+    rallocv(n, &state->tmprow, _state);
+    for(i=0; i<=nwork-1; i++)
+    {
+        rcopyrv(n, &state->qnew, i, &state->tmprow, _state);
+        v = ae_sqrt(rdotv2(n, &state->tmprow, _state), _state);
+        rowwisegramschmidt(&state->qnew, i, n, &state->tmprow, &state->tmprow, ae_false, _state);
+        vv = ae_sqrt(rdotv2(n, &state->tmprow, _state), _state);
+        while(ae_fp_eq(v,(double)(0))||ae_fp_less_eq(vv,(double)1000*ae_machineepsilon*v))
+        {
+            for(j=0; j<=n-1; j++)
+            {
+                state->tmprow.ptr.p_double[j] = hqrnduniformr(&state->rs, _state)-0.5;
+            }
+            v = ae_sqrt(rdotv2(n, &state->tmprow, _state), _state);
+            rowwisegramschmidt(&state->qnew, i, n, &state->tmprow, &state->tmprow, ae_false, _state);
+            vv = ae_sqrt(rdotv2(n, &state->tmprow, _state), _state);
+        }
+        rmulv(n, (double)1/vv, &state->tmprow, _state);
+        rcopyvr(n, &state->tmprow, &state->qnew, i, _state);
+    }
+    rmatrixcopy(nwork, n, &state->qnew, 0, 0, &state->qcur, 0, 0, _state);
+    rmatrixtranspose(nwork, n, &state->qcur, 0, 0, &state->x, 0, 0, _state);
+    evd_clearrfields(state, _state);
+    state->requesttype = 0;
+    state->requestsize = nwork;
+    state->rstate.stage = 2;
+    goto lbl_rcomm;
 lbl_2:
+    state->repiterationscount = state->repiterationscount+1;
+lbl_7:
     
     /*
      * Perform Rayleigh-Ritz step: find true eigenpairs in NWork-dimensional
      * subspace.
      */
-    ae_assert(state->matrixtype==0, "integrity check failed", _state);
     ae_assert(state->eigenvectorsneeded==1, "Assertion failed", _state);
     rmatrixgemm(nwork, nwork, n, 1.0, &state->qcur, 0, 0, 0, &state->ax, 0, 0, 0, 0.0, &state->r, 0, 0, _state);
     if( !smatrixevd(&state->r, nwork, 1, ae_true, &state->tw, &state->tz, _state) )
@@ -1109,6 +1231,7 @@ lbl_rcomm:
     state->rstate.ia.ptr.p_int[5] = i1;
     state->rstate.ia.ptr.p_int[6] = j;
     state->rstate.ia.ptr.p_int[7] = convcnt;
+    state->rstate.ia.ptr.p_int[8] = iterationtype;
     state->rstate.ra.ptr.p_double[0] = vv;
     state->rstate.ra.ptr.p_double[1] = v;
     return result;
@@ -7487,6 +7610,7 @@ void _eigsubspacestate_init(void* _p, ae_state *_state, ae_bool make_automatic)
     ae_matrix_init(&p->dummy, 0, 0, DT_REAL, _state, make_automatic);
     ae_vector_init(&p->rw, 0, DT_REAL, _state, make_automatic);
     ae_vector_init(&p->tw, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->tmprow, 0, DT_REAL, _state, make_automatic);
     ae_vector_init(&p->wcur, 0, DT_REAL, _state, make_automatic);
     ae_vector_init(&p->wprev, 0, DT_REAL, _state, make_automatic);
     ae_vector_init(&p->wrank, 0, DT_REAL, _state, make_automatic);
@@ -7507,7 +7631,7 @@ void _eigsubspacestate_init_copy(void* _dst, const void* _src, ae_state *_state,
     dst->maxits = src->maxits;
     dst->eps = src->eps;
     dst->eigenvectorsneeded = src->eigenvectorsneeded;
-    dst->matrixtype = src->matrixtype;
+    dst->solvermode = src->solvermode;
     dst->usewarmstart = src->usewarmstart;
     dst->firstcall = src->firstcall;
     _hqrndstate_init_copy(&dst->rs, &src->rs, _state, make_automatic);
@@ -7524,6 +7648,7 @@ void _eigsubspacestate_init_copy(void* _dst, const void* _src, ae_state *_state,
     ae_matrix_init_copy(&dst->dummy, &src->dummy, _state, make_automatic);
     ae_vector_init_copy(&dst->rw, &src->rw, _state, make_automatic);
     ae_vector_init_copy(&dst->tw, &src->tw, _state, make_automatic);
+    ae_vector_init_copy(&dst->tmprow, &src->tmprow, _state, make_automatic);
     ae_vector_init_copy(&dst->wcur, &src->wcur, _state, make_automatic);
     ae_vector_init_copy(&dst->wprev, &src->wprev, _state, make_automatic);
     ae_vector_init_copy(&dst->wrank, &src->wrank, _state, make_automatic);
@@ -7554,6 +7679,7 @@ void _eigsubspacestate_clear(void* _p)
     ae_matrix_clear(&p->dummy);
     ae_vector_clear(&p->rw);
     ae_vector_clear(&p->tw);
+    ae_vector_clear(&p->tmprow);
     ae_vector_clear(&p->wcur);
     ae_vector_clear(&p->wprev);
     ae_vector_clear(&p->wrank);
@@ -7581,6 +7707,7 @@ void _eigsubspacestate_destroy(void* _p)
     ae_matrix_destroy(&p->dummy);
     ae_vector_destroy(&p->rw);
     ae_vector_destroy(&p->tw);
+    ae_vector_destroy(&p->tmprow);
     ae_vector_destroy(&p->wcur);
     ae_vector_destroy(&p->wprev);
     ae_vector_destroy(&p->wrank);

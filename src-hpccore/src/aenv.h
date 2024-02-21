@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -37,6 +37,18 @@
 #undef AE_OS
 #define AE_OS AE_POSIX
 #define _ALGLIB_USE_LINUX_EXTENSIONS
+#endif
+
+/* return types for worker functions for different OS types*/
+#if AE_OS==AE_WINDOWS
+#define _ALGLIB_THREAD_RETURN_TYPE  DWORD WINAPI
+#define _ALGLIB_THREAD_RETURN       return 0
+#elif AE_OS==AE_POSIX
+#define _ALGLIB_THREAD_RETURN_TYPE  void*
+#define _ALGLIB_THREAD_RETURN       return NULL
+#else
+#define _ALGLIB_THREAD_RETURN_TYPE  void
+#define _ALGLIB_THREAD_RETURN       return
 #endif
 
 /* threading models for AE_THREADING */
@@ -88,11 +100,15 @@
 #endif
 
 /* state flags */
-#define _ALGLIB_FLG_THREADING_MASK          0x7
-#define _ALGLIB_FLG_THREADING_SHIFT         0
-#define _ALGLIB_FLG_THREADING_USE_GLOBAL    0x0
-#define _ALGLIB_FLG_THREADING_SERIAL        0x1
-#define _ALGLIB_FLG_THREADING_PARALLEL      0x2
+#define _ALGLIB_FLG_THREADING_MASK_WRK              0x7
+#define _ALGLIB_FLG_THREADING_MASK_CBK              (0x7<<3)
+#define _ALGLIB_FLG_THREADING_MASK_ALL              (_ALGLIB_FLG_THREADING_MASK_WRK|_ALGLIB_FLG_THREADING_MASK_CBK)
+#define _ALGLIB_FLG_THREADING_SHIFT                 0
+#define _ALGLIB_FLG_THREADING_USE_GLOBAL            0x0
+#define _ALGLIB_FLG_THREADING_SERIAL                0x1
+#define _ALGLIB_FLG_THREADING_PARALLEL              0x2
+#define _ALGLIB_FLG_THREADING_SERIAL_CALLBACKS      (0x1<<3)
+#define _ALGLIB_FLG_THREADING_PARALLEL_CALLBACKS    (0x2<<3)
 
 
 /* now we are ready to include headers */
@@ -826,6 +842,8 @@ ae_int_t ae_get_effective_workers(ae_int_t nworkers);
 void  ae_optional_atomic_add_i(ae_int_t *p, ae_int_t v);
 void  ae_optional_atomic_sub_i(ae_int_t *p, ae_int_t v);
 void  ae_mfence(ae_lock *lock);
+ae_int_t ae_unsafe_read_aeint(ae_int_t *p);
+void ae_unsafe_write_aeint(ae_int_t *dst, ae_int_t v);
 
 void* aligned_malloc(size_t size, size_t alignment);
 void* aligned_extract_ptr(void *block);
@@ -910,7 +928,7 @@ void ae_shared_pool_destroy(void *dst);
 ae_bool ae_shared_pool_is_initialized(void *_dst);
 void ae_shared_pool_set_seed(
     ae_shared_pool  *dst,
-    void            *seed_object,
+    const void      *seed_object,
     ae_int_t        size_of_object,
     ae_constructor  constructor,
     ae_copy_constructor copy_constructor,

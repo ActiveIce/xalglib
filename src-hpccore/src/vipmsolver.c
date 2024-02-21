@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -19,6 +19,7 @@
 
 
 /*$ Declarations $*/
+static double vipmsolver_muquasidense = 5.0;
 static ae_int_t vipmsolver_maxipmits = 200;
 static double vipmsolver_initslackval = 100.0;
 static double vipmsolver_steplengthdecay = 0.95;
@@ -1862,6 +1863,7 @@ static void vipmsolver_reducedsysteminit(vipmreducedsparsesystem* s,
     ae_int_t nnzmax;
     ae_int_t factldlt;
     ae_int_t permpriorityamd;
+    ae_int_t memreuse;
     ae_int_t offs;
     ae_int_t rowoffs;
     ae_int_t i;
@@ -1871,6 +1873,10 @@ static void vipmsolver_reducedsysteminit(vipmreducedsparsesystem* s,
     ae_int_t k1;
     ae_int_t sumcoldeg;
     ae_int_t sumrowdeg;
+    ae_int_t colthreshold;
+    ae_int_t rowthreshold;
+    ae_int_t eligiblecols;
+    ae_int_t eligiblerows;
 
 
     ae_assert(solver->factorizationtype==1, "ReducedSystemInit: unexpected factorization type", _state);
@@ -2017,6 +2023,61 @@ static void vipmsolver_reducedsysteminit(vipmreducedsparsesystem* s,
      * Prepare reordering
      */
     isetallocv(ntotal, 0, &s->priorities, _state);
+    colthreshold = ae_round(vipmsolver_muquasidense*(double)sumcoldeg/(double)solver->n, _state)+1;
+    rowthreshold = ae_round(vipmsolver_muquasidense*(double)sumrowdeg/(double)(solver->msparse+solver->mdense+1), _state)+1;
+    eligiblecols = 0;
+    eligiblerows = 0;
+    for(i=0; i<=solver->n-1; i++)
+    {
+        if( s->coldegrees.ptr.p_int[i]<=colthreshold )
+        {
+            eligiblecols = eligiblecols+1;
+        }
+    }
+    for(i=0; i<=solver->mdense+solver->msparse-1; i++)
+    {
+        if( s->rowdegrees.ptr.p_int[i]<=rowthreshold )
+        {
+            eligiblerows = eligiblerows+1;
+        }
+    }
+    if( ae_maxint(eligiblecols, eligiblerows, _state)>0&&ae_maxint(eligiblecols, eligiblerows, _state)<ntotal )
+    {
+        if( eligiblecols>=eligiblerows )
+        {
+            
+            /*
+             * Eliminate columns first
+             */
+            for(i=0; i<=solver->n-1; i++)
+            {
+                s->priorities.ptr.p_int[i] = icase2(s->coldegrees.ptr.p_int[i]<=colthreshold, 0, 2, _state);
+            }
+            for(i=solver->n; i<=ntotal-1; i++)
+            {
+                s->priorities.ptr.p_int[i] = icase2(s->rowdegrees.ptr.p_int[i-solver->n]<=rowthreshold, 1, 2, _state);
+            }
+        }
+        else
+        {
+            
+            /*
+             * Eliminate rows first
+             */
+            for(i=0; i<=solver->n-1; i++)
+            {
+                s->priorities.ptr.p_int[i] = icase2(s->coldegrees.ptr.p_int[i]<=colthreshold, 1, 2, _state);
+            }
+            for(i=solver->n; i<=ntotal-1; i++)
+            {
+                s->priorities.ptr.p_int[i] = icase2(s->rowdegrees.ptr.p_int[i-solver->n]<=rowthreshold, 0, 2, _state);
+            }
+        }
+    }
+    for(i=0; i<=solver->n-1; i++)
+    {
+        s->priorities.ptr.p_int[i] = icase2(solver->hasbndl.ptr.p_bool[i]||solver->hasbndu.ptr.p_bool[i], s->priorities.ptr.p_int[i], 2, _state);
+    }
     if( solver->dotrace )
     {
         ae_trace("> initializing KKT system; no priority ordering being applied\n");
@@ -2027,7 +2088,8 @@ static void vipmsolver_reducedsysteminit(vipmreducedsparsesystem* s,
      */
     factldlt = 1;
     permpriorityamd = 3;
-    if( !spsymmanalyze(&s->rawsystem, &s->priorities, 0.0, factldlt, permpriorityamd, &s->analysis, _state) )
+    memreuse = 1;
+    if( !spsymmanalyze(&s->rawsystem, &s->priorities, (double)ntotal+1.0, 0, factldlt, permpriorityamd, memreuse, &s->analysis, _state) )
     {
         ae_assert(ae_false, "ReducedSystemInit: critical integrity check failed, symbolically degenerate KKT system encountered", _state);
     }

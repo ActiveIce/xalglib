@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -107,13 +107,31 @@ typedef struct
     double stplimit;
     ae_vector autobuf;
     ae_vector invs;
+    ae_int_t protocolversion;
+    ae_bool userterminationneeded;
     ae_vector x;
     double f;
     ae_vector g;
     ae_bool needf;
     ae_bool needfg;
     ae_bool xupdated;
-    ae_bool userterminationneeded;
+    ae_int_t requesttype;
+    ae_vector reportx;
+    double reportf;
+    ae_int_t querysize;
+    ae_int_t queryfuncs;
+    ae_int_t queryvars;
+    ae_int_t querydim;
+    ae_int_t queryformulasize;
+    ae_vector querydata;
+    ae_vector replyfi;
+    ae_vector replydj;
+    sparsematrix replysj;
+    ae_vector tmpx1;
+    ae_vector tmpc1;
+    ae_vector tmpf1;
+    ae_vector tmpg1;
+    ae_matrix tmpj1;
     double teststep;
     rcommstate rstate;
     ae_int_t repiterationscount;
@@ -190,7 +208,6 @@ USAGE:
    with same N/M but another starting point and/or another function.
    MinLBFGSRestartFrom() allows to reuse already initialized structure.
 
-
 INPUT PARAMETERS:
     N       -   problem dimension. N>0
     M       -   number of corrections in the BFGS scheme of Hessian
@@ -204,6 +221,18 @@ INPUT PARAMETERS:
 OUTPUT PARAMETERS:
     State   -   structure which stores algorithm state
     
+IMPORTANT: the   LBFGS  optimizer  supports  parallel  parallel  numerical
+           differentiation  ('callback    parallelism').   This   feature,
+           which  is  present  in  commercial   ALGLIB   editions  greatly
+           accelerates  optimization  with  numerical  differentiation  of
+           an expensive target functions.
+
+           Callback parallelism is usually  beneficial  when  computing  a
+           numerical gradient requires  more  than  several  milliseconds.
+
+           See ALGLIB Reference Manual, 'Working with commercial version'
+           section,  and  comments  on  minlbfgsoptimize() function for
+           more information.
 
 NOTES:
 1. you may tune stopping conditions with MinLBFGSSetCond() function
@@ -245,6 +274,20 @@ INPUT PARAMETERS:
 
 OUTPUT PARAMETERS:
     State   -   structure which stores algorithm state
+
+
+IMPORTANT: the   LBFGS  optimizer  supports  parallel  parallel  numerical
+           differentiation  ('callback    parallelism').   This   feature,
+           which  is  present  in  commercial   ALGLIB   editions  greatly
+           accelerates  optimization  with  numerical  differentiation  of
+           an expensive target functions.
+
+           Callback parallelism is usually  beneficial  when  computing  a
+           numerical gradient requires  more  than  several  milliseconds.
+
+           See ALGLIB Reference Manual, 'Working with commercial version'
+           section,  and  comments  on  minlbfgsoptimize() function for
+           more information.
 
 NOTES:
 1. algorithm uses 4-point central formula for differentiation.
@@ -576,7 +619,24 @@ void minlbfgssetpreclowrankexact(minlbfgsstate* state,
 
 
 /*************************************************************************
-NOTES:
+
+CALLBACK PARALLELISM:
+
+The LBFGS optimizer supports parallel numerical differentiation ('callback
+parallelism').  This  feature,  which  is  present  in  commercial  ALGLIB
+editions,  greatly  accelerates  numerical  differentiation  of  expensive
+targets.
+
+Callback parallelism is usually beneficial computing a numerical  gradient
+requires more than several milliseconds. In this case the job of computing
+individual gradient components can be split between multiple threads. Even
+inexpensive  targets  can  benefit  from  parallelism, if  you  have  many
+variables.
+
+ALGLIB Reference Manual, 'Working with commercial  version' section, tells
+how to activate callback parallelism for your programming language.
+
+CALLBACKS ACCEPTED
 
 1. This function has two different implementations: one which  uses  exact
    (analytical) user-supplied gradient,  and one which uses function value
@@ -1027,6 +1087,18 @@ NOTE: multiple calls to this function are possible. First call is counted,
      Copyright 08.10.2014 by Bochkanov Sergey
 *************************************************************************/
 void minlbfgsrequesttermination(minlbfgsstate* state, ae_state *_state);
+
+
+/*************************************************************************
+Set V1 reverse communication protocol
+*************************************************************************/
+void minlbfgssetprotocolv1(minlbfgsstate* state, ae_state *_state);
+
+
+/*************************************************************************
+Set V2 reverse communication protocol
+*************************************************************************/
+void minlbfgssetprotocolv2(minlbfgsstate* state, ae_state *_state);
 void _minlbfgsstate_init(void* _p, ae_state *_state, ae_bool make_automatic);
 void _minlbfgsstate_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
 void _minlbfgsstate_clear(void* _p);

@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -88,6 +88,10 @@ DLLEXPORT void x_free_disposed_items()
 DLLEXPORT void x_trace_file(const char *tags, const char *filename)
 {
     ae_trace_file(tags, filename);
+}
+DLLEXPORT void x_trace_string(const char *str)
+{
+    ae_trace("%s", str);
 }
 DLLEXPORT void x_trace_disable()
 {
@@ -3457,6 +3461,55 @@ DLLEXPORT ae_int32_t alglib_xv2_sparsecreatecrsbuf(const char **errormsg, ae_int
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
+DLLEXPORT ae_int32_t alglib_xv2_sparsecreatecrsfromdense(const char **errormsg, x_matrix* a, ae_int_t* m, ae_int_t* n, x_sparsematrix** s, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_matrix _a;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_a, 0, sizeof(_a));
+    ae_matrix_init_attach_to_x(&_a, a, &_alglib_env_state, ae_true);
+    *s = x_obj_alloc_sparsematrix(&_alglib_env_state);
+    sparsecreatecrsfromdense(&_a, *m, *n, &(*s)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_sparsecreatecrsfromdensebuf(const char **errormsg, x_matrix* a, ae_int_t* m, ae_int_t* n, x_sparsematrix** s, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_matrix _a;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_a, 0, sizeof(_a));
+    ae_matrix_init_attach_to_x(&_a, a, &_alglib_env_state, ae_true);
+    sparsecreatecrsfromdensebuf(&_a, *m, *n, &(*s)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
 DLLEXPORT ae_int32_t alglib_xv2_sparsecreatesks(const char **errormsg, ae_int_t* m, ae_int_t* n, x_vector* d, x_vector* u, x_sparsematrix** s, ae_uint64_t _xparams)
 {
     ae_state _alglib_env_state;
@@ -4734,6 +4787,35 @@ DLLEXPORT ae_int32_t alglib_xv2_sparsegetlowercount(const char **errormsg, ae_in
         ae_state_set_flags(&_alglib_env_state, _xparams);
     ae_frame_make(&_alglib_env_state, &_frame_block);
     *result = sparsegetlowercount(&(*s)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_sparsescale(const char **errormsg, x_sparsematrix** s, ae_int_t* scltype, bool8* scalerows, bool8* scalecols, bool8* colsfirst, x_vector* r, x_vector* c, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _r;
+    ae_vector _c;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_r, 0, sizeof(_r));
+    ae_vector_init(&_r, 0, DT_REAL, &_alglib_env_state, ae_true);
+    memset(&_c, 0, sizeof(_c));
+    ae_vector_init(&_c, 0, DT_REAL, &_alglib_env_state, ae_true);
+    sparsescale(&(*s)->obj, *scltype, *scalerows, *scalecols, *colsfirst, &_r, &_c, &_alglib_env_state);
+    ae_x_set_vector(r, &_r, &_alglib_env_state);
+    ae_x_set_vector(c, &_c, &_alglib_env_state);
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
@@ -7723,172 +7805,6 @@ void sparsesolverreport_init_from_x(sparsesolverreport *dst, x_sparsesolverrepor
     dst->iterationscount = (ae_int_t)(src->iterationscount);
     dst->r2 = src->r2;
 }
-DLLEXPORT ae_int32_t alglib_xv2_sparsespdsolvesks(const char **errormsg, x_sparsematrix** a, bool8* isupper, x_vector* b, x_vector* x, x_sparsesolverreport* rep, ae_uint64_t _xparams)
-{
-    ae_state _alglib_env_state;
-    ae_frame _frame_block;
-    jmp_buf _break_jump;
-    ae_vector _b;
-    ae_vector _x;
-    sparsesolverreport _rep;
-    ae_state_init(&_alglib_env_state);
-    if( setjmp(_break_jump) )
-    {
-        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
-        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
-        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
-        return -1;
-    }
-    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
-    if( _xparams!=0x0 )
-        ae_state_set_flags(&_alglib_env_state, _xparams);
-    ae_frame_make(&_alglib_env_state, &_frame_block);
-    memset(&_b, 0, sizeof(_b));
-    ae_vector_init_attach_to_x(&_b, b, &_alglib_env_state, ae_true);
-    memset(&_x, 0, sizeof(_x));
-    ae_vector_init(&_x, 0, DT_REAL, &_alglib_env_state, ae_true);
-    memset(&_rep, 0, sizeof(_rep));
-    _sparsesolverreport_init(&_rep, &_alglib_env_state, ae_true);
-    sparsespdsolvesks(&(*a)->obj, *isupper, &_b, &_x, &_rep, &_alglib_env_state);
-    ae_x_set_vector(x, &_x, &_alglib_env_state);
-    x_set_sparsesolverreport(rep, &_rep, &_alglib_env_state);
-    ae_state_clear(&_alglib_env_state);
-    return X_OK;
-}
-DLLEXPORT ae_int32_t alglib_xv2_sparsespdsolve(const char **errormsg, x_sparsematrix** a, bool8* isupper, x_vector* b, x_vector* x, x_sparsesolverreport* rep, ae_uint64_t _xparams)
-{
-    ae_state _alglib_env_state;
-    ae_frame _frame_block;
-    jmp_buf _break_jump;
-    ae_vector _b;
-    ae_vector _x;
-    sparsesolverreport _rep;
-    ae_state_init(&_alglib_env_state);
-    if( setjmp(_break_jump) )
-    {
-        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
-        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
-        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
-        return -1;
-    }
-    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
-    if( _xparams!=0x0 )
-        ae_state_set_flags(&_alglib_env_state, _xparams);
-    ae_frame_make(&_alglib_env_state, &_frame_block);
-    memset(&_b, 0, sizeof(_b));
-    ae_vector_init_attach_to_x(&_b, b, &_alglib_env_state, ae_true);
-    memset(&_x, 0, sizeof(_x));
-    ae_vector_init(&_x, 0, DT_REAL, &_alglib_env_state, ae_true);
-    memset(&_rep, 0, sizeof(_rep));
-    _sparsesolverreport_init(&_rep, &_alglib_env_state, ae_true);
-    sparsespdsolve(&(*a)->obj, *isupper, &_b, &_x, &_rep, &_alglib_env_state);
-    ae_x_set_vector(x, &_x, &_alglib_env_state);
-    x_set_sparsesolverreport(rep, &_rep, &_alglib_env_state);
-    ae_state_clear(&_alglib_env_state);
-    return X_OK;
-}
-DLLEXPORT ae_int32_t alglib_xv2_sparsespdcholeskysolve(const char **errormsg, x_sparsematrix** a, bool8* isupper, x_vector* b, x_vector* x, x_sparsesolverreport* rep, ae_uint64_t _xparams)
-{
-    ae_state _alglib_env_state;
-    ae_frame _frame_block;
-    jmp_buf _break_jump;
-    ae_vector _b;
-    ae_vector _x;
-    sparsesolverreport _rep;
-    ae_state_init(&_alglib_env_state);
-    if( setjmp(_break_jump) )
-    {
-        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
-        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
-        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
-        return -1;
-    }
-    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
-    if( _xparams!=0x0 )
-        ae_state_set_flags(&_alglib_env_state, _xparams);
-    ae_frame_make(&_alglib_env_state, &_frame_block);
-    memset(&_b, 0, sizeof(_b));
-    ae_vector_init_attach_to_x(&_b, b, &_alglib_env_state, ae_true);
-    memset(&_x, 0, sizeof(_x));
-    ae_vector_init(&_x, 0, DT_REAL, &_alglib_env_state, ae_true);
-    memset(&_rep, 0, sizeof(_rep));
-    _sparsesolverreport_init(&_rep, &_alglib_env_state, ae_true);
-    sparsespdcholeskysolve(&(*a)->obj, *isupper, &_b, &_x, &_rep, &_alglib_env_state);
-    ae_x_set_vector(x, &_x, &_alglib_env_state);
-    x_set_sparsesolverreport(rep, &_rep, &_alglib_env_state);
-    ae_state_clear(&_alglib_env_state);
-    return X_OK;
-}
-DLLEXPORT ae_int32_t alglib_xv2_sparsesolve(const char **errormsg, x_sparsematrix** a, x_vector* b, x_vector* x, x_sparsesolverreport* rep, ae_uint64_t _xparams)
-{
-    ae_state _alglib_env_state;
-    ae_frame _frame_block;
-    jmp_buf _break_jump;
-    ae_vector _b;
-    ae_vector _x;
-    sparsesolverreport _rep;
-    ae_state_init(&_alglib_env_state);
-    if( setjmp(_break_jump) )
-    {
-        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
-        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
-        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
-        return -1;
-    }
-    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
-    if( _xparams!=0x0 )
-        ae_state_set_flags(&_alglib_env_state, _xparams);
-    ae_frame_make(&_alglib_env_state, &_frame_block);
-    memset(&_b, 0, sizeof(_b));
-    ae_vector_init_attach_to_x(&_b, b, &_alglib_env_state, ae_true);
-    memset(&_x, 0, sizeof(_x));
-    ae_vector_init(&_x, 0, DT_REAL, &_alglib_env_state, ae_true);
-    memset(&_rep, 0, sizeof(_rep));
-    _sparsesolverreport_init(&_rep, &_alglib_env_state, ae_true);
-    sparsesolve(&(*a)->obj, &_b, &_x, &_rep, &_alglib_env_state);
-    ae_x_set_vector(x, &_x, &_alglib_env_state);
-    x_set_sparsesolverreport(rep, &_rep, &_alglib_env_state);
-    ae_state_clear(&_alglib_env_state);
-    return X_OK;
-}
-DLLEXPORT ae_int32_t alglib_xv2_sparselusolve(const char **errormsg, x_sparsematrix** a, x_vector* p, x_vector* q, x_vector* b, x_vector* x, x_sparsesolverreport* rep, ae_uint64_t _xparams)
-{
-    ae_state _alglib_env_state;
-    ae_frame _frame_block;
-    jmp_buf _break_jump;
-    ae_vector _p;
-    ae_vector _q;
-    ae_vector _b;
-    ae_vector _x;
-    sparsesolverreport _rep;
-    ae_state_init(&_alglib_env_state);
-    if( setjmp(_break_jump) )
-    {
-        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
-        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
-        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
-        return -1;
-    }
-    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
-    if( _xparams!=0x0 )
-        ae_state_set_flags(&_alglib_env_state, _xparams);
-    ae_frame_make(&_alglib_env_state, &_frame_block);
-    memset(&_p, 0, sizeof(_p));
-    ae_vector_init_attach_to_x(&_p, p, &_alglib_env_state, ae_true);
-    memset(&_q, 0, sizeof(_q));
-    ae_vector_init_attach_to_x(&_q, q, &_alglib_env_state, ae_true);
-    memset(&_b, 0, sizeof(_b));
-    ae_vector_init_attach_to_x(&_b, b, &_alglib_env_state, ae_true);
-    memset(&_x, 0, sizeof(_x));
-    ae_vector_init(&_x, 0, DT_REAL, &_alglib_env_state, ae_true);
-    memset(&_rep, 0, sizeof(_rep));
-    _sparsesolverreport_init(&_rep, &_alglib_env_state, ae_true);
-    sparselusolve(&(*a)->obj, &_p, &_q, &_b, &_x, &_rep, &_alglib_env_state);
-    ae_x_set_vector(x, &_x, &_alglib_env_state);
-    x_set_sparsesolverreport(rep, &_rep, &_alglib_env_state);
-    ae_state_clear(&_alglib_env_state);
-    return X_OK;
-}
 typedef ALIGNED struct
 {
     ALIGNED sparsesolverstate obj;
@@ -9029,6 +8945,204 @@ DLLEXPORT ae_int32_t alglib_xv2_linlsqrrequesttermination(const char **errormsg,
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
+DLLEXPORT ae_int32_t alglib_xv2_sparsespdsolvesks(const char **errormsg, x_sparsematrix** a, bool8* isupper, x_vector* b, x_vector* x, x_sparsesolverreport* rep, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _b;
+    ae_vector _x;
+    sparsesolverreport _rep;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_b, 0, sizeof(_b));
+    ae_vector_init_attach_to_x(&_b, b, &_alglib_env_state, ae_true);
+    memset(&_x, 0, sizeof(_x));
+    ae_vector_init(&_x, 0, DT_REAL, &_alglib_env_state, ae_true);
+    memset(&_rep, 0, sizeof(_rep));
+    _sparsesolverreport_init(&_rep, &_alglib_env_state, ae_true);
+    sparsespdsolvesks(&(*a)->obj, *isupper, &_b, &_x, &_rep, &_alglib_env_state);
+    ae_x_set_vector(x, &_x, &_alglib_env_state);
+    x_set_sparsesolverreport(rep, &_rep, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_sparsespdsolve(const char **errormsg, x_sparsematrix** a, bool8* isupper, x_vector* b, x_vector* x, x_sparsesolverreport* rep, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _b;
+    ae_vector _x;
+    sparsesolverreport _rep;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_b, 0, sizeof(_b));
+    ae_vector_init_attach_to_x(&_b, b, &_alglib_env_state, ae_true);
+    memset(&_x, 0, sizeof(_x));
+    ae_vector_init(&_x, 0, DT_REAL, &_alglib_env_state, ae_true);
+    memset(&_rep, 0, sizeof(_rep));
+    _sparsesolverreport_init(&_rep, &_alglib_env_state, ae_true);
+    sparsespdsolve(&(*a)->obj, *isupper, &_b, &_x, &_rep, &_alglib_env_state);
+    ae_x_set_vector(x, &_x, &_alglib_env_state);
+    x_set_sparsesolverreport(rep, &_rep, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_sparsespdcholeskysolve(const char **errormsg, x_sparsematrix** a, bool8* isupper, x_vector* b, x_vector* x, x_sparsesolverreport* rep, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _b;
+    ae_vector _x;
+    sparsesolverreport _rep;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_b, 0, sizeof(_b));
+    ae_vector_init_attach_to_x(&_b, b, &_alglib_env_state, ae_true);
+    memset(&_x, 0, sizeof(_x));
+    ae_vector_init(&_x, 0, DT_REAL, &_alglib_env_state, ae_true);
+    memset(&_rep, 0, sizeof(_rep));
+    _sparsesolverreport_init(&_rep, &_alglib_env_state, ae_true);
+    sparsespdcholeskysolve(&(*a)->obj, *isupper, &_b, &_x, &_rep, &_alglib_env_state);
+    ae_x_set_vector(x, &_x, &_alglib_env_state);
+    x_set_sparsesolverreport(rep, &_rep, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_sparsesolve(const char **errormsg, x_sparsematrix** a, x_vector* b, ae_int_t* solvertype, x_vector* x, x_sparsesolverreport* rep, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _b;
+    ae_vector _x;
+    sparsesolverreport _rep;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_b, 0, sizeof(_b));
+    ae_vector_init_attach_to_x(&_b, b, &_alglib_env_state, ae_true);
+    memset(&_x, 0, sizeof(_x));
+    ae_vector_init(&_x, 0, DT_REAL, &_alglib_env_state, ae_true);
+    memset(&_rep, 0, sizeof(_rep));
+    _sparsesolverreport_init(&_rep, &_alglib_env_state, ae_true);
+    sparsesolve(&(*a)->obj, &_b, *solvertype, &_x, &_rep, &_alglib_env_state);
+    ae_x_set_vector(x, &_x, &_alglib_env_state);
+    x_set_sparsesolverreport(rep, &_rep, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_sparsesolvelsreg(const char **errormsg, x_sparsematrix** a, x_vector* b, double* reg, ae_int_t* solvertype, x_vector* x, x_sparsesolverreport* rep, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _b;
+    ae_vector _x;
+    sparsesolverreport _rep;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_b, 0, sizeof(_b));
+    ae_vector_init_attach_to_x(&_b, b, &_alglib_env_state, ae_true);
+    memset(&_x, 0, sizeof(_x));
+    ae_vector_init(&_x, 0, DT_REAL, &_alglib_env_state, ae_true);
+    memset(&_rep, 0, sizeof(_rep));
+    _sparsesolverreport_init(&_rep, &_alglib_env_state, ae_true);
+    sparsesolvelsreg(&(*a)->obj, &_b, *reg, *solvertype, &_x, &_rep, &_alglib_env_state);
+    ae_x_set_vector(x, &_x, &_alglib_env_state);
+    x_set_sparsesolverreport(rep, &_rep, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_sparselusolve(const char **errormsg, x_sparsematrix** a, x_vector* p, x_vector* q, x_vector* b, x_vector* x, x_sparsesolverreport* rep, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _p;
+    ae_vector _q;
+    ae_vector _b;
+    ae_vector _x;
+    sparsesolverreport _rep;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_p, 0, sizeof(_p));
+    ae_vector_init_attach_to_x(&_p, p, &_alglib_env_state, ae_true);
+    memset(&_q, 0, sizeof(_q));
+    ae_vector_init_attach_to_x(&_q, q, &_alglib_env_state, ae_true);
+    memset(&_b, 0, sizeof(_b));
+    ae_vector_init_attach_to_x(&_b, b, &_alglib_env_state, ae_true);
+    memset(&_x, 0, sizeof(_x));
+    ae_vector_init(&_x, 0, DT_REAL, &_alglib_env_state, ae_true);
+    memset(&_rep, 0, sizeof(_rep));
+    _sparsesolverreport_init(&_rep, &_alglib_env_state, ae_true);
+    sparselusolve(&(*a)->obj, &_p, &_q, &_b, &_x, &_rep, &_alglib_env_state);
+    ae_x_set_vector(x, &_x, &_alglib_env_state);
+    x_set_sparsesolverreport(rep, &_rep, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
 typedef ALIGNED struct
 {
     ALIGNED nleqstate obj;
@@ -9228,6 +9342,27 @@ DLLEXPORT ae_int32_t alglib_xv2_nleqiteration(const char **errormsg, bool8* resu
         ae_state_set_flags(&_alglib_env_state, _xparams);
     ae_frame_make(&_alglib_env_state, &_frame_block);
     *result = nleqiteration(&(*state)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_rcv2_nleq_set_protocol_v1(const char **errormsg, x_nleqstate **state, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    nleqsetprotocolv1(&(*state)->obj, &_alglib_env_state);
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
@@ -9847,46 +9982,6 @@ DLLEXPORT void x_obj_free_minlbfgsstate(x_minlbfgsstate *obj)
     ae_free(obj);
     return;
 }
-DLLEXPORT void x_minlbfgsstate_get_needf(x_minlbfgsstate *obj, bool8 *result)
-{
-    *result = obj->obj.needf;
-}
-DLLEXPORT void x_minlbfgsstate_set_needf(x_minlbfgsstate *obj, bool8 *result)
-{
-    obj->obj.needf = *result;
-}
-DLLEXPORT void x_minlbfgsstate_get_needfg(x_minlbfgsstate *obj, bool8 *result)
-{
-    *result = obj->obj.needfg;
-}
-DLLEXPORT void x_minlbfgsstate_set_needfg(x_minlbfgsstate *obj, bool8 *result)
-{
-    obj->obj.needfg = *result;
-}
-DLLEXPORT void x_minlbfgsstate_get_xupdated(x_minlbfgsstate *obj, bool8 *result)
-{
-    *result = obj->obj.xupdated;
-}
-DLLEXPORT void x_minlbfgsstate_set_xupdated(x_minlbfgsstate *obj, bool8 *result)
-{
-    obj->obj.xupdated = *result;
-}
-DLLEXPORT void x_minlbfgsstate_get_f(x_minlbfgsstate *obj, double *result)
-{
-    *result = obj->obj.f;
-}
-DLLEXPORT void x_minlbfgsstate_set_f(x_minlbfgsstate *obj, double *result)
-{
-    obj->obj.f = *result;
-}
-DLLEXPORT void x_minlbfgsstate_get_g(x_minlbfgsstate *obj, x_vector *result)
-{
-    ae_x_attach_to_vector(result, &obj->obj.g);
-}
-DLLEXPORT void x_minlbfgsstate_get_x(x_minlbfgsstate *obj, x_vector *result)
-{
-    ae_x_attach_to_vector(result, &obj->obj.x);
-}
 typedef ALIGNED struct
 {
     ALIGNED ae_int64_t iterationscount;
@@ -10150,6 +10245,49 @@ DLLEXPORT ae_int32_t alglib_xv2_minlbfgsiteration(const char **errormsg, bool8* 
         ae_state_set_flags(&_alglib_env_state, _xparams);
     ae_frame_make(&_alglib_env_state, &_frame_block);
     *result = minlbfgsiteration(&(*state)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT void alglib_rcv2_minlbfgs_offload_v2_request(
+            x_minlbfgsstate *state,
+            ae_int_t* request, ae_int_t* size, ae_int_t* funcs, ae_int_t* vars, ae_int_t* dim, ae_int_t* formulasize,
+            double** reportx,
+            double*  reportf,
+            double** querydata,
+            double** replyfi,
+            double** replydj)
+{
+    *request    = state->obj.requesttype;
+    *size       = state->obj.querysize;
+    *funcs      = state->obj.queryfuncs;
+    *vars       = state->obj.queryvars;
+    *dim        = state->obj.querydim;
+    *formulasize= state->obj.queryformulasize;
+    *reportx    = state->obj.reportx.ptr.p_double;
+    *reportf    = state->obj.reportf;
+    *querydata  = state->obj.querydata.ptr.p_double;
+    *replyfi    = state->obj.replyfi.ptr.p_double;
+    *replydj    = state->obj.replydj.ptr.p_double;
+}
+
+DLLEXPORT ae_int32_t alglib_rcv2_minlbfgs_set_protocol_v2(const char **errormsg, x_minlbfgsstate **state, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    minlbfgssetprotocolv2(&(*state)->obj, &_alglib_env_state);
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
@@ -10769,6 +10907,27 @@ DLLEXPORT ae_int32_t alglib_xv2_minbleiciteration(const char **errormsg, bool8* 
         ae_state_set_flags(&_alglib_env_state, _xparams);
     ae_frame_make(&_alglib_env_state, &_frame_block);
     *result = minbleiciteration(&(*state)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_rcv2_minbleic_set_protocol_v1(const char **errormsg, x_minbleicstate **state, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    minbleicsetprotocolv1(&(*state)->obj, &_alglib_env_state);
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
@@ -11796,82 +11955,6 @@ DLLEXPORT void x_obj_free_minlmstate(x_minlmstate *obj)
     ae_free(obj);
     return;
 }
-DLLEXPORT void x_minlmstate_get_needf(x_minlmstate *obj, bool8 *result)
-{
-    *result = obj->obj.needf;
-}
-DLLEXPORT void x_minlmstate_set_needf(x_minlmstate *obj, bool8 *result)
-{
-    obj->obj.needf = *result;
-}
-DLLEXPORT void x_minlmstate_get_needfg(x_minlmstate *obj, bool8 *result)
-{
-    *result = obj->obj.needfg;
-}
-DLLEXPORT void x_minlmstate_set_needfg(x_minlmstate *obj, bool8 *result)
-{
-    obj->obj.needfg = *result;
-}
-DLLEXPORT void x_minlmstate_get_needfgh(x_minlmstate *obj, bool8 *result)
-{
-    *result = obj->obj.needfgh;
-}
-DLLEXPORT void x_minlmstate_set_needfgh(x_minlmstate *obj, bool8 *result)
-{
-    obj->obj.needfgh = *result;
-}
-DLLEXPORT void x_minlmstate_get_needfi(x_minlmstate *obj, bool8 *result)
-{
-    *result = obj->obj.needfi;
-}
-DLLEXPORT void x_minlmstate_set_needfi(x_minlmstate *obj, bool8 *result)
-{
-    obj->obj.needfi = *result;
-}
-DLLEXPORT void x_minlmstate_get_needfij(x_minlmstate *obj, bool8 *result)
-{
-    *result = obj->obj.needfij;
-}
-DLLEXPORT void x_minlmstate_set_needfij(x_minlmstate *obj, bool8 *result)
-{
-    obj->obj.needfij = *result;
-}
-DLLEXPORT void x_minlmstate_get_xupdated(x_minlmstate *obj, bool8 *result)
-{
-    *result = obj->obj.xupdated;
-}
-DLLEXPORT void x_minlmstate_set_xupdated(x_minlmstate *obj, bool8 *result)
-{
-    obj->obj.xupdated = *result;
-}
-DLLEXPORT void x_minlmstate_get_f(x_minlmstate *obj, double *result)
-{
-    *result = obj->obj.f;
-}
-DLLEXPORT void x_minlmstate_set_f(x_minlmstate *obj, double *result)
-{
-    obj->obj.f = *result;
-}
-DLLEXPORT void x_minlmstate_get_fi(x_minlmstate *obj, x_vector *result)
-{
-    ae_x_attach_to_vector(result, &obj->obj.fi);
-}
-DLLEXPORT void x_minlmstate_get_g(x_minlmstate *obj, x_vector *result)
-{
-    ae_x_attach_to_vector(result, &obj->obj.g);
-}
-DLLEXPORT void x_minlmstate_get_h(x_minlmstate *obj, x_matrix *result)
-{
-    ae_x_attach_to_matrix(result, &obj->obj.h);
-}
-DLLEXPORT void x_minlmstate_get_j(x_minlmstate *obj, x_matrix *result)
-{
-    ae_x_attach_to_matrix(result, &obj->obj.j);
-}
-DLLEXPORT void x_minlmstate_get_x(x_minlmstate *obj, x_vector *result)
-{
-    ae_x_attach_to_vector(result, &obj->obj.x);
-}
 typedef ALIGNED struct
 {
     ALIGNED ae_int64_t iterationscount;
@@ -11949,31 +12032,6 @@ DLLEXPORT ae_int32_t alglib_xv2_minlmcreatev(const char **errormsg, ae_int_t* n,
     ae_vector_init_attach_to_x(&_x, x, &_alglib_env_state, ae_true);
     *state = x_obj_alloc_minlmstate(&_alglib_env_state);
     minlmcreatev(*n, *m, &_x, *diffstep, &(*state)->obj, &_alglib_env_state);
-    ae_state_clear(&_alglib_env_state);
-    return X_OK;
-}
-DLLEXPORT ae_int32_t alglib_xv2_minlmcreatefgh(const char **errormsg, ae_int_t* n, x_vector* x, x_minlmstate** state, ae_uint64_t _xparams)
-{
-    ae_state _alglib_env_state;
-    ae_frame _frame_block;
-    jmp_buf _break_jump;
-    ae_vector _x;
-    ae_state_init(&_alglib_env_state);
-    if( setjmp(_break_jump) )
-    {
-        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
-        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
-        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
-        return -1;
-    }
-    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
-    if( _xparams!=0x0 )
-        ae_state_set_flags(&_alglib_env_state, _xparams);
-    ae_frame_make(&_alglib_env_state, &_frame_block);
-    memset(&_x, 0, sizeof(_x));
-    ae_vector_init_attach_to_x(&_x, x, &_alglib_env_state, ae_true);
-    *state = x_obj_alloc_minlmstate(&_alglib_env_state);
-    minlmcreatefgh(*n, &_x, &(*state)->obj, &_alglib_env_state);
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
@@ -12160,6 +12218,49 @@ DLLEXPORT ae_int32_t alglib_xv2_minlmiteration(const char **errormsg, bool8* res
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
+DLLEXPORT void alglib_rcv2_minlm_offload_v2_request(
+            x_minlmstate *state,
+            ae_int_t* request, ae_int_t* size, ae_int_t* funcs, ae_int_t* vars, ae_int_t* dim, ae_int_t* formulasize,
+            double** reportx,
+            double*  reportf,
+            double** querydata,
+            double** replyfi,
+            double** replydj)
+{
+    *request    = state->obj.requesttype;
+    *size       = state->obj.querysize;
+    *funcs      = state->obj.queryfuncs;
+    *vars       = state->obj.queryvars;
+    *dim        = state->obj.querydim;
+    *formulasize= state->obj.queryformulasize;
+    *reportx    = state->obj.reportx.ptr.p_double;
+    *reportf    = state->obj.reportf;
+    *querydata  = state->obj.querydata.ptr.p_double;
+    *replyfi    = state->obj.replyfi.ptr.p_double;
+    *replydj    = state->obj.replydj.ptr.p_double;
+}
+
+DLLEXPORT ae_int32_t alglib_rcv2_minlm_set_protocol_v2(const char **errormsg, x_minlmstate **state, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    minlmsetprotocolv2(&(*state)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
 DLLEXPORT ae_int32_t alglib_xv2_minlmoptguardgradient(const char **errormsg, x_minlmstate** state, double* teststep, ae_uint64_t _xparams)
 {
     ae_state _alglib_env_state;
@@ -12306,81 +12407,6 @@ DLLEXPORT ae_int32_t alglib_xv2_minlmrequesttermination(const char **errormsg, x
         ae_state_set_flags(&_alglib_env_state, _xparams);
     ae_frame_make(&_alglib_env_state, &_frame_block);
     minlmrequesttermination(&(*state)->obj, &_alglib_env_state);
-    ae_state_clear(&_alglib_env_state);
-    return X_OK;
-}
-DLLEXPORT ae_int32_t alglib_xv2_minlmcreatevgj(const char **errormsg, ae_int_t* n, ae_int_t* m, x_vector* x, x_minlmstate** state, ae_uint64_t _xparams)
-{
-    ae_state _alglib_env_state;
-    ae_frame _frame_block;
-    jmp_buf _break_jump;
-    ae_vector _x;
-    ae_state_init(&_alglib_env_state);
-    if( setjmp(_break_jump) )
-    {
-        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
-        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
-        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
-        return -1;
-    }
-    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
-    if( _xparams!=0x0 )
-        ae_state_set_flags(&_alglib_env_state, _xparams);
-    ae_frame_make(&_alglib_env_state, &_frame_block);
-    memset(&_x, 0, sizeof(_x));
-    ae_vector_init_attach_to_x(&_x, x, &_alglib_env_state, ae_true);
-    *state = x_obj_alloc_minlmstate(&_alglib_env_state);
-    minlmcreatevgj(*n, *m, &_x, &(*state)->obj, &_alglib_env_state);
-    ae_state_clear(&_alglib_env_state);
-    return X_OK;
-}
-DLLEXPORT ae_int32_t alglib_xv2_minlmcreatefgj(const char **errormsg, ae_int_t* n, ae_int_t* m, x_vector* x, x_minlmstate** state, ae_uint64_t _xparams)
-{
-    ae_state _alglib_env_state;
-    ae_frame _frame_block;
-    jmp_buf _break_jump;
-    ae_vector _x;
-    ae_state_init(&_alglib_env_state);
-    if( setjmp(_break_jump) )
-    {
-        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
-        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
-        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
-        return -1;
-    }
-    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
-    if( _xparams!=0x0 )
-        ae_state_set_flags(&_alglib_env_state, _xparams);
-    ae_frame_make(&_alglib_env_state, &_frame_block);
-    memset(&_x, 0, sizeof(_x));
-    ae_vector_init_attach_to_x(&_x, x, &_alglib_env_state, ae_true);
-    *state = x_obj_alloc_minlmstate(&_alglib_env_state);
-    minlmcreatefgj(*n, *m, &_x, &(*state)->obj, &_alglib_env_state);
-    ae_state_clear(&_alglib_env_state);
-    return X_OK;
-}
-DLLEXPORT ae_int32_t alglib_xv2_minlmcreatefj(const char **errormsg, ae_int_t* n, ae_int_t* m, x_vector* x, x_minlmstate** state, ae_uint64_t _xparams)
-{
-    ae_state _alglib_env_state;
-    ae_frame _frame_block;
-    jmp_buf _break_jump;
-    ae_vector _x;
-    ae_state_init(&_alglib_env_state);
-    if( setjmp(_break_jump) )
-    {
-        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
-        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
-        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
-        return -1;
-    }
-    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
-    if( _xparams!=0x0 )
-        ae_state_set_flags(&_alglib_env_state, _xparams);
-    ae_frame_make(&_alglib_env_state, &_frame_block);
-    memset(&_x, 0, sizeof(_x));
-    ae_vector_init_attach_to_x(&_x, x, &_alglib_env_state, ae_true);
-    *state = x_obj_alloc_minlmstate(&_alglib_env_state);
-    minlmcreatefj(*n, *m, &_x, &(*state)->obj, &_alglib_env_state);
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
@@ -12736,6 +12762,27 @@ DLLEXPORT ae_int32_t alglib_xv2_mincgiteration(const char **errormsg, bool8* res
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
+DLLEXPORT ae_int32_t alglib_rcv2_mincg_set_protocol_v1(const char **errormsg, x_mincgstate **state, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    mincgsetprotocolv1(&(*state)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
 DLLEXPORT ae_int32_t alglib_xv2_mincgoptguardgradient(const char **errormsg, x_mincgstate** state, double* teststep, ae_uint64_t _xparams)
 {
     ae_state _alglib_env_state;
@@ -12961,6 +13008,400 @@ DLLEXPORT ae_int32_t alglib_xv2_mincgrequesttermination(const char **errormsg, x
         ae_state_set_flags(&_alglib_env_state, _xparams);
     ae_frame_make(&_alglib_env_state, &_frame_block);
     mincgrequesttermination(&(*state)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+typedef ALIGNED struct
+{
+    ALIGNED mindfstate obj;
+} x_mindfstate;
+x_mindfstate* x_obj_alloc_mindfstate(ae_state *_state)
+{
+    x_mindfstate *result;
+    result = ae_malloc(sizeof(x_mindfstate), _state);
+    memset(result, 0, sizeof(x_mindfstate));
+    _mindfstate_init(&result->obj, _state, ae_false);
+    return result;
+}
+DLLEXPORT x_mindfstate* x_obj_copy_mindfstate(x_mindfstate *src, ae_state *_state)
+{
+    x_mindfstate *result;
+    result = ae_malloc(sizeof(x_mindfstate), _state);
+    memset(result, 0, sizeof(x_mindfstate));
+    _mindfstate_init_copy(&result->obj, &src->obj, _state, ae_false);
+    return result;
+}
+DLLEXPORT void x_obj_free_mindfstate(x_mindfstate *obj)
+{
+    if( obj==NULL )
+        return;
+    _mindfstate_destroy(&obj->obj);
+    ae_free(obj);
+    return;
+}
+typedef ALIGNED struct
+{
+    ALIGNED ae_int64_t iterationscount;
+    ALIGNED ae_int64_t nfev;
+    ALIGNED double bcerr;
+    ALIGNED double lcerr;
+    ALIGNED double nlcerr;
+    ALIGNED ae_int64_t terminationtype;
+} x_mindfreport;
+void x_set_mindfreport(x_mindfreport *dst, mindfreport *src, ae_state *_state)
+{
+    dst->iterationscount = src->iterationscount;
+    dst->nfev = src->nfev;
+    dst->bcerr = src->bcerr;
+    dst->lcerr = src->lcerr;
+    dst->nlcerr = src->nlcerr;
+    dst->terminationtype = src->terminationtype;
+}
+void mindfreport_init_from_x(mindfreport *dst, x_mindfreport *src, ae_state *_state, ae_bool make_automatic)
+{
+    dst->iterationscount = (ae_int_t)(src->iterationscount);
+    dst->nfev = (ae_int_t)(src->nfev);
+    dst->bcerr = src->bcerr;
+    dst->lcerr = src->lcerr;
+    dst->nlcerr = src->nlcerr;
+    dst->terminationtype = (ae_int_t)(src->terminationtype);
+}
+DLLEXPORT ae_int32_t alglib_xv2_mindfcreate(const char **errormsg, ae_int_t* n, x_vector* x, x_mindfstate** state, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _x;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_x, 0, sizeof(_x));
+    ae_vector_init_attach_to_x(&_x, x, &_alglib_env_state, ae_true);
+    *state = x_obj_alloc_mindfstate(&_alglib_env_state);
+    mindfcreate(*n, &_x, &(*state)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_mindfsetbc(const char **errormsg, x_mindfstate** state, x_vector* bndl, x_vector* bndu, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _bndl;
+    ae_vector _bndu;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_bndl, 0, sizeof(_bndl));
+    ae_vector_init_attach_to_x(&_bndl, bndl, &_alglib_env_state, ae_true);
+    memset(&_bndu, 0, sizeof(_bndu));
+    ae_vector_init_attach_to_x(&_bndu, bndu, &_alglib_env_state, ae_true);
+    mindfsetbc(&(*state)->obj, &_bndl, &_bndu, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_mindfsetlc2dense(const char **errormsg, x_mindfstate** state, x_matrix* a, x_vector* al, x_vector* au, ae_int_t* k, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_matrix _a;
+    ae_vector _al;
+    ae_vector _au;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_a, 0, sizeof(_a));
+    ae_matrix_init_attach_to_x(&_a, a, &_alglib_env_state, ae_true);
+    memset(&_al, 0, sizeof(_al));
+    ae_vector_init_attach_to_x(&_al, al, &_alglib_env_state, ae_true);
+    memset(&_au, 0, sizeof(_au));
+    ae_vector_init_attach_to_x(&_au, au, &_alglib_env_state, ae_true);
+    mindfsetlc2dense(&(*state)->obj, &_a, &_al, &_au, *k, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_mindfsetnlc2(const char **errormsg, x_mindfstate** state, x_vector* nl, x_vector* nu, ae_int_t* nnlc, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _nl;
+    ae_vector _nu;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_nl, 0, sizeof(_nl));
+    ae_vector_init_attach_to_x(&_nl, nl, &_alglib_env_state, ae_true);
+    memset(&_nu, 0, sizeof(_nu));
+    ae_vector_init_attach_to_x(&_nu, nu, &_alglib_env_state, ae_true);
+    mindfsetnlc2(&(*state)->obj, &_nl, &_nu, *nnlc, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_mindfsetscale(const char **errormsg, x_mindfstate** state, x_vector* s, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _s;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_s, 0, sizeof(_s));
+    ae_vector_init_attach_to_x(&_s, s, &_alglib_env_state, ae_true);
+    mindfsetscale(&(*state)->obj, &_s, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_mindfrequesttermination(const char **errormsg, x_mindfstate** state, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    mindfrequesttermination(&(*state)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_mindfsetalgogdemo(const char **errormsg, x_mindfstate** state, ae_int_t* epochscnt, ae_int_t* popsize, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    mindfsetalgogdemo(&(*state)->obj, *epochscnt, *popsize, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_mindfsetgdemopenalty(const char **errormsg, x_mindfstate** state, double* rho1, double* rho2, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    mindfsetgdemopenalty(&(*state)->obj, *rho1, *rho2, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_mindfsetalgogdemofixed(const char **errormsg, x_mindfstate** state, ae_int_t* epochscnt, ae_int_t* strategy, double* crossoverprob, double* differentialweight, ae_int_t* popsize, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    mindfsetalgogdemofixed(&(*state)->obj, *epochscnt, *strategy, *crossoverprob, *differentialweight, *popsize, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_mindfiteration(const char **errormsg, bool8* result, x_mindfstate** state, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    *result = mindfiteration(&(*state)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT void alglib_rcv2_mindf_offload_v2_request(
+            x_mindfstate *state,
+            ae_int_t* request, ae_int_t* size, ae_int_t* funcs, ae_int_t* vars, ae_int_t* dim, ae_int_t* formulasize,
+            double** reportx,
+            double*  reportf,
+            double** querydata,
+            double** replyfi,
+            double** replydj)
+{
+    *request    = state->obj.requesttype;
+    *size       = state->obj.querysize;
+    *funcs      = state->obj.queryfuncs;
+    *vars       = state->obj.queryvars;
+    *dim        = state->obj.querydim;
+    *formulasize= state->obj.queryformulasize;
+    *reportx    = state->obj.reportx.ptr.p_double;
+    *reportf    = state->obj.reportf;
+    *querydata  = state->obj.querydata.ptr.p_double;
+    *replyfi    = state->obj.replyfi.ptr.p_double;
+    *replydj    = state->obj.replydj.ptr.p_double;
+}
+
+DLLEXPORT ae_int32_t alglib_rcv2_mindf_set_protocol_v2(const char **errormsg, x_mindfstate **state, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    mindfsetprotocolv2(&(*state)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_mindfresults(const char **errormsg, x_mindfstate** state, x_vector* x, x_mindfreport* rep, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _x;
+    mindfreport _rep;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_x, 0, sizeof(_x));
+    ae_vector_init(&_x, 0, DT_REAL, &_alglib_env_state, ae_true);
+    memset(&_rep, 0, sizeof(_rep));
+    _mindfreport_init(&_rep, &_alglib_env_state, ae_true);
+    mindfresults(&(*state)->obj, &_x, &_rep, &_alglib_env_state);
+    ae_x_set_vector(x, &_x, &_alglib_env_state);
+    x_set_mindfreport(rep, &_rep, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_mindfresultsbuf(const char **errormsg, x_mindfstate** state, x_vector* x, x_mindfreport* rep, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _x;
+    mindfreport _rep;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_x, 0, sizeof(_x));
+    ae_vector_init_attach_to_x(&_x, x, &_alglib_env_state, ae_true);
+    memset(&_rep, 0, sizeof(_rep));
+    mindfreport_init_from_x(&_rep, rep, &_alglib_env_state, ae_true);
+    mindfresultsbuf(&(*state)->obj, &_x, &_rep, &_alglib_env_state);
+    ae_x_set_vector(x, &_x, &_alglib_env_state);
+    x_set_mindfreport(rep, &_rep, &_alglib_env_state);
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
@@ -13428,6 +13869,379 @@ DLLEXPORT ae_int32_t alglib_xv2_minlpresultsbuf(const char **errormsg, x_minlpst
 }
 typedef ALIGNED struct
 {
+    ALIGNED nlsstate obj;
+} x_nlsstate;
+x_nlsstate* x_obj_alloc_nlsstate(ae_state *_state)
+{
+    x_nlsstate *result;
+    result = ae_malloc(sizeof(x_nlsstate), _state);
+    memset(result, 0, sizeof(x_nlsstate));
+    _nlsstate_init(&result->obj, _state, ae_false);
+    return result;
+}
+DLLEXPORT x_nlsstate* x_obj_copy_nlsstate(x_nlsstate *src, ae_state *_state)
+{
+    x_nlsstate *result;
+    result = ae_malloc(sizeof(x_nlsstate), _state);
+    memset(result, 0, sizeof(x_nlsstate));
+    _nlsstate_init_copy(&result->obj, &src->obj, _state, ae_false);
+    return result;
+}
+DLLEXPORT void x_obj_free_nlsstate(x_nlsstate *obj)
+{
+    if( obj==NULL )
+        return;
+    _nlsstate_destroy(&obj->obj);
+    ae_free(obj);
+    return;
+}
+typedef ALIGNED struct
+{
+    ALIGNED ae_int64_t iterationscount;
+    ALIGNED ae_int64_t terminationtype;
+    ALIGNED ae_int64_t nfunc;
+} x_nlsreport;
+void x_set_nlsreport(x_nlsreport *dst, nlsreport *src, ae_state *_state)
+{
+    dst->iterationscount = src->iterationscount;
+    dst->terminationtype = src->terminationtype;
+    dst->nfunc = src->nfunc;
+}
+void nlsreport_init_from_x(nlsreport *dst, x_nlsreport *src, ae_state *_state, ae_bool make_automatic)
+{
+    dst->iterationscount = (ae_int_t)(src->iterationscount);
+    dst->terminationtype = (ae_int_t)(src->terminationtype);
+    dst->nfunc = (ae_int_t)(src->nfunc);
+}
+DLLEXPORT ae_int32_t alglib_xv2_nlscreatedfo(const char **errormsg, ae_int_t* n, ae_int_t* m, x_vector* x, x_nlsstate** state, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _x;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_x, 0, sizeof(_x));
+    ae_vector_init_attach_to_x(&_x, x, &_alglib_env_state, ae_true);
+    *state = x_obj_alloc_nlsstate(&_alglib_env_state);
+    nlscreatedfo(*n, *m, &_x, &(*state)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_nlssetalgo2ps(const char **errormsg, x_nlsstate** state, ae_int_t* nnoisyrestarts, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    nlssetalgo2ps(&(*state)->obj, *nnoisyrestarts, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_nlssetalgodfolsa(const char **errormsg, x_nlsstate** state, ae_int_t* nnoisyrestarts, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    nlssetalgodfolsa(&(*state)->obj, *nnoisyrestarts, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_nlssetcond(const char **errormsg, x_nlsstate** state, double* epsx, ae_int_t* maxits, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    nlssetcond(&(*state)->obj, *epsx, *maxits, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_nlssetxrep(const char **errormsg, x_nlsstate** state, bool8* needxrep, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    nlssetxrep(&(*state)->obj, *needxrep, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_nlssetscale(const char **errormsg, x_nlsstate** state, x_vector* s, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _s;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_s, 0, sizeof(_s));
+    ae_vector_init_attach_to_x(&_s, s, &_alglib_env_state, ae_true);
+    nlssetscale(&(*state)->obj, &_s, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_nlssetbc(const char **errormsg, x_nlsstate** state, x_vector* bndl, x_vector* bndu, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _bndl;
+    ae_vector _bndu;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_bndl, 0, sizeof(_bndl));
+    ae_vector_init_attach_to_x(&_bndl, bndl, &_alglib_env_state, ae_true);
+    memset(&_bndu, 0, sizeof(_bndu));
+    ae_vector_init_attach_to_x(&_bndu, bndu, &_alglib_env_state, ae_true);
+    nlssetbc(&(*state)->obj, &_bndl, &_bndu, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_nlsiteration(const char **errormsg, bool8* result, x_nlsstate** state, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    *result = nlsiteration(&(*state)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT void alglib_rcv2_nls_offload_v2_request(
+            x_nlsstate *state,
+            ae_int_t* request, ae_int_t* size, ae_int_t* funcs, ae_int_t* vars, ae_int_t* dim, ae_int_t* formulasize,
+            double** reportx,
+            double*  reportf,
+            double** querydata,
+            double** replyfi,
+            double** replydj)
+{
+    *request    = state->obj.requesttype;
+    *size       = state->obj.querysize;
+    *funcs      = state->obj.queryfuncs;
+    *vars       = state->obj.queryvars;
+    *dim        = state->obj.querydim;
+    *formulasize= state->obj.queryformulasize;
+    *reportx    = state->obj.reportx.ptr.p_double;
+    *reportf    = state->obj.reportf;
+    *querydata  = state->obj.querydata.ptr.p_double;
+    *replyfi    = state->obj.replyfi.ptr.p_double;
+    *replydj    = state->obj.replydj.ptr.p_double;
+}
+
+DLLEXPORT ae_int32_t alglib_rcv2_nls_set_protocol_v2(const char **errormsg, x_nlsstate **state, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    nlssetprotocolv2(&(*state)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_nlsresults(const char **errormsg, x_nlsstate** state, x_vector* x, x_nlsreport* rep, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _x;
+    nlsreport _rep;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_x, 0, sizeof(_x));
+    ae_vector_init(&_x, 0, DT_REAL, &_alglib_env_state, ae_true);
+    memset(&_rep, 0, sizeof(_rep));
+    _nlsreport_init(&_rep, &_alglib_env_state, ae_true);
+    nlsresults(&(*state)->obj, &_x, &_rep, &_alglib_env_state);
+    ae_x_set_vector(x, &_x, &_alglib_env_state);
+    x_set_nlsreport(rep, &_rep, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_nlsresultsbuf(const char **errormsg, x_nlsstate** state, x_vector* x, x_nlsreport* rep, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _x;
+    nlsreport _rep;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_x, 0, sizeof(_x));
+    ae_vector_init_attach_to_x(&_x, x, &_alglib_env_state, ae_true);
+    memset(&_rep, 0, sizeof(_rep));
+    nlsreport_init_from_x(&_rep, rep, &_alglib_env_state, ae_true);
+    nlsresultsbuf(&(*state)->obj, &_x, &_rep, &_alglib_env_state);
+    ae_x_set_vector(x, &_x, &_alglib_env_state);
+    x_set_nlsreport(rep, &_rep, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_nlsrestartfrom(const char **errormsg, x_nlsstate** state, x_vector* x, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _x;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_x, 0, sizeof(_x));
+    ae_vector_init_attach_to_x(&_x, x, &_alglib_env_state, ae_true);
+    nlsrestartfrom(&(*state)->obj, &_x, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_nlsrequesttermination(const char **errormsg, x_nlsstate** state, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    nlsrequesttermination(&(*state)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+typedef ALIGNED struct
+{
     ALIGNED minnlcstate obj;
 } x_minnlcstate;
 x_minnlcstate* x_obj_alloc_minnlcstate(ae_state *_state)
@@ -13453,50 +14267,6 @@ DLLEXPORT void x_obj_free_minnlcstate(x_minnlcstate *obj)
     _minnlcstate_destroy(&obj->obj);
     ae_free(obj);
     return;
-}
-DLLEXPORT void x_minnlcstate_get_needfi(x_minnlcstate *obj, bool8 *result)
-{
-    *result = obj->obj.needfi;
-}
-DLLEXPORT void x_minnlcstate_set_needfi(x_minnlcstate *obj, bool8 *result)
-{
-    obj->obj.needfi = *result;
-}
-DLLEXPORT void x_minnlcstate_get_needfij(x_minnlcstate *obj, bool8 *result)
-{
-    *result = obj->obj.needfij;
-}
-DLLEXPORT void x_minnlcstate_set_needfij(x_minnlcstate *obj, bool8 *result)
-{
-    obj->obj.needfij = *result;
-}
-DLLEXPORT void x_minnlcstate_get_xupdated(x_minnlcstate *obj, bool8 *result)
-{
-    *result = obj->obj.xupdated;
-}
-DLLEXPORT void x_minnlcstate_set_xupdated(x_minnlcstate *obj, bool8 *result)
-{
-    obj->obj.xupdated = *result;
-}
-DLLEXPORT void x_minnlcstate_get_f(x_minnlcstate *obj, double *result)
-{
-    *result = obj->obj.f;
-}
-DLLEXPORT void x_minnlcstate_set_f(x_minnlcstate *obj, double *result)
-{
-    obj->obj.f = *result;
-}
-DLLEXPORT void x_minnlcstate_get_fi(x_minnlcstate *obj, x_vector *result)
-{
-    ae_x_attach_to_vector(result, &obj->obj.fi);
-}
-DLLEXPORT void x_minnlcstate_get_j(x_minnlcstate *obj, x_matrix *result)
-{
-    ae_x_attach_to_matrix(result, &obj->obj.j);
-}
-DLLEXPORT void x_minnlcstate_get_x(x_minnlcstate *obj, x_vector *result)
-{
-    ae_x_attach_to_vector(result, &obj->obj.x);
 }
 typedef ALIGNED struct
 {
@@ -13662,6 +14432,33 @@ DLLEXPORT ae_int32_t alglib_xv2_minnlcsetnlc(const char **errormsg, x_minnlcstat
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
+DLLEXPORT ae_int32_t alglib_xv2_minnlcsetnlc2(const char **errormsg, x_minnlcstate** state, x_vector* nl, x_vector* nu, ae_int_t* nnlc, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _nl;
+    ae_vector _nu;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_nl, 0, sizeof(_nl));
+    ae_vector_init_attach_to_x(&_nl, nl, &_alglib_env_state, ae_true);
+    memset(&_nu, 0, sizeof(_nu));
+    ae_vector_init_attach_to_x(&_nu, nu, &_alglib_env_state, ae_true);
+    minnlcsetnlc2(&(*state)->obj, &_nl, &_nu, *nnlc, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
 DLLEXPORT ae_int32_t alglib_xv2_minnlcsetcond(const char **errormsg, x_minnlcstate** state, double* epsx, ae_int_t* maxits, ae_uint64_t _xparams)
 {
     ae_state _alglib_env_state;
@@ -13680,6 +14477,27 @@ DLLEXPORT ae_int32_t alglib_xv2_minnlcsetcond(const char **errormsg, x_minnlcsta
         ae_state_set_flags(&_alglib_env_state, _xparams);
     ae_frame_make(&_alglib_env_state, &_frame_block);
     minnlcsetcond(&(*state)->obj, *epsx, *maxits, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_minnlcsetcond3(const char **errormsg, x_minnlcstate** state, double* epsf, double* epsx, ae_int_t* maxits, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    minnlcsetcond3(&(*state)->obj, *epsf, *epsx, *maxits, &_alglib_env_state);
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
@@ -13707,90 +14525,6 @@ DLLEXPORT ae_int32_t alglib_xv2_minnlcsetscale(const char **errormsg, x_minnlcst
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
-DLLEXPORT ae_int32_t alglib_xv2_minnlcsetprecinexact(const char **errormsg, x_minnlcstate** state, ae_uint64_t _xparams)
-{
-    ae_state _alglib_env_state;
-    ae_frame _frame_block;
-    jmp_buf _break_jump;
-    ae_state_init(&_alglib_env_state);
-    if( setjmp(_break_jump) )
-    {
-        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
-        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
-        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
-        return -1;
-    }
-    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
-    if( _xparams!=0x0 )
-        ae_state_set_flags(&_alglib_env_state, _xparams);
-    ae_frame_make(&_alglib_env_state, &_frame_block);
-    minnlcsetprecinexact(&(*state)->obj, &_alglib_env_state);
-    ae_state_clear(&_alglib_env_state);
-    return X_OK;
-}
-DLLEXPORT ae_int32_t alglib_xv2_minnlcsetprecexactlowrank(const char **errormsg, x_minnlcstate** state, ae_int_t* updatefreq, ae_uint64_t _xparams)
-{
-    ae_state _alglib_env_state;
-    ae_frame _frame_block;
-    jmp_buf _break_jump;
-    ae_state_init(&_alglib_env_state);
-    if( setjmp(_break_jump) )
-    {
-        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
-        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
-        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
-        return -1;
-    }
-    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
-    if( _xparams!=0x0 )
-        ae_state_set_flags(&_alglib_env_state, _xparams);
-    ae_frame_make(&_alglib_env_state, &_frame_block);
-    minnlcsetprecexactlowrank(&(*state)->obj, *updatefreq, &_alglib_env_state);
-    ae_state_clear(&_alglib_env_state);
-    return X_OK;
-}
-DLLEXPORT ae_int32_t alglib_xv2_minnlcsetprecexactrobust(const char **errormsg, x_minnlcstate** state, ae_int_t* updatefreq, ae_uint64_t _xparams)
-{
-    ae_state _alglib_env_state;
-    ae_frame _frame_block;
-    jmp_buf _break_jump;
-    ae_state_init(&_alglib_env_state);
-    if( setjmp(_break_jump) )
-    {
-        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
-        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
-        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
-        return -1;
-    }
-    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
-    if( _xparams!=0x0 )
-        ae_state_set_flags(&_alglib_env_state, _xparams);
-    ae_frame_make(&_alglib_env_state, &_frame_block);
-    minnlcsetprecexactrobust(&(*state)->obj, *updatefreq, &_alglib_env_state);
-    ae_state_clear(&_alglib_env_state);
-    return X_OK;
-}
-DLLEXPORT ae_int32_t alglib_xv2_minnlcsetprecnone(const char **errormsg, x_minnlcstate** state, ae_uint64_t _xparams)
-{
-    ae_state _alglib_env_state;
-    ae_frame _frame_block;
-    jmp_buf _break_jump;
-    ae_state_init(&_alglib_env_state);
-    if( setjmp(_break_jump) )
-    {
-        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
-        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
-        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
-        return -1;
-    }
-    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
-    if( _xparams!=0x0 )
-        ae_state_set_flags(&_alglib_env_state, _xparams);
-    ae_frame_make(&_alglib_env_state, &_frame_block);
-    minnlcsetprecnone(&(*state)->obj, &_alglib_env_state);
-    ae_state_clear(&_alglib_env_state);
-    return X_OK;
-}
 DLLEXPORT ae_int32_t alglib_xv2_minnlcsetstpmax(const char **errormsg, x_minnlcstate** state, double* stpmax, ae_uint64_t _xparams)
 {
     ae_state _alglib_env_state;
@@ -13812,7 +14546,7 @@ DLLEXPORT ae_int32_t alglib_xv2_minnlcsetstpmax(const char **errormsg, x_minnlcs
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
-DLLEXPORT ae_int32_t alglib_xv2_minnlcsetalgoaul(const char **errormsg, x_minnlcstate** state, double* rho, ae_int_t* itscnt, ae_uint64_t _xparams)
+DLLEXPORT ae_int32_t alglib_xv2_minnlcsetalgoaul2(const char **errormsg, x_minnlcstate** state, ae_int_t* maxouterits, ae_uint64_t _xparams)
 {
     ae_state _alglib_env_state;
     ae_frame _frame_block;
@@ -13829,7 +14563,7 @@ DLLEXPORT ae_int32_t alglib_xv2_minnlcsetalgoaul(const char **errormsg, x_minnlc
     if( _xparams!=0x0 )
         ae_state_set_flags(&_alglib_env_state, _xparams);
     ae_frame_make(&_alglib_env_state, &_frame_block);
-    minnlcsetalgoaul(&(*state)->obj, *rho, *itscnt, &_alglib_env_state);
+    minnlcsetalgoaul2(&(*state)->obj, *maxouterits, &_alglib_env_state);
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
@@ -13854,6 +14588,48 @@ DLLEXPORT ae_int32_t alglib_xv2_minnlcsetalgoslp(const char **errormsg, x_minnlc
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
+DLLEXPORT ae_int32_t alglib_xv2_minnlcsetalgosl1qp(const char **errormsg, x_minnlcstate** state, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    minnlcsetalgosl1qp(&(*state)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_minnlcsetalgosl1qpbfgs(const char **errormsg, x_minnlcstate** state, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    minnlcsetalgosl1qpbfgs(&(*state)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
 DLLEXPORT ae_int32_t alglib_xv2_minnlcsetalgosqp(const char **errormsg, x_minnlcstate** state, ae_uint64_t _xparams)
 {
     ae_state _alglib_env_state;
@@ -13872,6 +14648,27 @@ DLLEXPORT ae_int32_t alglib_xv2_minnlcsetalgosqp(const char **errormsg, x_minnlc
         ae_state_set_flags(&_alglib_env_state, _xparams);
     ae_frame_make(&_alglib_env_state, &_frame_block);
     minnlcsetalgosqp(&(*state)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_minnlcsetalgosqpbfgs(const char **errormsg, x_minnlcstate** state, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    minnlcsetalgosqpbfgs(&(*state)->obj, &_alglib_env_state);
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
@@ -13914,6 +14711,49 @@ DLLEXPORT ae_int32_t alglib_xv2_minnlciteration(const char **errormsg, bool8* re
         ae_state_set_flags(&_alglib_env_state, _xparams);
     ae_frame_make(&_alglib_env_state, &_frame_block);
     *result = minnlciteration(&(*state)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT void alglib_rcv2_minnlc_offload_v2_request(
+            x_minnlcstate *state,
+            ae_int_t* request, ae_int_t* size, ae_int_t* funcs, ae_int_t* vars, ae_int_t* dim, ae_int_t* formulasize,
+            double** reportx,
+            double*  reportf,
+            double** querydata,
+            double** replyfi,
+            double** replydj)
+{
+    *request    = state->obj.requesttype;
+    *size       = state->obj.querysize;
+    *funcs      = state->obj.queryfuncs;
+    *vars       = state->obj.queryvars;
+    *dim        = state->obj.querydim;
+    *formulasize= state->obj.queryformulasize;
+    *reportx    = state->obj.reportx.ptr.p_double;
+    *reportf    = state->obj.reportf;
+    *querydata  = state->obj.querydata.ptr.p_double;
+    *replyfi    = state->obj.replyfi.ptr.p_double;
+    *replydj    = state->obj.replydj.ptr.p_double;
+}
+
+DLLEXPORT ae_int32_t alglib_rcv2_minnlc_set_protocol_v2(const char **errormsg, x_minnlcstate **state, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    minnlcsetprotocolv2(&(*state)->obj, &_alglib_env_state);
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
@@ -14630,6 +15470,27 @@ DLLEXPORT ae_int32_t alglib_xv2_minmoiteration(const char **errormsg, bool8* res
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
+DLLEXPORT ae_int32_t alglib_rcv2_minmo_set_protocol_v1(const char **errormsg, x_minmostate **state, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    minmosetprotocolv1(&(*state)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
 DLLEXPORT ae_int32_t alglib_xv2_minmoresults(const char **errormsg, x_minmostate** state, x_matrix* paretofront, ae_int_t* frontsize, x_minmoreport* rep, ae_uint64_t _xparams)
 {
     ae_state _alglib_env_state;
@@ -15063,6 +15924,27 @@ DLLEXPORT ae_int32_t alglib_xv2_minnsiteration(const char **errormsg, bool8* res
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
+DLLEXPORT ae_int32_t alglib_rcv2_minns_set_protocol_v1(const char **errormsg, x_minnsstate **state, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    minnssetprotocolv1(&(*state)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
 DLLEXPORT ae_int32_t alglib_xv2_minnsresults(const char **errormsg, x_minnsstate** state, x_vector* x, x_minnsreport* rep, ae_uint64_t _xparams)
 {
     ae_state _alglib_env_state;
@@ -15446,6 +16328,27 @@ DLLEXPORT ae_int32_t alglib_xv2_minasaiteration(const char **errormsg, bool8* re
         ae_state_set_flags(&_alglib_env_state, _xparams);
     ae_frame_make(&_alglib_env_state, &_frame_block);
     *result = minasaiteration(&(*state)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_rcv2_minasa_set_protocol_v1(const char **errormsg, x_minasastate **state, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    minasasetprotocolv1(&(*state)->obj, &_alglib_env_state);
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
@@ -15874,6 +16777,27 @@ DLLEXPORT ae_int32_t alglib_xv2_minbciteration(const char **errormsg, bool8* res
         ae_state_set_flags(&_alglib_env_state, _xparams);
     ae_frame_make(&_alglib_env_state, &_frame_block);
     *result = minbciteration(&(*state)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_rcv2_minbc_set_protocol_v1(const char **errormsg, x_minbcstate **state, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    minbcsetprotocolv1(&(*state)->obj, &_alglib_env_state);
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
@@ -20633,6 +21557,92 @@ DLLEXPORT ae_int32_t alglib_xv2_idwfit(const char **errormsg, x_idwbuilder** sta
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
+DLLEXPORT ae_int32_t alglib_xv2_idwpeekprogress(const char **errormsg, double* result, x_idwbuilder** s, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    *result = idwpeekprogress(&(*s)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_idwgridcalc2v(const char **errormsg, x_idwmodel** s, x_vector* x0, ae_int_t* n0, x_vector* x1, ae_int_t* n1, x_vector* y, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _x0;
+    ae_vector _x1;
+    ae_vector _y;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_x0, 0, sizeof(_x0));
+    ae_vector_init_attach_to_x(&_x0, x0, &_alglib_env_state, ae_true);
+    memset(&_x1, 0, sizeof(_x1));
+    ae_vector_init_attach_to_x(&_x1, x1, &_alglib_env_state, ae_true);
+    memset(&_y, 0, sizeof(_y));
+    ae_vector_init(&_y, 0, DT_REAL, &_alglib_env_state, ae_true);
+    idwgridcalc2v(&(*s)->obj, &_x0, *n0, &_x1, *n1, &_y, &_alglib_env_state);
+    ae_x_set_vector(y, &_y, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_idwgridcalc2vsubset(const char **errormsg, x_idwmodel** s, x_vector* x0, ae_int_t* n0, x_vector* x1, ae_int_t* n1, x_vector* flagy, x_vector* y, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _x0;
+    ae_vector _x1;
+    ae_vector _flagy;
+    ae_vector _y;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_x0, 0, sizeof(_x0));
+    ae_vector_init_attach_to_x(&_x0, x0, &_alglib_env_state, ae_true);
+    memset(&_x1, 0, sizeof(_x1));
+    ae_vector_init_attach_to_x(&_x1, x1, &_alglib_env_state, ae_true);
+    memset(&_flagy, 0, sizeof(_flagy));
+    ae_vector_init_attach_to_x(&_flagy, flagy, &_alglib_env_state, ae_true);
+    memset(&_y, 0, sizeof(_y));
+    ae_vector_init(&_y, 0, DT_REAL, &_alglib_env_state, ae_true);
+    idwgridcalc2vsubset(&(*s)->obj, &_x0, *n0, &_x1, *n1, &_flagy, &_y, &_alglib_env_state);
+    ae_x_set_vector(y, &_y, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
 DLLEXPORT ae_int32_t alglib_xv2_polynomialbar2cheb(const char **errormsg, x_barycentricinterpolant** p, double* a, double* b, x_vector* t, ae_uint64_t _xparams)
 {
     ae_state _alglib_env_state;
@@ -21465,6 +22475,34 @@ DLLEXPORT ae_int32_t alglib_xv2_spline1dbuildakima(const char **errormsg, x_vect
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
+DLLEXPORT ae_int32_t alglib_xv2_spline1dbuildakimamod(const char **errormsg, x_vector* x, x_vector* y, ae_int_t* n, x_spline1dinterpolant** c, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _x;
+    ae_vector _y;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_x, 0, sizeof(_x));
+    ae_vector_init_attach_to_x(&_x, x, &_alglib_env_state, ae_true);
+    memset(&_y, 0, sizeof(_y));
+    ae_vector_init_attach_to_x(&_y, y, &_alglib_env_state, ae_true);
+    *c = x_obj_alloc_spline1dinterpolant(&_alglib_env_state);
+    spline1dbuildakimamod(&_x, &_y, *n, &(*c)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
 DLLEXPORT ae_int32_t alglib_xv2_spline1dcalc(const char **errormsg, double* result, x_spline1dinterpolant** c, double* x, ae_uint64_t _xparams)
 {
     ae_state _alglib_env_state;
@@ -21790,62 +22828,6 @@ DLLEXPORT void x_obj_free_lsfitstate(x_lsfitstate *obj)
     _lsfitstate_destroy(&obj->obj);
     ae_free(obj);
     return;
-}
-DLLEXPORT void x_lsfitstate_get_needf(x_lsfitstate *obj, bool8 *result)
-{
-    *result = obj->obj.needf;
-}
-DLLEXPORT void x_lsfitstate_set_needf(x_lsfitstate *obj, bool8 *result)
-{
-    obj->obj.needf = *result;
-}
-DLLEXPORT void x_lsfitstate_get_needfg(x_lsfitstate *obj, bool8 *result)
-{
-    *result = obj->obj.needfg;
-}
-DLLEXPORT void x_lsfitstate_set_needfg(x_lsfitstate *obj, bool8 *result)
-{
-    obj->obj.needfg = *result;
-}
-DLLEXPORT void x_lsfitstate_get_needfgh(x_lsfitstate *obj, bool8 *result)
-{
-    *result = obj->obj.needfgh;
-}
-DLLEXPORT void x_lsfitstate_set_needfgh(x_lsfitstate *obj, bool8 *result)
-{
-    obj->obj.needfgh = *result;
-}
-DLLEXPORT void x_lsfitstate_get_xupdated(x_lsfitstate *obj, bool8 *result)
-{
-    *result = obj->obj.xupdated;
-}
-DLLEXPORT void x_lsfitstate_set_xupdated(x_lsfitstate *obj, bool8 *result)
-{
-    obj->obj.xupdated = *result;
-}
-DLLEXPORT void x_lsfitstate_get_c(x_lsfitstate *obj, x_vector *result)
-{
-    ae_x_attach_to_vector(result, &obj->obj.c);
-}
-DLLEXPORT void x_lsfitstate_get_f(x_lsfitstate *obj, double *result)
-{
-    *result = obj->obj.f;
-}
-DLLEXPORT void x_lsfitstate_set_f(x_lsfitstate *obj, double *result)
-{
-    obj->obj.f = *result;
-}
-DLLEXPORT void x_lsfitstate_get_g(x_lsfitstate *obj, x_vector *result)
-{
-    ae_x_attach_to_vector(result, &obj->obj.g);
-}
-DLLEXPORT void x_lsfitstate_get_h(x_lsfitstate *obj, x_matrix *result)
-{
-    ae_x_attach_to_matrix(result, &obj->obj.h);
-}
-DLLEXPORT void x_lsfitstate_get_x(x_lsfitstate *obj, x_vector *result)
-{
-    ae_x_attach_to_vector(result, &obj->obj.x);
 }
 DLLEXPORT ae_int32_t alglib_xv2_lstfitpiecewiselinearrdpfixed(const char **errormsg, x_vector* x, x_vector* y, ae_int_t* n, ae_int_t* m, x_vector* x2, x_vector* y2, ae_int_t* nsections, ae_uint64_t _xparams)
 {
@@ -22603,7 +23585,7 @@ DLLEXPORT ae_int32_t alglib_xv2_lsfitcreatef(const char **errormsg, x_matrix* x,
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
-DLLEXPORT ae_int32_t alglib_xv2_lsfitcreatewfg(const char **errormsg, x_matrix* x, x_vector* y, x_vector* w, x_vector* c, ae_int_t* n, ae_int_t* m, ae_int_t* k, bool8* cheapfg, x_lsfitstate** state, ae_uint64_t _xparams)
+DLLEXPORT ae_int32_t alglib_xv2_lsfitcreatewfg(const char **errormsg, x_matrix* x, x_vector* y, x_vector* w, x_vector* c, ae_int_t* n, ae_int_t* m, ae_int_t* k, x_lsfitstate** state, ae_uint64_t _xparams)
 {
     ae_state _alglib_env_state;
     ae_frame _frame_block;
@@ -22633,11 +23615,11 @@ DLLEXPORT ae_int32_t alglib_xv2_lsfitcreatewfg(const char **errormsg, x_matrix* 
     memset(&_c, 0, sizeof(_c));
     ae_vector_init_attach_to_x(&_c, c, &_alglib_env_state, ae_true);
     *state = x_obj_alloc_lsfitstate(&_alglib_env_state);
-    lsfitcreatewfg(&_x, &_y, &_w, &_c, *n, *m, *k, *cheapfg, &(*state)->obj, &_alglib_env_state);
+    lsfitcreatewfg(&_x, &_y, &_w, &_c, *n, *m, *k, &(*state)->obj, &_alglib_env_state);
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
-DLLEXPORT ae_int32_t alglib_xv2_lsfitcreatefg(const char **errormsg, x_matrix* x, x_vector* y, x_vector* c, ae_int_t* n, ae_int_t* m, ae_int_t* k, bool8* cheapfg, x_lsfitstate** state, ae_uint64_t _xparams)
+DLLEXPORT ae_int32_t alglib_xv2_lsfitcreatefg(const char **errormsg, x_matrix* x, x_vector* y, x_vector* c, ae_int_t* n, ae_int_t* m, ae_int_t* k, x_lsfitstate** state, ae_uint64_t _xparams)
 {
     ae_state _alglib_env_state;
     ae_frame _frame_block;
@@ -22664,72 +23646,7 @@ DLLEXPORT ae_int32_t alglib_xv2_lsfitcreatefg(const char **errormsg, x_matrix* x
     memset(&_c, 0, sizeof(_c));
     ae_vector_init_attach_to_x(&_c, c, &_alglib_env_state, ae_true);
     *state = x_obj_alloc_lsfitstate(&_alglib_env_state);
-    lsfitcreatefg(&_x, &_y, &_c, *n, *m, *k, *cheapfg, &(*state)->obj, &_alglib_env_state);
-    ae_state_clear(&_alglib_env_state);
-    return X_OK;
-}
-DLLEXPORT ae_int32_t alglib_xv2_lsfitcreatewfgh(const char **errormsg, x_matrix* x, x_vector* y, x_vector* w, x_vector* c, ae_int_t* n, ae_int_t* m, ae_int_t* k, x_lsfitstate** state, ae_uint64_t _xparams)
-{
-    ae_state _alglib_env_state;
-    ae_frame _frame_block;
-    jmp_buf _break_jump;
-    ae_matrix _x;
-    ae_vector _y;
-    ae_vector _w;
-    ae_vector _c;
-    ae_state_init(&_alglib_env_state);
-    if( setjmp(_break_jump) )
-    {
-        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
-        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
-        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
-        return -1;
-    }
-    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
-    if( _xparams!=0x0 )
-        ae_state_set_flags(&_alglib_env_state, _xparams);
-    ae_frame_make(&_alglib_env_state, &_frame_block);
-    memset(&_x, 0, sizeof(_x));
-    ae_matrix_init_attach_to_x(&_x, x, &_alglib_env_state, ae_true);
-    memset(&_y, 0, sizeof(_y));
-    ae_vector_init_attach_to_x(&_y, y, &_alglib_env_state, ae_true);
-    memset(&_w, 0, sizeof(_w));
-    ae_vector_init_attach_to_x(&_w, w, &_alglib_env_state, ae_true);
-    memset(&_c, 0, sizeof(_c));
-    ae_vector_init_attach_to_x(&_c, c, &_alglib_env_state, ae_true);
-    *state = x_obj_alloc_lsfitstate(&_alglib_env_state);
-    lsfitcreatewfgh(&_x, &_y, &_w, &_c, *n, *m, *k, &(*state)->obj, &_alglib_env_state);
-    ae_state_clear(&_alglib_env_state);
-    return X_OK;
-}
-DLLEXPORT ae_int32_t alglib_xv2_lsfitcreatefgh(const char **errormsg, x_matrix* x, x_vector* y, x_vector* c, ae_int_t* n, ae_int_t* m, ae_int_t* k, x_lsfitstate** state, ae_uint64_t _xparams)
-{
-    ae_state _alglib_env_state;
-    ae_frame _frame_block;
-    jmp_buf _break_jump;
-    ae_matrix _x;
-    ae_vector _y;
-    ae_vector _c;
-    ae_state_init(&_alglib_env_state);
-    if( setjmp(_break_jump) )
-    {
-        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
-        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
-        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
-        return -1;
-    }
-    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
-    if( _xparams!=0x0 )
-        ae_state_set_flags(&_alglib_env_state, _xparams);
-    ae_frame_make(&_alglib_env_state, &_frame_block);
-    memset(&_x, 0, sizeof(_x));
-    ae_matrix_init_attach_to_x(&_x, x, &_alglib_env_state, ae_true);
-    memset(&_y, 0, sizeof(_y));
-    ae_vector_init_attach_to_x(&_y, y, &_alglib_env_state, ae_true);
-    memset(&_c, 0, sizeof(_c));
-    ae_vector_init_attach_to_x(&_c, c, &_alglib_env_state, ae_true);
-    *state = x_obj_alloc_lsfitstate(&_alglib_env_state);
-    lsfitcreatefgh(&_x, &_y, &_c, *n, *m, *k, &(*state)->obj, &_alglib_env_state);
+    lsfitcreatefg(&_x, &_y, &_c, *n, *m, *k, &(*state)->obj, &_alglib_env_state);
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
@@ -22895,6 +23812,49 @@ DLLEXPORT ae_int32_t alglib_xv2_lsfititeration(const char **errormsg, bool8* res
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
+DLLEXPORT void alglib_rcv2_lsfit_offload_v2_request(
+            x_lsfitstate *state,
+            ae_int_t* request, ae_int_t* size, ae_int_t* funcs, ae_int_t* vars, ae_int_t* dim, ae_int_t* formulasize,
+            double** reportx,
+            double*  reportf,
+            double** querydata,
+            double** replyfi,
+            double** replydj)
+{
+    *request    = state->obj.requesttype;
+    *size       = state->obj.querysize;
+    *funcs      = state->obj.queryfuncs;
+    *vars       = state->obj.queryvars;
+    *dim        = state->obj.querydim;
+    *formulasize= state->obj.queryformulasize;
+    *reportx    = state->obj.reportx.ptr.p_double;
+    *reportf    = state->obj.reportf;
+    *querydata  = state->obj.querydata.ptr.p_double;
+    *replyfi    = state->obj.replyfi.ptr.p_double;
+    *replydj    = state->obj.replydj.ptr.p_double;
+}
+
+DLLEXPORT ae_int32_t alglib_rcv2_lsfit_set_protocol_v2(const char **errormsg, x_lsfitstate **state, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    lsfitsetprotocolv2(&(*state)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
 DLLEXPORT ae_int32_t alglib_xv2_lsfitresults(const char **errormsg, x_lsfitstate** state, x_vector* c, x_lsfitreport* rep, ae_uint64_t _xparams)
 {
     ae_state _alglib_env_state;
@@ -23057,7 +24017,7 @@ DLLEXPORT ae_int32_t alglib_xv2_fitspheremz(const char **errormsg, x_matrix* xy,
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
-DLLEXPORT ae_int32_t alglib_xv2_fitspherex(const char **errormsg, x_matrix* xy, ae_int_t* npoints, ae_int_t* nx, ae_int_t* problemtype, double* epsx, ae_int_t* aulits, double* penalty, x_vector* cx, double* rlo, double* rhi, ae_uint64_t _xparams)
+DLLEXPORT ae_int32_t alglib_xv2_fitspherex(const char **errormsg, x_matrix* xy, ae_int_t* npoints, ae_int_t* nx, ae_int_t* problemtype, double* epsx, ae_int_t* aulits, x_vector* cx, double* rlo, double* rhi, ae_uint64_t _xparams)
 {
     ae_state _alglib_env_state;
     ae_frame _frame_block;
@@ -23080,7 +24040,7 @@ DLLEXPORT ae_int32_t alglib_xv2_fitspherex(const char **errormsg, x_matrix* xy, 
     ae_matrix_init_attach_to_x(&_xy, xy, &_alglib_env_state, ae_true);
     memset(&_cx, 0, sizeof(_cx));
     ae_vector_init(&_cx, 0, DT_REAL, &_alglib_env_state, ae_true);
-    fitspherex(&_xy, *npoints, *nx, *problemtype, *epsx, *aulits, *penalty, &_cx, rlo, rhi, &_alglib_env_state);
+    fitspherex(&_xy, *npoints, *nx, *problemtype, *epsx, *aulits, &_cx, rlo, rhi, &_alglib_env_state);
     ae_x_set_vector(cx, &_cx, &_alglib_env_state);
     ae_state_clear(&_alglib_env_state);
     return X_OK;
@@ -24184,6 +25144,92 @@ DLLEXPORT ae_int32_t alglib_xv2_spline2dbuildbicubicv(const char **errormsg, x_v
     ae_vector_init_attach_to_x(&_f, f, &_alglib_env_state, ae_true);
     *c = x_obj_alloc_spline2dinterpolant(&_alglib_env_state);
     spline2dbuildbicubicv(&_x, *n, &_y, *m, &_f, *d, &(*c)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_spline2dbuildclampedv(const char **errormsg, x_vector* x, ae_int_t* n, x_vector* y, ae_int_t* m, x_vector* bndbtm, ae_int_t* bndtypebtm, x_vector* bndtop, ae_int_t* bndtypetop, x_vector* bndlft, ae_int_t* bndtypelft, x_vector* bndrgt, ae_int_t* bndtypergt, x_vector* mixedd, x_vector* f, ae_int_t* d, x_spline2dinterpolant** c, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _x;
+    ae_vector _y;
+    ae_vector _bndbtm;
+    ae_vector _bndtop;
+    ae_vector _bndlft;
+    ae_vector _bndrgt;
+    ae_vector _mixedd;
+    ae_vector _f;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_x, 0, sizeof(_x));
+    ae_vector_init_attach_to_x(&_x, x, &_alglib_env_state, ae_true);
+    memset(&_y, 0, sizeof(_y));
+    ae_vector_init_attach_to_x(&_y, y, &_alglib_env_state, ae_true);
+    memset(&_bndbtm, 0, sizeof(_bndbtm));
+    ae_vector_init_attach_to_x(&_bndbtm, bndbtm, &_alglib_env_state, ae_true);
+    memset(&_bndtop, 0, sizeof(_bndtop));
+    ae_vector_init_attach_to_x(&_bndtop, bndtop, &_alglib_env_state, ae_true);
+    memset(&_bndlft, 0, sizeof(_bndlft));
+    ae_vector_init_attach_to_x(&_bndlft, bndlft, &_alglib_env_state, ae_true);
+    memset(&_bndrgt, 0, sizeof(_bndrgt));
+    ae_vector_init_attach_to_x(&_bndrgt, bndrgt, &_alglib_env_state, ae_true);
+    memset(&_mixedd, 0, sizeof(_mixedd));
+    ae_vector_init_attach_to_x(&_mixedd, mixedd, &_alglib_env_state, ae_true);
+    memset(&_f, 0, sizeof(_f));
+    ae_vector_init_attach_to_x(&_f, f, &_alglib_env_state, ae_true);
+    *c = x_obj_alloc_spline2dinterpolant(&_alglib_env_state);
+    spline2dbuildclampedv(&_x, *n, &_y, *m, &_bndbtm, *bndtypebtm, &_bndtop, *bndtypetop, &_bndlft, *bndtypelft, &_bndrgt, *bndtypergt, &_mixedd, &_f, *d, &(*c)->obj, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_spline2dbuildhermitev(const char **errormsg, x_vector* x, ae_int_t* n, x_vector* y, ae_int_t* m, x_vector* f, x_vector* dfdx, x_vector* dfdy, x_vector* d2fdxdy, ae_int_t* d, x_spline2dinterpolant** c, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _x;
+    ae_vector _y;
+    ae_vector _f;
+    ae_vector _dfdx;
+    ae_vector _dfdy;
+    ae_vector _d2fdxdy;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_x, 0, sizeof(_x));
+    ae_vector_init_attach_to_x(&_x, x, &_alglib_env_state, ae_true);
+    memset(&_y, 0, sizeof(_y));
+    ae_vector_init_attach_to_x(&_y, y, &_alglib_env_state, ae_true);
+    memset(&_f, 0, sizeof(_f));
+    ae_vector_init_attach_to_x(&_f, f, &_alglib_env_state, ae_true);
+    memset(&_dfdx, 0, sizeof(_dfdx));
+    ae_vector_init_attach_to_x(&_dfdx, dfdx, &_alglib_env_state, ae_true);
+    memset(&_dfdy, 0, sizeof(_dfdy));
+    ae_vector_init_attach_to_x(&_dfdy, dfdy, &_alglib_env_state, ae_true);
+    memset(&_d2fdxdy, 0, sizeof(_d2fdxdy));
+    ae_vector_init_attach_to_x(&_d2fdxdy, d2fdxdy, &_alglib_env_state, ae_true);
+    *c = x_obj_alloc_spline2dinterpolant(&_alglib_env_state);
+    spline2dbuildhermitev(&_x, *n, &_y, *m, &_f, &_dfdx, &_dfdy, &_d2fdxdy, *d, &(*c)->obj, &_alglib_env_state);
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
@@ -26607,6 +27653,34 @@ DLLEXPORT ae_int32_t alglib_xv2_fftr1d(const char **errormsg, x_vector* a, ae_in
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
+DLLEXPORT ae_int32_t alglib_xv2_fftr1dbuf(const char **errormsg, x_vector* a, ae_int_t* n, x_vector* f, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _a;
+    ae_vector _f;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_a, 0, sizeof(_a));
+    ae_vector_init_attach_to_x(&_a, a, &_alglib_env_state, ae_true);
+    memset(&_f, 0, sizeof(_f));
+    ae_vector_init_attach_to_x(&_f, f, &_alglib_env_state, ae_true);
+    fftr1dbuf(&_a, *n, &_f, &_alglib_env_state);
+    ae_x_set_vector(f, &_f, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
 DLLEXPORT ae_int32_t alglib_xv2_fftr1dinv(const char **errormsg, x_vector* f, ae_int_t* n, x_vector* a, ae_uint64_t _xparams)
 {
     ae_state _alglib_env_state;
@@ -26631,6 +27705,34 @@ DLLEXPORT ae_int32_t alglib_xv2_fftr1dinv(const char **errormsg, x_vector* f, ae
     memset(&_a, 0, sizeof(_a));
     ae_vector_init(&_a, 0, DT_REAL, &_alglib_env_state, ae_true);
     fftr1dinv(&_f, *n, &_a, &_alglib_env_state);
+    ae_x_set_vector(a, &_a, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_fftr1dinvbuf(const char **errormsg, x_vector* f, ae_int_t* n, x_vector* a, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _f;
+    ae_vector _a;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_f, 0, sizeof(_f));
+    ae_vector_init_attach_to_x(&_f, f, &_alglib_env_state, ae_true);
+    memset(&_a, 0, sizeof(_a));
+    ae_vector_init_attach_to_x(&_a, a, &_alglib_env_state, ae_true);
+    fftr1dinvbuf(&_f, *n, &_a, &_alglib_env_state);
     ae_x_set_vector(a, &_a, &_alglib_env_state);
     ae_state_clear(&_alglib_env_state);
     return X_OK;
@@ -26716,6 +27818,37 @@ DLLEXPORT ae_int32_t alglib_xv2_convc1d(const char **errormsg, x_vector* a, ae_i
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
+DLLEXPORT ae_int32_t alglib_xv2_convc1dbuf(const char **errormsg, x_vector* a, ae_int_t* m, x_vector* b, ae_int_t* n, x_vector* r, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _a;
+    ae_vector _b;
+    ae_vector _r;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_a, 0, sizeof(_a));
+    ae_vector_init_attach_to_x(&_a, a, &_alglib_env_state, ae_true);
+    memset(&_b, 0, sizeof(_b));
+    ae_vector_init_attach_to_x(&_b, b, &_alglib_env_state, ae_true);
+    memset(&_r, 0, sizeof(_r));
+    ae_vector_init_attach_to_x(&_r, r, &_alglib_env_state, ae_true);
+    convc1dbuf(&_a, *m, &_b, *n, &_r, &_alglib_env_state);
+    ae_x_set_vector(r, &_r, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
 DLLEXPORT ae_int32_t alglib_xv2_convc1dinv(const char **errormsg, x_vector* a, ae_int_t* m, x_vector* b, ae_int_t* n, x_vector* r, ae_uint64_t _xparams)
 {
     ae_state _alglib_env_state;
@@ -26743,6 +27876,37 @@ DLLEXPORT ae_int32_t alglib_xv2_convc1dinv(const char **errormsg, x_vector* a, a
     memset(&_r, 0, sizeof(_r));
     ae_vector_init(&_r, 0, DT_COMPLEX, &_alglib_env_state, ae_true);
     convc1dinv(&_a, *m, &_b, *n, &_r, &_alglib_env_state);
+    ae_x_set_vector(r, &_r, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_convc1dinvbuf(const char **errormsg, x_vector* a, ae_int_t* m, x_vector* b, ae_int_t* n, x_vector* r, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _a;
+    ae_vector _b;
+    ae_vector _r;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_a, 0, sizeof(_a));
+    ae_vector_init_attach_to_x(&_a, a, &_alglib_env_state, ae_true);
+    memset(&_b, 0, sizeof(_b));
+    ae_vector_init_attach_to_x(&_b, b, &_alglib_env_state, ae_true);
+    memset(&_r, 0, sizeof(_r));
+    ae_vector_init_attach_to_x(&_r, r, &_alglib_env_state, ae_true);
+    convc1dinvbuf(&_a, *m, &_b, *n, &_r, &_alglib_env_state);
     ae_x_set_vector(r, &_r, &_alglib_env_state);
     ae_state_clear(&_alglib_env_state);
     return X_OK;
@@ -26778,6 +27942,37 @@ DLLEXPORT ae_int32_t alglib_xv2_convc1dcircular(const char **errormsg, x_vector*
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
+DLLEXPORT ae_int32_t alglib_xv2_convc1dcircularbuf(const char **errormsg, x_vector* s, ae_int_t* m, x_vector* r, ae_int_t* n, x_vector* c, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _s;
+    ae_vector _r;
+    ae_vector _c;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_s, 0, sizeof(_s));
+    ae_vector_init_attach_to_x(&_s, s, &_alglib_env_state, ae_true);
+    memset(&_r, 0, sizeof(_r));
+    ae_vector_init_attach_to_x(&_r, r, &_alglib_env_state, ae_true);
+    memset(&_c, 0, sizeof(_c));
+    ae_vector_init_attach_to_x(&_c, c, &_alglib_env_state, ae_true);
+    convc1dcircularbuf(&_s, *m, &_r, *n, &_c, &_alglib_env_state);
+    ae_x_set_vector(c, &_c, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
 DLLEXPORT ae_int32_t alglib_xv2_convc1dcircularinv(const char **errormsg, x_vector* a, ae_int_t* m, x_vector* b, ae_int_t* n, x_vector* r, ae_uint64_t _xparams)
 {
     ae_state _alglib_env_state;
@@ -26805,6 +28000,37 @@ DLLEXPORT ae_int32_t alglib_xv2_convc1dcircularinv(const char **errormsg, x_vect
     memset(&_r, 0, sizeof(_r));
     ae_vector_init(&_r, 0, DT_COMPLEX, &_alglib_env_state, ae_true);
     convc1dcircularinv(&_a, *m, &_b, *n, &_r, &_alglib_env_state);
+    ae_x_set_vector(r, &_r, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_convc1dcircularinvbuf(const char **errormsg, x_vector* a, ae_int_t* m, x_vector* b, ae_int_t* n, x_vector* r, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _a;
+    ae_vector _b;
+    ae_vector _r;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_a, 0, sizeof(_a));
+    ae_vector_init_attach_to_x(&_a, a, &_alglib_env_state, ae_true);
+    memset(&_b, 0, sizeof(_b));
+    ae_vector_init_attach_to_x(&_b, b, &_alglib_env_state, ae_true);
+    memset(&_r, 0, sizeof(_r));
+    ae_vector_init_attach_to_x(&_r, r, &_alglib_env_state, ae_true);
+    convc1dcircularinvbuf(&_a, *m, &_b, *n, &_r, &_alglib_env_state);
     ae_x_set_vector(r, &_r, &_alglib_env_state);
     ae_state_clear(&_alglib_env_state);
     return X_OK;
@@ -26840,6 +28066,37 @@ DLLEXPORT ae_int32_t alglib_xv2_convr1d(const char **errormsg, x_vector* a, ae_i
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
+DLLEXPORT ae_int32_t alglib_xv2_convr1dbuf(const char **errormsg, x_vector* a, ae_int_t* m, x_vector* b, ae_int_t* n, x_vector* r, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _a;
+    ae_vector _b;
+    ae_vector _r;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_a, 0, sizeof(_a));
+    ae_vector_init_attach_to_x(&_a, a, &_alglib_env_state, ae_true);
+    memset(&_b, 0, sizeof(_b));
+    ae_vector_init_attach_to_x(&_b, b, &_alglib_env_state, ae_true);
+    memset(&_r, 0, sizeof(_r));
+    ae_vector_init_attach_to_x(&_r, r, &_alglib_env_state, ae_true);
+    convr1dbuf(&_a, *m, &_b, *n, &_r, &_alglib_env_state);
+    ae_x_set_vector(r, &_r, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
 DLLEXPORT ae_int32_t alglib_xv2_convr1dinv(const char **errormsg, x_vector* a, ae_int_t* m, x_vector* b, ae_int_t* n, x_vector* r, ae_uint64_t _xparams)
 {
     ae_state _alglib_env_state;
@@ -26867,6 +28124,37 @@ DLLEXPORT ae_int32_t alglib_xv2_convr1dinv(const char **errormsg, x_vector* a, a
     memset(&_r, 0, sizeof(_r));
     ae_vector_init(&_r, 0, DT_REAL, &_alglib_env_state, ae_true);
     convr1dinv(&_a, *m, &_b, *n, &_r, &_alglib_env_state);
+    ae_x_set_vector(r, &_r, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_convr1dinvbuf(const char **errormsg, x_vector* a, ae_int_t* m, x_vector* b, ae_int_t* n, x_vector* r, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _a;
+    ae_vector _b;
+    ae_vector _r;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_a, 0, sizeof(_a));
+    ae_vector_init_attach_to_x(&_a, a, &_alglib_env_state, ae_true);
+    memset(&_b, 0, sizeof(_b));
+    ae_vector_init_attach_to_x(&_b, b, &_alglib_env_state, ae_true);
+    memset(&_r, 0, sizeof(_r));
+    ae_vector_init_attach_to_x(&_r, r, &_alglib_env_state, ae_true);
+    convr1dinvbuf(&_a, *m, &_b, *n, &_r, &_alglib_env_state);
     ae_x_set_vector(r, &_r, &_alglib_env_state);
     ae_state_clear(&_alglib_env_state);
     return X_OK;
@@ -26902,6 +28190,37 @@ DLLEXPORT ae_int32_t alglib_xv2_convr1dcircular(const char **errormsg, x_vector*
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
+DLLEXPORT ae_int32_t alglib_xv2_convr1dcircularbuf(const char **errormsg, x_vector* s, ae_int_t* m, x_vector* r, ae_int_t* n, x_vector* c, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _s;
+    ae_vector _r;
+    ae_vector _c;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_s, 0, sizeof(_s));
+    ae_vector_init_attach_to_x(&_s, s, &_alglib_env_state, ae_true);
+    memset(&_r, 0, sizeof(_r));
+    ae_vector_init_attach_to_x(&_r, r, &_alglib_env_state, ae_true);
+    memset(&_c, 0, sizeof(_c));
+    ae_vector_init_attach_to_x(&_c, c, &_alglib_env_state, ae_true);
+    convr1dcircularbuf(&_s, *m, &_r, *n, &_c, &_alglib_env_state);
+    ae_x_set_vector(c, &_c, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
 DLLEXPORT ae_int32_t alglib_xv2_convr1dcircularinv(const char **errormsg, x_vector* a, ae_int_t* m, x_vector* b, ae_int_t* n, x_vector* r, ae_uint64_t _xparams)
 {
     ae_state _alglib_env_state;
@@ -26929,6 +28248,37 @@ DLLEXPORT ae_int32_t alglib_xv2_convr1dcircularinv(const char **errormsg, x_vect
     memset(&_r, 0, sizeof(_r));
     ae_vector_init(&_r, 0, DT_REAL, &_alglib_env_state, ae_true);
     convr1dcircularinv(&_a, *m, &_b, *n, &_r, &_alglib_env_state);
+    ae_x_set_vector(r, &_r, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_convr1dcircularinvbuf(const char **errormsg, x_vector* a, ae_int_t* m, x_vector* b, ae_int_t* n, x_vector* r, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _a;
+    ae_vector _b;
+    ae_vector _r;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_a, 0, sizeof(_a));
+    ae_vector_init_attach_to_x(&_a, a, &_alglib_env_state, ae_true);
+    memset(&_b, 0, sizeof(_b));
+    ae_vector_init_attach_to_x(&_b, b, &_alglib_env_state, ae_true);
+    memset(&_r, 0, sizeof(_r));
+    ae_vector_init_attach_to_x(&_r, r, &_alglib_env_state, ae_true);
+    convr1dcircularinvbuf(&_a, *m, &_b, *n, &_r, &_alglib_env_state);
     ae_x_set_vector(r, &_r, &_alglib_env_state);
     ae_state_clear(&_alglib_env_state);
     return X_OK;
@@ -26964,6 +28314,37 @@ DLLEXPORT ae_int32_t alglib_xv2_corrc1d(const char **errormsg, x_vector* signal,
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
+DLLEXPORT ae_int32_t alglib_xv2_corrc1dbuf(const char **errormsg, x_vector* signal, ae_int_t* n, x_vector* pattern, ae_int_t* m, x_vector* r, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _signal;
+    ae_vector _pattern;
+    ae_vector _r;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_signal, 0, sizeof(_signal));
+    ae_vector_init_attach_to_x(&_signal, signal, &_alglib_env_state, ae_true);
+    memset(&_pattern, 0, sizeof(_pattern));
+    ae_vector_init_attach_to_x(&_pattern, pattern, &_alglib_env_state, ae_true);
+    memset(&_r, 0, sizeof(_r));
+    ae_vector_init_attach_to_x(&_r, r, &_alglib_env_state, ae_true);
+    corrc1dbuf(&_signal, *n, &_pattern, *m, &_r, &_alglib_env_state);
+    ae_x_set_vector(r, &_r, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
 DLLEXPORT ae_int32_t alglib_xv2_corrc1dcircular(const char **errormsg, x_vector* signal, ae_int_t* m, x_vector* pattern, ae_int_t* n, x_vector* c, ae_uint64_t _xparams)
 {
     ae_state _alglib_env_state;
@@ -26991,6 +28372,37 @@ DLLEXPORT ae_int32_t alglib_xv2_corrc1dcircular(const char **errormsg, x_vector*
     memset(&_c, 0, sizeof(_c));
     ae_vector_init(&_c, 0, DT_COMPLEX, &_alglib_env_state, ae_true);
     corrc1dcircular(&_signal, *m, &_pattern, *n, &_c, &_alglib_env_state);
+    ae_x_set_vector(c, &_c, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_corrc1dcircularbuf(const char **errormsg, x_vector* signal, ae_int_t* m, x_vector* pattern, ae_int_t* n, x_vector* c, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _signal;
+    ae_vector _pattern;
+    ae_vector _c;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_signal, 0, sizeof(_signal));
+    ae_vector_init_attach_to_x(&_signal, signal, &_alglib_env_state, ae_true);
+    memset(&_pattern, 0, sizeof(_pattern));
+    ae_vector_init_attach_to_x(&_pattern, pattern, &_alglib_env_state, ae_true);
+    memset(&_c, 0, sizeof(_c));
+    ae_vector_init_attach_to_x(&_c, c, &_alglib_env_state, ae_true);
+    corrc1dcircularbuf(&_signal, *m, &_pattern, *n, &_c, &_alglib_env_state);
     ae_x_set_vector(c, &_c, &_alglib_env_state);
     ae_state_clear(&_alglib_env_state);
     return X_OK;
@@ -27026,6 +28438,37 @@ DLLEXPORT ae_int32_t alglib_xv2_corrr1d(const char **errormsg, x_vector* signal,
     ae_state_clear(&_alglib_env_state);
     return X_OK;
 }
+DLLEXPORT ae_int32_t alglib_xv2_corrr1dbuf(const char **errormsg, x_vector* signal, ae_int_t* n, x_vector* pattern, ae_int_t* m, x_vector* r, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _signal;
+    ae_vector _pattern;
+    ae_vector _r;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_signal, 0, sizeof(_signal));
+    ae_vector_init_attach_to_x(&_signal, signal, &_alglib_env_state, ae_true);
+    memset(&_pattern, 0, sizeof(_pattern));
+    ae_vector_init_attach_to_x(&_pattern, pattern, &_alglib_env_state, ae_true);
+    memset(&_r, 0, sizeof(_r));
+    ae_vector_init_attach_to_x(&_r, r, &_alglib_env_state, ae_true);
+    corrr1dbuf(&_signal, *n, &_pattern, *m, &_r, &_alglib_env_state);
+    ae_x_set_vector(r, &_r, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
 DLLEXPORT ae_int32_t alglib_xv2_corrr1dcircular(const char **errormsg, x_vector* signal, ae_int_t* m, x_vector* pattern, ae_int_t* n, x_vector* c, ae_uint64_t _xparams)
 {
     ae_state _alglib_env_state;
@@ -27053,6 +28496,37 @@ DLLEXPORT ae_int32_t alglib_xv2_corrr1dcircular(const char **errormsg, x_vector*
     memset(&_c, 0, sizeof(_c));
     ae_vector_init(&_c, 0, DT_REAL, &_alglib_env_state, ae_true);
     corrr1dcircular(&_signal, *m, &_pattern, *n, &_c, &_alglib_env_state);
+    ae_x_set_vector(c, &_c, &_alglib_env_state);
+    ae_state_clear(&_alglib_env_state);
+    return X_OK;
+}
+DLLEXPORT ae_int32_t alglib_xv2_corrr1dcircularbuf(const char **errormsg, x_vector* signal, ae_int_t* m, x_vector* pattern, ae_int_t* n, x_vector* c, ae_uint64_t _xparams)
+{
+    ae_state _alglib_env_state;
+    ae_frame _frame_block;
+    jmp_buf _break_jump;
+    ae_vector _signal;
+    ae_vector _pattern;
+    ae_vector _c;
+    ae_state_init(&_alglib_env_state);
+    if( setjmp(_break_jump) )
+    {
+        if( _alglib_env_state.last_error==ERR_OUT_OF_MEMORY )    { *errormsg = "ALGLIB: malloc error"; return X_MALLOC_ERROR; }
+        if( _alglib_env_state.last_error==ERR_XARRAY_TOO_LARGE ) { *errormsg = "ALGLIB: array too large"; return X_ARRAY_TOO_LARGE; }
+        if( _alglib_env_state.last_error==ERR_ASSERTION_FAILED ) { *errormsg = _alglib_env_state.error_msg; return X_ASSERTION_FAILED; }
+        return -1;
+    }
+    ae_state_set_break_jump(&_alglib_env_state, &_break_jump);
+    if( _xparams!=0x0 )
+        ae_state_set_flags(&_alglib_env_state, _xparams);
+    ae_frame_make(&_alglib_env_state, &_frame_block);
+    memset(&_signal, 0, sizeof(_signal));
+    ae_vector_init_attach_to_x(&_signal, signal, &_alglib_env_state, ae_true);
+    memset(&_pattern, 0, sizeof(_pattern));
+    ae_vector_init_attach_to_x(&_pattern, pattern, &_alglib_env_state, ae_true);
+    memset(&_c, 0, sizeof(_c));
+    ae_vector_init_attach_to_x(&_c, c, &_alglib_env_state, ae_true);
+    corrr1dcircularbuf(&_signal, *m, &_pattern, *n, &_c, &_alglib_env_state);
     ae_x_set_vector(c, &_c, &_alglib_env_state);
     ae_state_clear(&_alglib_env_state);
     return X_OK;

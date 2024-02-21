@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -206,21 +206,21 @@ void sparsecreatebuf(ae_int_t m,
 
 
 /*************************************************************************
-This function creates sparse matrix in a CRS format (expert function for
-situations when you are running out of memory).
+This function creates sparse matrix in a CRS format - the least  flexible
+but the most efficient format implemented in ALGLIB.
 
 This function creates CRS matrix. Typical usage scenario for a CRS matrix 
 is:
-1. creation (you have to tell number of non-zero elements at each row  at 
-   this moment)
-2. insertion of the matrix elements (row by row, from left to right) 
-3. matrix is passed to some linear algebra algorithm
+1. creation (you have to tell the number of non-zero elements at each row
+   at this moment)
+2. initialization of the matrix elements (row by row, from left to right) 
+3. the matrix is passed to some linear algebra algorithm
 
 This function is a memory-efficient alternative to SparseCreate(), but it
 is more complex because it requires you to know in advance how large your
 matrix is. Some  information about  different matrix formats can be found 
 in comments on SparseMatrix structure.  We recommend  you  to  read  them
-before starting to use ALGLIB sparse matrices..
+before starting to use ALGLIB sparse matrices.
 
 INPUT PARAMETERS
     M           -   number of rows in a matrix, M>=1
@@ -282,6 +282,65 @@ OUTPUT PARAMETERS
 void sparsecreatecrsbuf(ae_int_t m,
      ae_int_t n,
      /* Integer */ const ae_vector* ner,
+     sparsematrix* s,
+     ae_state *_state);
+
+
+/*************************************************************************
+This function creates a CRS-based sparse matrix from  the  dense  matrix.
+
+This function is intended for situations when you already  have  a  dense
+matrix and need a convenient way of converting it to the CRS format.
+
+INPUT PARAMETERS
+    A           -   array[M,N]. If larger, only leading MxN submatrix
+                    will be used.
+    M           -   number of rows in a matrix, M>=1
+    N           -   number of columns in a matrix, N>=1
+
+OUTPUT PARAMETERS
+    S           -   sparse M*N matrix A in the CRS format
+                    
+NOTE: this function completely  overwrites  S  with  new  sparse  matrix.
+      Previously allocated storage is NOT reused. If you  want  to  reuse
+      already allocated memory, call SparseCreateCRSFromDenseBuf function.
+
+  -- ALGLIB PROJECT --
+     Copyright 16.06.2023 by Bochkanov Sergey
+*************************************************************************/
+void sparsecreatecrsfromdense(/* Real    */ const ae_matrix* a,
+     ae_int_t m,
+     ae_int_t n,
+     sparsematrix* s,
+     ae_state *_state);
+
+
+/*************************************************************************
+This function creates a CRS-based sparse matrix from  the  dense  matrix.
+A buffered version which reused memory already allocated in S as much  as
+possible.
+
+This function is intended for situations when you already  have  a  dense
+matrix and need a convenient way of converting it to the CRS format.
+
+INPUT PARAMETERS
+    A           -   array[M,N]. If larger, only leading MxN submatrix
+                    will be used.
+    M           -   number of rows in a matrix, M>=1
+    N           -   number of columns in a matrix, N>=1
+    S           -   an already allocated structure; if it already has
+                    enough memory to store the matrix, no new memory
+                    will be allocated.
+
+OUTPUT PARAMETERS
+    S           -   sparse M*N matrix A in the CRS format.
+
+  -- ALGLIB PROJECT --
+     Copyright 16.06.2023 by Bochkanov Sergey
+*************************************************************************/
+void sparsecreatecrsfromdensebuf(/* Real    */ const ae_matrix* a,
+     ae_int_t m,
+     ae_int_t n,
      sparsematrix* s,
      ae_state *_state);
 
@@ -1871,6 +1930,55 @@ RESULT: number of non-zero elements strictly below main diagonal
      Copyright 12.02.2014 by Bochkanov Sergey
 *************************************************************************/
 ae_int_t sparsegetlowercount(const sparsematrix* s, ae_state *_state);
+
+
+/*************************************************************************
+This function performs an in-place matrix conditioning scaling  such  that
+
+    A = R*Z*C
+
+where A is an original matrix, R and C are diagonal scaling  matrices, and
+Z is a scaled matrix. Z replaces A, R and C are returned as 1D arrays.
+
+INPUT PARAMETERS
+    S           -   sparse M*N matrix in CRS format.
+    SclType     -   scaling type:
+                    * 0     for automatically chosen scaling
+                    * 1     for equilibration scaling
+    ScaleRows   -   if False, rows are not scaled (R=identity)
+    ScaleCols   -   if False, cols are not scaled (C=identity)
+    ColsFirst   -   scale columns first. If False, rows are  scaled  prior
+                    to scaling columns. Ignored for ScaleCols=False.
+    
+OUTPUT PARAMETERS
+    R           -   array[M], row scales, R[i]>0
+    C           -   array[N], col scales, C[i]>0
+    
+NOTE: this function throws exception when called  for  a  non-CRS  matrix.
+      You must convert your matrix with SparseConvertToCRS()  before using
+      this function.
+
+NOTE: this  function  works  with  general  (nonsymmetric)  matrices.  See
+      sparsesymmscale() for a symmetric version. See sparsescalebuf()  for
+      a version which reuses space already present in output arrays R/C.
+
+NOTE: if both ScaleRows=False and ScaleCols=False, this  function  returns
+      an identity scaling.
+
+NOTE: R[] and C[] are guaranteed to be strictly positive. When the  matrix
+      has zero rows/cols, corresponding elements of R/C are set to 1.
+
+  -- ALGLIB PROJECT --
+     Copyright 12.11.2023 by Bochkanov Sergey
+*************************************************************************/
+void sparsescale(sparsematrix* s,
+     ae_int_t scltype,
+     ae_bool scalerows,
+     ae_bool scalecols,
+     ae_bool colsfirst,
+     /* Real    */ ae_vector* r,
+     /* Real    */ ae_vector* c,
+     ae_state *_state);
 
 
 /*************************************************************************

@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -34,6 +34,22 @@
 
 
 /*$ Declarations $*/
+
+
+/*************************************************************************
+Temporaries for priority AMD
+*************************************************************************/
+typedef struct
+{
+    ae_vector tmpperm;
+    ae_vector invtmpperm;
+    amdbuffer amdtmp;
+    sparsematrix tmpa2;
+    sparsematrix tmpbottomt;
+    sparsematrix tmpupdate;
+    sparsematrix tmpupdatet;
+    sparsematrix tmpnewtailt;
+} priorityamdbuffers;
 
 
 /*************************************************************************
@@ -121,16 +137,16 @@ typedef struct
     ae_vector rowstrides;
     ae_vector rowoffsets;
     ae_vector diagd;
-    nbpool nbooleanpool;
-    nipool nintegerpool;
+    nbpool n1booleanpool;
+    nipool n1integerpool;
     nrpool nrealpool;
     ae_vector currowbegin;
     ae_vector flagarray;
-    ae_vector eligible;
     ae_vector curpriorities;
     ae_vector tmpparent;
     ae_vector node2supernode;
     amdbuffer amdtmp;
+    priorityamdbuffers pamdtmp;
     ae_vector tmp0;
     ae_vector tmp1;
     ae_vector tmp2;
@@ -139,13 +155,6 @@ typedef struct
     ae_vector raw2smap;
     sparsematrix tmpa;
     sparsematrix tmpat;
-    sparsematrix tmpa2;
-    sparsematrix tmpbottomt;
-    sparsematrix tmpupdate;
-    sparsematrix tmpupdatet;
-    sparsematrix tmpnewtailt;
-    ae_vector tmpperm;
-    ae_vector invtmpperm;
     ae_vector tmpx;
     ae_vector simdbuf;
 } spcholanalysis;
@@ -205,12 +214,22 @@ INPUT PARAMETERS:
                     * zero value means that appropriate  value  for  a  soft
                       priority (between 2 and 5) is automatically chosen.
                       Specific value may change in future ALGLIB versions.
+    PromoteTo   -   controls column promotion:
+                    * columns which will be postponed due to being too dense
+                      will be promoted to the priority group #PromoteTo
+                      instead of the next group.
+                    * Ignored for PermType<>3 and PermType<>-3.
+                    * If column already belongs to a priority group #PromoteTo
+                      or higher, it will be promoted to the next priority group.
+                    * Can be zero (means default way of promoting columns).
+                    * Avoid specifying too large values (above 10) because
+                      algorithm will perform at least (PromoteTo+1) elimination rounds.
     FactType    -   factorization type:
                     * 0 for traditional Cholesky
                     * 1 for LDLT decomposition with strictly diagonal D
     PermType    -   permutation type:
-                    *-3 for debug improved AMD which debugs AMD itself and
-                        parallel block supernodal code:
+                    *-3 for debug improved AMD which debugs AMD itself, parallel
+                        block supernodal code and advanced memory management:
                         * AMD is debugged by generating a sequence of decreasing
                           tail sizes, ~logN in total, even if ordering can be
                           done with just one round of AMD. This ordering is
@@ -219,6 +238,8 @@ INPUT PARAMETERS:
                           partitioning problems into smallest possible chunks,
                           ignoring thresholds set by SMPActivationLevel()
                           and SpawnLevel().
+                        * memory management is debugged by randomly switching
+                          MemReuse between +1 and -1, ignoring its original value
                     *-2 for column count ordering (NOT RECOMMENDED!)
                     *-1 for absence of permutation
                     * 0 for best permutation available
@@ -229,13 +250,25 @@ INPUT PARAMETERS:
                         ordering with better  handling  of  matrices  with
                         dense rows/columns and ability to perform priority
                         ordering
+    MemReuse    -   the memory management strategy:
+                    * +1 means that the internally allocated memory is reused
+                         as much as possible. What was once allocated is not
+                         freed as long as SPCholAnalysis structure is alive.
+                         Ideal for many small and medium-sized repeated
+                         factorization problems.
+                    * -1 means that some potentially large memory blocks
+                         are freed as soon as they are not needed. Whilst
+                         some limited amount of dynamically allocated memory
+                         is still reused, the largest block are not.
+                         Ideal for large-scale problems that occupy almost
+                         all available RAM.
     Analysis    -   can be uninitialized instance, or previous analysis
                     results. Previously allocated memory is reused as much
                     as possible.
     Buf         -   buffer; may be completely uninitialized, or one remained
                     from previous calls (including ones with completely
                     different matrices). Previously allocated temporary
-                    space will be reused as much as possible.
+                    space will be reused.
 
 OUTPUT PARAMETERS:
     Analysis    -   symbolic analysis of the matrix structure  which  will
@@ -264,8 +297,10 @@ NOTE: defining 'DEBUG.SLOW' trace tag will  activate  extra-slow  (roughly
 ae_bool spsymmanalyze(const sparsematrix* a,
      /* Integer */ const ae_vector* priorities,
      double promoteabove,
+     ae_int_t promoteto,
      ae_int_t facttype,
      ae_int_t permtype,
+     ae_int_t memreuse,
      spcholanalysis* analysis,
      ae_state *_state);
 
@@ -290,6 +325,10 @@ INPUT PARAMETERS:
                         and will stop immediately
                       * if ModParam0 is zero, no pivot modification is applied
                       * if ModParam1 is zero, no overflow check is performed
+                    * 2 for modified Cholesky/LDLT which handles pivots
+                      smaller than ModParam0 in the following way:
+                      * a diagonal element is set to a very large value
+                      * offdiagonal elements are zeroed
     P0, P1, P2,P3 - modification parameters #0 #1, #2 and #3.
                     Params #2 and #3 are ignored in current version.
 
@@ -497,6 +536,10 @@ void spsymmdiagerr(spcholanalysis* analysis,
      double* sumsq,
      double* errsq,
      ae_state *_state);
+void _priorityamdbuffers_init(void* _p, ae_state *_state, ae_bool make_automatic);
+void _priorityamdbuffers_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
+void _priorityamdbuffers_clear(void* _p);
+void _priorityamdbuffers_destroy(void* _p);
 void _spcholadj_init(void* _p, ae_state *_state, ae_bool make_automatic);
 void _spcholadj_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
 void _spcholadj_clear(void* _p);

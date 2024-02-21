@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -73,6 +73,7 @@
 #include "minbleic.h"
 #include "qpbleicsolver.h"
 #include "vipmsolver.h"
+#include "ipm2solver.h"
 #include "minqp.h"
 #include "minlm.h"
 
@@ -184,6 +185,7 @@ Never try to access its fields directly!
 *************************************************************************/
 typedef struct
 {
+    ae_int_t protocolversion;
     ae_int_t optalgo;
     ae_int_t m;
     ae_int_t k;
@@ -211,14 +213,30 @@ typedef struct
     ae_bool xupdated;
     ae_bool needf;
     ae_bool needfg;
-    ae_bool needfgh;
     ae_int_t pointindex;
     ae_vector x;
     ae_vector c;
     double f;
     ae_vector g;
-    ae_matrix h;
+    ae_int_t requesttype;
+    ae_vector reportx;
+    double reportf;
+    ae_int_t querysize;
+    ae_int_t queryfuncs;
+    ae_int_t queryvars;
+    ae_int_t querydim;
+    ae_int_t queryformulasize;
+    ae_vector querydata;
+    ae_vector replyfi;
+    ae_vector replydj;
+    sparsematrix replysj;
+    ae_vector tmpx1;
+    ae_vector tmpc1;
+    ae_vector tmpf1;
+    ae_vector tmpg1;
+    ae_matrix tmpj1;
     ae_vector wcur;
+    ae_vector tmpwk;
     ae_vector tmpct;
     ae_vector tmp;
     ae_vector tmpf;
@@ -2173,6 +2191,20 @@ INPUT PARAMETERS:
 OUTPUT PARAMETERS:
     State   -   structure which stores algorithm state
 
+IMPORTANT: the LSFIT optimizer  supports  parallel  model  evaluation  and
+           parallel numerical  differentiation  ('callback  parallelism').
+           This feature, which is present in commercial  ALGLIB  editions,
+           greatly accelerates fits with large datasets  and/or  expensive
+           target functions.
+           
+           Callback parallelism is usually beneficial when a  single  pass
+           over  the   entire   dataset   requires   more   than   several
+           milliseconds.
+           
+           See ALGLIB Reference Manual, 'Working with commercial  version'
+           section,  and  comments  on  lsfitfit()   function   for   more
+           information.
+
   -- ALGLIB --
      Copyright 18.10.2008 by Bochkanov Sergey
 *************************************************************************/
@@ -2222,6 +2254,20 @@ INPUT PARAMETERS:
 OUTPUT PARAMETERS:
     State   -   structure which stores algorithm state
 
+IMPORTANT: the LSFIT optimizer  supports  parallel  model  evaluation  and
+           parallel numerical  differentiation  ('callback  parallelism').
+           This feature, which is present in commercial  ALGLIB  editions,
+           greatly accelerates fits with large datasets  and/or  expensive
+           target functions.
+           
+           Callback parallelism is usually beneficial when a  single  pass
+           over  the   entire   dataset   requires   more   than   several
+           milliseconds.
+           
+           See ALGLIB Reference Manual, 'Working with commercial  version'
+           section,  and  comments  on  lsfitfit()   function   for   more
+           information.
+           
   -- ALGLIB --
      Copyright 18.10.2008 by Bochkanov Sergey
 *************************************************************************/
@@ -2260,14 +2306,6 @@ INPUT PARAMETERS:
     N       -   number of points, N>1
     M       -   dimension of space
     K       -   number of parameters being fitted
-    CheapFG -   boolean flag, which is:
-                * True  if both function and gradient calculation complexity
-                        are less than O(M^2).  An improved  algorithm  can
-                        be  used  which corresponds  to  FGJ  scheme  from
-                        MINLM unit.
-                * False otherwise.
-                        Standard Jacibian-bases  Levenberg-Marquardt  algo
-                        will be used (FJ scheme).
 
 OUTPUT PARAMETERS:
     State   -   structure which stores algorithm state
@@ -2276,8 +2314,21 @@ See also:
     LSFitResults
     LSFitCreateFG (fitting without weights)
     LSFitCreateWFGH (fitting using Hessian)
-    LSFitCreateFGH (fitting using Hessian, without weights)
 
+IMPORTANT: the LSFIT optimizer  supports  parallel  model  evaluation  and
+           parallel numerical  differentiation  ('callback  parallelism').
+           This feature, which is present in commercial  ALGLIB  editions,
+           greatly accelerates fits with large datasets  and/or  expensive
+           target functions.
+           
+           Callback parallelism is usually beneficial when a  single  pass
+           over  the   entire   dataset   requires   more   than   several
+           milliseconds.
+           
+           See ALGLIB Reference Manual, 'Working with commercial  version'
+           section,  and  comments  on  lsfitfit()   function   for   more
+           information.
+           
   -- ALGLIB --
      Copyright 17.08.2009 by Bochkanov Sergey
 *************************************************************************/
@@ -2288,7 +2339,6 @@ void lsfitcreatewfg(/* Real    */ const ae_matrix* x,
      ae_int_t n,
      ae_int_t m,
      ae_int_t k,
-     ae_bool cheapfg,
      lsfitstate* state,
      ae_state *_state);
 
@@ -2316,106 +2366,28 @@ INPUT PARAMETERS:
     N       -   number of points, N>1
     M       -   dimension of space
     K       -   number of parameters being fitted
-    CheapFG -   boolean flag, which is:
-                * True  if both function and gradient calculation complexity
-                        are less than O(M^2).  An improved  algorithm  can
-                        be  used  which corresponds  to  FGJ  scheme  from
-                        MINLM unit.
-                * False otherwise.
-                        Standard Jacibian-bases  Levenberg-Marquardt  algo
-                        will be used (FJ scheme).
 
 OUTPUT PARAMETERS:
     State   -   structure which stores algorithm state
 
+IMPORTANT: the LSFIT optimizer  supports  parallel  model  evaluation  and
+           parallel numerical  differentiation  ('callback  parallelism').
+           This feature, which is present in commercial  ALGLIB  editions,
+           greatly accelerates fits with large datasets  and/or  expensive
+           target functions.
+           
+           Callback parallelism is usually beneficial when a  single  pass
+           over  the   entire   dataset   requires   more   than   several
+           milliseconds.
+           
+           See ALGLIB Reference Manual, 'Working with commercial  version'
+           section,  and  comments  on  lsfitfit()   function   for   more
+           information.
+           
   -- ALGLIB --
      Copyright 17.08.2009 by Bochkanov Sergey
 *************************************************************************/
 void lsfitcreatefg(/* Real    */ const ae_matrix* x,
-     /* Real    */ const ae_vector* y,
-     /* Real    */ const ae_vector* c,
-     ae_int_t n,
-     ae_int_t m,
-     ae_int_t k,
-     ae_bool cheapfg,
-     lsfitstate* state,
-     ae_state *_state);
-
-
-/*************************************************************************
-Weighted nonlinear least squares fitting using gradient/Hessian.
-
-Nonlinear task min(F(c)) is solved, where
-
-    F(c) = (w[0]*(f(c,x[0])-y[0]))^2 + ... + (w[n-1]*(f(c,x[n-1])-y[n-1]))^2,
-
-    * N is a number of points,
-    * M is a dimension of a space points belong to,
-    * K is a dimension of a space of parameters being fitted,
-    * w is an N-dimensional vector of weight coefficients,
-    * x is a set of N points, each of them is an M-dimensional vector,
-    * c is a K-dimensional vector of parameters being fitted
-
-This subroutine uses f(c,x[i]), its gradient and its Hessian.
-
-INPUT PARAMETERS:
-    X       -   array[0..N-1,0..M-1], points (one row = one point)
-    Y       -   array[0..N-1], function values.
-    W       -   weights, array[0..N-1]
-    C       -   array[0..K-1], initial approximation to the solution,
-    N       -   number of points, N>1
-    M       -   dimension of space
-    K       -   number of parameters being fitted
-
-OUTPUT PARAMETERS:
-    State   -   structure which stores algorithm state
-
-  -- ALGLIB --
-     Copyright 17.08.2009 by Bochkanov Sergey
-*************************************************************************/
-void lsfitcreatewfgh(/* Real    */ const ae_matrix* x,
-     /* Real    */ const ae_vector* y,
-     /* Real    */ const ae_vector* w,
-     /* Real    */ const ae_vector* c,
-     ae_int_t n,
-     ae_int_t m,
-     ae_int_t k,
-     lsfitstate* state,
-     ae_state *_state);
-
-
-/*************************************************************************
-Nonlinear least squares fitting using gradient/Hessian, without individial
-weights.
-
-Nonlinear task min(F(c)) is solved, where
-
-    F(c) = ((f(c,x[0])-y[0]))^2 + ... + ((f(c,x[n-1])-y[n-1]))^2,
-
-    * N is a number of points,
-    * M is a dimension of a space points belong to,
-    * K is a dimension of a space of parameters being fitted,
-    * x is a set of N points, each of them is an M-dimensional vector,
-    * c is a K-dimensional vector of parameters being fitted
-
-This subroutine uses f(c,x[i]), its gradient and its Hessian.
-
-INPUT PARAMETERS:
-    X       -   array[0..N-1,0..M-1], points (one row = one point)
-    Y       -   array[0..N-1], function values.
-    C       -   array[0..K-1], initial approximation to the solution,
-    N       -   number of points, N>1
-    M       -   dimension of space
-    K       -   number of parameters being fitted
-
-OUTPUT PARAMETERS:
-    State   -   structure which stores algorithm state
-
-
-  -- ALGLIB --
-     Copyright 17.08.2009 by Bochkanov Sergey
-*************************************************************************/
-void lsfitcreatefgh(/* Real    */ const ae_matrix* x,
      /* Real    */ const ae_vector* y,
      /* Real    */ const ae_vector* c,
      ae_int_t n,
@@ -2615,42 +2587,46 @@ void lsfitsetlc(lsfitstate* state,
 
 
 /*************************************************************************
-NOTES:
 
-1. this algorithm is somewhat unusual because it works with  parameterized
-   function f(C,X), where X is a function argument (we  have  many  points
-   which are characterized by different  argument  values),  and  C  is  a
-   parameter to fit.
+CALLBACK PARALLELISM:
 
-   For example, if we want to do linear fit by f(c0,c1,x) = c0*x+c1,  then
-   x will be argument, and {c0,c1} will be parameters.
-   
-   It is important to understand that this algorithm finds minimum in  the
-   space of function PARAMETERS (not arguments), so it  needs  derivatives
-   of f() with respect to C, not X.
-   
-   In the example above it will need f=c0*x+c1 and {df/dc0,df/dc1} = {x,1}
-   instead of {df/dx} = {c0}.
+The  LSFIT  optimizer  supports  parallel  model  evaluation  and parallel
+numerical differentiation ('callback parallelism'). This feature, which is
+present in commercial ALGLIB editions, greatly accelerates fits with large
+datasets and/or expensive target functions.
 
-2. Callback functions accept C as the first parameter, and X as the second
+Callback parallelism is usually beneficial when a  single  pass  over  the
+entire dataset requires more than several milliseconds. In this  case  the
+job of computing model values at  dataset  points  can  be  split  between
+multiple threads.
 
-3. If  state  was  created  with  LSFitCreateFG(),  algorithm  needs  just
-   function   and   its   gradient,   but   if   state   was  created with
-   LSFitCreateFGH(), algorithm will need function, gradient and Hessian.
-   
-   According  to  the  said  above,  there  ase  several  versions of this
-   function, which accept different sets of callbacks.
-   
-   This flexibility opens way to subtle errors - you may create state with
-   LSFitCreateFGH() (optimization using Hessian), but call function  which
-   does not accept Hessian. So when algorithm will request Hessian,  there
-   will be no callback to call. In this case exception will be thrown.
-   
-   Be careful to avoid such errors because there is no way to find them at
-   compile time - you can see them at runtime only.
+If you employ a numerical differentiation scheme, you can also parallelize
+computation of different components of a numerical gradient. Generally, the
+mode computationally demanding your problem is (many points, numerical differentiation,
+expensive model), the more you can get for multithreading.
+
+ALGLIB Reference Manual, 'Working with commercial  version' section,
+describes how to activate callback parallelism for your programming language.
+
+CALLBACK ARGUMENTS
+
+This algorithm is somewhat unusual because  it  works  with  parameterized
+function f(C,X), where X is  a  function  argument (we  have  many  points
+which  are  characterized  by different  argument  values),  and  C  is  a
+parameter to fit.
+
+For example, if we want to do linear  fit  by  f(c0,c1,x) = c0*x+c1,  then
+x will be argument, and {c0,c1} will be parameters.
+
+It is important to understand that this algorithm finds   minimum  in  the
+space of function PARAMETERS (not  arguments),  so  it  needs  derivatives
+of f() with respect to C, not X.
+
+In the example above it will need f=c0*x+c1 and {df/dc0,df/dc1} = {x,1}
+instead of {df/dx} = {c0}.
 
   -- ALGLIB --
-     Copyright 17.08.2009 by Bochkanov Sergey
+     Copyright 17.12.2023 by Bochkanov Sergey
 *************************************************************************/
 ae_bool lsfititeration(lsfitstate* state, ae_state *_state);
 
@@ -2789,6 +2765,18 @@ INPUT PARAMETERS:
 void lsfitsetgradientcheck(lsfitstate* state,
      double teststep,
      ae_state *_state);
+
+
+/*************************************************************************
+Set V1 reverse communication protocol
+*************************************************************************/
+void lsfitsetprotocolv1(lsfitstate* state, ae_state *_state);
+
+
+/*************************************************************************
+Set V2 reverse communication protocol
+*************************************************************************/
+void lsfitsetprotocolv2(lsfitstate* state, ae_state *_state);
 void _polynomialfitreport_init(void* _p, ae_state *_state, ae_bool make_automatic);
 void _polynomialfitreport_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
 void _polynomialfitreport_clear(void* _p);

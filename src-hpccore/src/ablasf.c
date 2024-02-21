@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -18,6 +18,12 @@
 
 
 /*$ Declarations $*/
+static void ablasf_igrowvinternal(ae_int_t newn,
+     /* Integer */ ae_vector* x,
+     ae_state *_state);
+static void ablasf_rgrowvinternal(ae_int_t newn,
+     /* Real    */ ae_vector* x,
+     ae_state *_state);
 #ifdef ALGLIB_NO_FAST_KERNELS
 static ae_bool ablasf_rgemm32basecase(ae_int_t m,
      ae_int_t n,
@@ -2107,25 +2113,20 @@ c) actual size can be larger than N, so subsequent grow() calls can return
 *************************************************************************/
 void igrowv(ae_int_t newn, /* Integer */ ae_vector* x, ae_state *_state)
 {
-    ae_frame _frame_block;
-    ae_vector oldx;
-    ae_int_t oldn;
 
-    ae_frame_make(_state, &_frame_block);
-    memset(&oldx, 0, sizeof(oldx));
-    ae_vector_init(&oldx, 0, DT_INT, _state, ae_true);
 
+    
+    /*
+     * If no growth is required, exit. Call worker function otherwise.
+     *
+     * The idea is that we call function which works with dynamic arrays
+     * (and utilizes stack unwinding) only when absolutely necessary.
+     */
     if( x->cnt>=newn )
     {
-        ae_frame_leave(_state);
         return;
     }
-    oldn = x->cnt;
-    newn = ae_maxint(newn, ae_round(1.8*(double)oldn+(double)1, _state), _state);
-    ae_swap_vectors(x, &oldx);
-    ae_vector_set_length(x, newn, _state);
-    icopyv(oldn, &oldx, x, _state);
-    ae_frame_leave(_state);
+    ablasf_igrowvinternal(newn, x, _state);
 }
 
 
@@ -2137,29 +2138,24 @@ c) actual size can be larger than N, so subsequent grow() calls can return
    without reallocation
 
   -- ALGLIB --
-     Copyright 20.03.2009 by Bochkanov Sergey
+     Copyright 07.06.2023 by Bochkanov Sergey
 *************************************************************************/
 void rgrowv(ae_int_t newn, /* Real    */ ae_vector* x, ae_state *_state)
 {
-    ae_frame _frame_block;
-    ae_vector oldx;
-    ae_int_t oldn;
 
-    ae_frame_make(_state, &_frame_block);
-    memset(&oldx, 0, sizeof(oldx));
-    ae_vector_init(&oldx, 0, DT_REAL, _state, ae_true);
 
+    
+    /*
+     * If no growth is required, exit. Call worker function otherwise.
+     *
+     * The idea is that we call function which works with dynamic arrays
+     * (and utilizes stack unwinding) only when absolutely necessary.
+     */
     if( x->cnt>=newn )
     {
-        ae_frame_leave(_state);
         return;
     }
-    oldn = x->cnt;
-    newn = ae_maxint(newn, ae_round(1.8*(double)oldn+(double)1, _state), _state);
-    ae_swap_vectors(x, &oldx);
-    ae_vector_set_length(x, newn, _state);
-    rcopyv(oldn, &oldx, x, _state);
-    ae_frame_leave(_state);
+    ablasf_rgrowvinternal(newn, x, _state);
 }
 
 
@@ -4746,6 +4742,70 @@ void rmatrixgemmk44v11(ae_int_t m,
         }
         i = i+4;
     }
+}
+
+
+/*************************************************************************
+Internal function that actually works with dynamic arrays.
+
+  -- ALGLIB --
+     Copyright 07.06.2023 by Bochkanov Sergey
+*************************************************************************/
+static void ablasf_igrowvinternal(ae_int_t newn,
+     /* Integer */ ae_vector* x,
+     ae_state *_state)
+{
+    ae_frame _frame_block;
+    ae_vector oldx;
+    ae_int_t oldn;
+
+    ae_frame_make(_state, &_frame_block);
+    memset(&oldx, 0, sizeof(oldx));
+    ae_vector_init(&oldx, 0, DT_INT, _state, ae_true);
+
+    if( x->cnt>=newn )
+    {
+        ae_frame_leave(_state);
+        return;
+    }
+    oldn = x->cnt;
+    newn = ae_maxint(newn, ae_round(1.8*(double)oldn+(double)1, _state), _state);
+    ae_swap_vectors(x, &oldx);
+    ae_vector_set_length(x, newn, _state);
+    icopyv(oldn, &oldx, x, _state);
+    ae_frame_leave(_state);
+}
+
+
+/*************************************************************************
+Internal function which actually works with dynamic arrays
+
+  -- ALGLIB --
+     Copyright 07.06.2023 by Bochkanov Sergey
+*************************************************************************/
+static void ablasf_rgrowvinternal(ae_int_t newn,
+     /* Real    */ ae_vector* x,
+     ae_state *_state)
+{
+    ae_frame _frame_block;
+    ae_vector oldx;
+    ae_int_t oldn;
+
+    ae_frame_make(_state, &_frame_block);
+    memset(&oldx, 0, sizeof(oldx));
+    ae_vector_init(&oldx, 0, DT_REAL, _state, ae_true);
+
+    if( x->cnt>=newn )
+    {
+        ae_frame_leave(_state);
+        return;
+    }
+    oldn = x->cnt;
+    newn = ae_maxint(newn, ae_round(1.8*(double)oldn+(double)1, _state), _state);
+    ae_swap_vectors(x, &oldx);
+    ae_vector_set_length(x, newn, _state);
+    rcopyv(oldn, &oldx, x, _state);
+    ae_frame_leave(_state);
 }
 
 

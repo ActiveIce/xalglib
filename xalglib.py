@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -41,6 +41,7 @@ X_ASSERTION_FAILED = 5
 X_SET     = 1 # data are copied into x-vector/matrix; previous contents of x-structure is freed
 X_CREATE  = 2 # x-vector/matrix is created, its previous contents is ignored
 X_REWRITE = 3 # data are copied into x-structure; size of Python structure must be equal to the x-structure size
+X_MINREWRITE = 4 # data are copied into x-structure; a minimum of lengths of Python and x-structure is copied
 
 class x_complex(ctypes.Structure):
     _fields_ = [("x", ctypes.c_double), ("y", ctypes.c_double)]
@@ -89,11 +90,11 @@ curdir = os.path.dirname(__file__)
 if curdir=="":
     curdir = "."
 if sys.platform=="win32" or sys.platform=="cygwin":
-    _shared_lib_name = "alglib400_"+str(ctypes.sizeof(ctypes.c_void_p)*8)+"hpc"+".dll"
+    _shared_lib_name = "alglib401_"+str(ctypes.sizeof(ctypes.c_void_p)*8)+"hpc"+".dll"
     _so_candidates.append(os.path.join(curdir,_shared_lib_name))
     _so_candidates.append(os.path.join(sys.prefix,_shared_lib_name))
 else:
-    _shared_lib_name = "alglib400_"+str(ctypes.sizeof(ctypes.c_void_p)*8)+"hpc"+".so"
+    _shared_lib_name = "alglib401_"+str(ctypes.sizeof(ctypes.c_void_p)*8)+"hpc"+".so"
     _so_candidates.append(os.path.join(curdir,_shared_lib_name))
     _so_candidates.append(os.path.join(sys.prefix,_shared_lib_name))
     _so_candidates.append(os.path.join(os.sep+"usr","local",_shared_lib_name))
@@ -127,6 +128,367 @@ _lib_alglib.x_force_symmetric_e_.restype = ctypes.c_uint8
 _lib_alglib.x_force_hermitian_e_.argtypes = [ctypes.c_void_p]
 _lib_alglib.x_force_hermitian_e_.restype = ctypes.c_uint8
 
+_lib_alglib.x_trace_file.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+_lib_alglib.x_trace_file.restype = None
+_lib_alglib.x_trace_string.argtypes = [ctypes.c_char_p]
+_lib_alglib.x_trace_string.restype = None
+_lib_alglib.x_trace_disable.argtypes = []
+_lib_alglib.x_trace_disable.restype = None
+
+#
+# Class encapsulating RCOMM-V2 request information
+#
+class _rcommv2_request(object):
+    def __init__(self, p, spname):
+        self.param = p
+        self.subpackage  = spname
+        self.ptr_reportx = x_multiptr(p_ptr=0)
+        self.dbl_reportf = ctypes.c_double(0)
+        self.ptr_querydata = x_multiptr(p_ptr=0)
+        self.ptr_replyfi = x_multiptr(p_ptr=0)
+        self.ptr_replydj = x_multiptr(p_ptr=0)
+        self.int_request = x_int(val=0)
+        self.int_size    = x_int(val=0)
+        self.int_funcs   = x_int(val=0)
+        self.int_vars    = x_int(val=0)
+        self.int_dim     = x_int(val=0)
+        self.int_formulasize = x_int(val=0)
+        self.tmp_xv = x_vector(cnt=0,datatype=DT_REAL,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+        self.reportx = []
+        self.querydata = []
+        self.replyfi = []
+        self.replydj = []
+        
+    #
+    # Fetch data from X-core
+    #
+    def fetch(self, py_obj, fetch_func):
+        fetch_func(py_obj.ptr, ctypes.byref(self.int_request), ctypes.byref(self.int_size), ctypes.byref(self.int_funcs), ctypes.byref(self.int_vars), ctypes.byref(self.int_dim), ctypes.byref(self.int_formulasize), ctypes.byref(self.ptr_reportx), ctypes.byref(self.dbl_reportf), ctypes.byref(self.ptr_querydata), ctypes.byref(self.ptr_replyfi), ctypes.byref(self.ptr_replydj))
+        
+        self.request = int(self.int_request.val)
+        self.size    = int(self.int_size.val)
+        self.vars    = int(self.int_vars.val)
+        self.funcs   = int(self.int_funcs.val)
+        self.dim     = int(self.int_dim.val)
+        self.formulasize = int(self.int_formulasize.val)
+        
+        if self.request==-1:
+            self.reportf = float(self.dbl_reportf)
+            #
+            need_len = self.vars
+            self.tmp_xv.cnt = need_len
+            self.tmp_xv.ptr.p_ptr = self.ptr_reportf.p_ptr
+            if len(self.reportx)<need_len:
+                self.reportx = create_real_vector(need_len)
+        elif self.request==2 or self.request==3 or self.request==4:
+            qd_len = self.size*(self.vars+self.dim) if self.request!=3 else self.size*(self.vars+self.dim+self.vars*2*self.formulasize)
+            rf_len = self.size*self.funcs
+            rd_len = self.size*self.funcs*self.vars if (self.request==2 or self.request==3) else 0
+            #
+            self.tmp_xv.cnt = qd_len
+            self.tmp_xv.ptr.p_ptr = self.ptr_querydata.p_ptr
+            if len(self.querydata)<qd_len:
+                self.querydata = create_real_vector(qd_len)
+            copy_x_to_list(self.tmp_xv,self.querydata)
+            #
+            if len(self.replyfi)<rf_len:
+                self.replyfi = create_real_vector(rf_len)
+            #
+            if len(self.replydj)<rd_len:
+                self.replydj = create_real_vector(rd_len)
+        else:
+            raise RuntimeError("ALGLIB: unexpected request type for RCOMM-V2 protocol")
+        
+    def send_reply(self):
+        if self.request==2 or self.request==3 or self.request==4:
+            rf_len = self.size*self.funcs
+            rd_len = self.size*self.funcs*self.vars if (self.request==2 or self.request==3) else 0
+            #
+            if rf_len>0:
+                self.tmp_xv.cnt = rf_len
+                self.tmp_xv.ptr.p_ptr = self.ptr_replyfi.p_ptr
+                x_from_list(self.tmp_xv, self.replyfi, DT_REAL, X_MINREWRITE)
+            #
+            if rd_len>0:
+                self.tmp_xv.cnt = rd_len
+                self.tmp_xv.ptr.p_ptr = self.ptr_replydj.p_ptr
+                x_from_list(self.tmp_xv, self.replydj, DT_REAL, X_MINREWRITE)
+        else:
+            raise RuntimeError("ALGLIB: send_reply() detected unexpected request type for RCOMM-V2 protocol")
+        
+
+#
+# preallocated buffers for RCOMM-V2 protocol
+#
+class _rcommv2_buffers(object):
+    def __init__(self):
+        self.tmpX = []
+        self.tmpC = []
+        self.tmpF = []
+        self.tmpG = []
+        self.tmpJ = [[]]
+        
+    #
+    # resize buffers according to the current request size.
+    # Does not change size, if requested size is too small.
+    #
+    def resize(self,request):
+        if len(self.tmpX)<request.vars:
+            self.tmpX = create_real_vector(request.vars)
+        if request.dim>0 and len(self.tmpC)<request.dim:
+            self.tmpC = create_real_vector(request.dim)
+        if len(self.tmpF)<request.funcs:
+            self.tmpF = create_real_vector(request.funcs)
+        if len(self.tmpG)<request.vars:
+            self.tmpG = create_real_vector(request.vars)
+        if safe_rows('',self.tmpJ)<request.funcs or safe_cols('',self.tmpJ)<request.vars:
+            self.tmpJ = create_real_matrix(request.funcs, request.vars)
+
+#
+# RCOMM-V2 handling of request 2
+#
+def _process_v2request_2(request, query_idx, callback, is_scalar, buffers):
+    #
+    # Query and reply offsets
+    #
+    query_data_offs = query_idx*(request.vars+request.dim)
+    reply_fi_offs   = query_idx*request.funcs
+    reply_dj_offs   = query_idx*request.funcs*request.vars
+            
+    #
+    # Copy inputs to buffers
+    #
+    i=0
+    while i<request.vars:
+        buffers.tmpX[i] = request.querydata[query_data_offs+i]
+        i += 1
+    if request.dim>0:
+        i=0
+        while i<request.dim:
+            buffers.tmpC[i] = request.querydata[query_data_offs+request.vars+i]
+            i += 1
+            
+    #
+    # Callback
+    #
+    if is_scalar:
+        if request.dim==0:
+            request.replyfi[reply_fi_offs] = callback(buffers.tmpX, buffers.tmpG, request.param)
+        else:
+            request.replyfi[reply_fi_offs] = callback(buffers.tmpX, buffers.tmpC, buffers.tmpG, request.param)
+        i=0
+        while i<request.vars:
+            request.replydj[reply_dj_offs+i] = buffers.tmpG[i]
+            i += 1
+    else:
+        if request.dim==0:
+            callback(buffers.tmpX, buffers.tmpF, buffers.tmpJ, request.param)
+        else:
+            callback(buffers.tmpX, buffers.tmpC, buffers.tmpF, buffers.tmpJ, request.param)
+        ridx=0
+        while ridx<request.funcs:
+            request.replyfi[reply_fi_offs+ridx] = buffers.tmpF[ridx]
+            doffs = reply_dj_offs+ridx*request.vars
+            i=0
+            while i<request.vars:
+                request.replydj[doffs+i] = buffers.tmpJ[ridx][i]
+                i += 1
+            ridx += 1
+
+#
+# RCOMM-V2 handling of request 3
+#
+def _process_v2request_3phase0(request, job_idx, callback, is_scalar, buffers):
+    #
+    # Phase 0: compute target at the origin and compute parts of the numerical differentiation formula that do NOT depend
+    # on the value at origin.
+    #
+    if job_idx<request.size*request.vars:
+        #
+        # Compute parts of the numerical differentiation formula that do NOT depend
+        # on the value at origin.
+        #
+        query_idx = job_idx // request.vars
+        var_idx   = job_idx%request.vars
+        n = request.vars
+        m = request.funcs
+        fs = request.formulasize
+        query_data_offs   = query_idx*(n+request.dim+n*request.formulasize*2)
+        formula_data_offs = query_data_offs+n+request.dim+var_idx*fs*2
+        reply_dj_offs     = query_idx*n*m
+        
+        #
+        # Copy inputs to buffers
+        #
+        i=0
+        while i<request.vars:
+            buffers.tmpX[i] = request.querydata[query_data_offs+i]
+            i += 1
+        if request.dim>0:
+            i=0
+            while i<request.dim:
+                buffers.tmpC[i] = request.querydata[query_data_offs+request.vars+i]
+                i += 1
+        
+        #
+        # compute gradient using numerical differentiation formula provided by the optimizer
+        #
+        xprev = buffers.tmpX[var_idx]
+        t=0
+        while t<m:
+            request.replydj[reply_dj_offs+t*n+var_idx] = 0
+            t += 1
+        idx=0
+        while idx<fs:
+            # read numdiff formula and advance position
+            xx = request.querydata[formula_data_offs+idx*2+0]
+            coeff = request.querydata[formula_data_offs+idx*2+1]
+            idx += 1
+            
+            # handle the formula
+            if coeff==0:
+                continue
+            if xx==request.querydata[query_data_offs+var_idx]: # skip terms that depend on the target value at origin - it is still computed
+                continue
+            buffers.tmpX[var_idx] = xx
+            if is_scalar:
+                if request.dim==0:
+                    buffers.tmpF[0] = callback(buffers.tmpX, request.param)
+                else:
+                    buffers.tmpF[0] = callback(buffers.tmpX, buffers.tmpC, request.param)
+            else:
+                if request.dim==0:
+                    callback(buffers.tmpX, buffers.tmpF, request.param)
+                else:
+                    callback(buffers.tmpX, buffers.tmpC, buffers.tmpF, request.param)
+            buffers.tmpX[var_idx] = xprev
+            t=0
+            while t<m:
+                request.replydj[reply_dj_offs+t*n+var_idx] += coeff*buffers.tmpF[t]
+                t += 1
+    else:
+        #
+        # Compute target value at the origin
+        #
+        query_idx = job_idx-request.size*request.vars
+        query_data_offs = query_idx*(request.vars+request.dim+request.vars*request.formulasize*2)
+        reply_fi_offs   = query_idx*request.funcs
+        m = request.funcs
+        
+        #
+        # Copy inputs to buffers
+        #
+        i=0
+        while i<request.vars:
+            buffers.tmpX[i] = request.querydata[query_data_offs+i]
+            i += 1
+        if request.dim>0:
+            i=0
+            while i<request.dim:
+                buffers.tmpC[i] = request.querydata[query_data_offs+request.vars+i]
+                i += 1
+        
+        #
+        # Callback
+        #
+        if is_scalar:
+            if request.dim==0:
+                buffers.tmpF[0] = callback(buffers.tmpX, request.param)
+            else:
+                buffers.tmpF[0] = callback(buffers.tmpX, buffers.tmpC, request.param)
+        else:
+            if request.dim==0:
+                callback(buffers.tmpX, buffers.tmpF, request.param)
+            else:
+                callback(buffers.tmpX, buffers.tmpC, buffers.tmpF, request.param)
+
+        #
+        # Offload data
+        #
+        t=0
+        while t<m:
+            request.replyfi[reply_fi_offs+t] = buffers.tmpF[t]
+            t += 1
+
+def _process_v2request_3phase1(request):
+    #
+    # Phase 1: compute parts of the numerical differentiation formula that DO depend on the value at origin.
+    #
+    query_idx=0
+    while query_idx<request.size:
+        var_idx=0
+        while var_idx<request.vars:
+            #
+            # Compute parts of the numerical differentiation formula that do NOT depend
+            # on the value at origin.
+            #
+            n = request.vars
+            m = request.funcs
+            fs = request.formulasize
+            query_data_offs   = query_idx*(n+request.dim+n*request.formulasize*2)
+            formula_data_offs = query_data_offs+n+request.dim+var_idx*fs*2
+            reply_fi_offs     = query_idx*m
+            reply_dj_offs     = query_idx*n*m
+            idx=0
+            while idx<fs:
+                xx=request.querydata[formula_data_offs+idx*2+0]
+                coeff=request.querydata[formula_data_offs+idx*2+1]
+                idx += 1
+                if coeff==0 or xx!=request.querydata[query_data_offs+var_idx]:
+                    continue
+                t=0
+                while t<m:
+                    request.replydj[reply_dj_offs+t*n+var_idx] += coeff*request.replyfi[reply_fi_offs+t]
+                    t += 1
+            var_idx += 1
+        query_idx += 1
+
+#
+# RCOMM-V2 handling of request 4
+#
+def _process_v2request_4(request, query_idx, callback, is_scalar, buffers):
+    #
+    # Query and reply offsets
+    #
+    query_data_offs = query_idx*(request.vars+request.dim)
+    reply_fi_offs   = query_idx*request.funcs
+    m               = request.funcs
+        
+    #
+    # Copy inputs to buffers
+    #
+    i=0
+    while i<request.vars:
+        buffers.tmpX[i] = request.querydata[query_data_offs+i]
+        i += 1
+    if request.dim>0:
+        i=0
+        while i<request.dim:
+            buffers.tmpC[i] = request.querydata[query_data_offs+request.vars+i]
+            i += 1
+        
+    #
+    # Callback
+    #
+    if is_scalar:
+        if request.dim==0:
+            buffers.tmpF[0] = callback(buffers.tmpX, request.param)
+        else:
+            buffers.tmpF[0] = callback(buffers.tmpX, buffers.tmpC, request.param)
+    else:
+        if request.dim==0:
+            callback(buffers.tmpX, buffers.tmpF, request.param)
+        else:
+            callback(buffers.tmpX, buffers.tmpC, buffers.tmpF, request.param)
+
+    #
+    # Offload data
+    #
+    t=0
+    while t<m:
+        request.replyfi[reply_fi_offs+t] = buffers.tmpF[t]
+        t += 1
+
 def x_malloc(cnt):
     __cnt = ctypes.c_uint64(cnt)
     if __cnt.value!=cnt:
@@ -147,6 +509,18 @@ def xsign(val):
     if val>0.0:
         return +1.0
     return 0.0
+
+def trace_file(tags,filename):
+    _lib_alglib.x_trace_file(tags.encode(),filename.encode())
+    return
+
+def trace_string(str):
+    _lib_alglib.x_trace_string(str.encode())
+    return
+
+def trace_disable():
+    _lib_alglib.x_trace_disable()
+    return
 
 def setnworkers(nworkers):
     __nworkers = ctypes.c_uint64(nworkers)
@@ -424,6 +798,7 @@ def is_complex_matrix(v):
 #       * X_SET -     x is assumed to be initialized; old contents is freed
 #       * X_REWRITE - x is assumed to have same size as v, exception is thrown otherwise
 #                     it is rewritten without reallocation of memory;
+#       * X_MINREWRITE - a minimum of len(x) and len(v) is copied. Data are rewritten without memory reallocation.
 #
 def x_from_list(x, v, dt, mode):
     #
@@ -455,6 +830,7 @@ def x_from_list(x, v, dt, mode):
         x.owner = OWN_AE
         x.ptr.p_ptr = x_malloc(elemsize*x.cnt)
         x.last_action = 1
+        cnt = x.cnt
     if mode==X_SET:
         if x.owner==OWN_AE:
             x_free(x.ptr.p_ptr)
@@ -463,36 +839,39 @@ def x_from_list(x, v, dt, mode):
         x.owner = OWN_AE
         x.ptr.p_ptr = x_malloc(elemsize*x.cnt)
         x.last_action = 3
+        cnt = x.cnt
     if mode==X_REWRITE:
         if x.datatype!=dt:
             raise RuntimeError("Trying to rewrite vector - types don't match")
         if len(v)!=x.cnt:
             raise RuntimeError("Trying to rewrite vector - sizes don't match")
         x.last_action = 2
+        cnt = x.cnt
+    if mode==X_MINREWRITE:
+        if x.datatype!=dt:
+            raise RuntimeError("Trying to min-rewrite vector - types don't match")
+        x.last_action = 2
+        cnt = min(x.cnt,len(v))
     
     #
     # copy
     #
     if dt==DT_BOOL:
-        cnt = x.cnt
         i = 0
         while i<cnt:
             x.ptr.p_bool[i] =   bool(v[i])
             i += 1
     if dt==DT_INT:
-        cnt = x.cnt
         i = 0
         while i<cnt:
             x.ptr.p_int[i] =    int(v[i])
             i += 1
     if dt==DT_REAL:
-        cnt = x.cnt
         i = 0
         while i<cnt:
             x.ptr.p_real[i] = float(v[i])
             i += 1
     if dt==DT_COMPLEX:
-        cnt = x.cnt
         i = 0
         while i<cnt:
             tmp = complex(v[i])
@@ -571,8 +950,10 @@ def x_from_listlist(x, v, dt, mode):
         if x.datatype!=dt:
             raise RuntimeError("Trying to rewrite matrix - types don't match")
         if rows!=x.rows or cols!=x.cols:
-            raise RuntimeError("Trying to rewrite vector - sizes don't match")
+            raise RuntimeError("Trying to rewrite matrix - sizes don't match")
         x.last_action = 2
+    if mode==X_MINREWRITE:
+        raise RuntimeError("X-matrices do not support min-rewrites yet")
     
     #
     # copy
@@ -4901,6 +5282,85 @@ def sparsecreatecrsbuf(m, n, ner, s):
         x_vector_clear(__ner)
 
 
+_lib_alglib.alglib_xv2_sparsecreatecrsfromdense.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_sparsecreatecrsfromdense.restype = ctypes.c_int32
+def sparsecreatecrsfromdense(*functionargs):
+    if len(functionargs)==3:
+        __friendly_form = False
+        a,m,n = functionargs
+    elif len(functionargs)==1:
+        __friendly_form = True
+        a, = functionargs
+        m = safe_rows("'sparsecreatecrsfromdense': incorrect parameters",a)
+        n = safe_cols("'sparsecreatecrsfromdense': incorrect parameters",a)
+    else:
+        raise RuntimeError("Error while calling 'sparsecreatecrsfromdense': function must have 1 or 3 parameters")
+    if not is_real_matrix(a):
+        raise ValueError("'a' parameter can't be cast to real_matrix")
+    __a = x_matrix(rows=0,cols=0,stride=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __m = x_int()
+    __m.val = int(m)
+    if __m.val!=m:
+        raise ValueError("Error while converting 'm' parameter to 'x_int'")
+    __n = x_int()
+    __n.val = int(n)
+    if __n.val!=n:
+        raise ValueError("Error while converting 'n' parameter to 'x_int'")
+    __s = ctypes.c_void_p(0)
+    try:
+        x_from_listlist(__a, a, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_sparsecreatecrsfromdense(ctypes.byref(_error_msg), ctypes.byref(__a), ctypes.byref(__m), ctypes.byref(__n), ctypes.byref(__s), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'sparsecreatecrsfromdense'")
+        __r__s = sparsematrix(__s)
+        return __r__s
+    finally:
+        x_matrix_clear(__a)
+
+
+_lib_alglib.alglib_xv2_sparsecreatecrsfromdensebuf.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_sparsecreatecrsfromdensebuf.restype = ctypes.c_int32
+def sparsecreatecrsfromdensebuf(*functionargs):
+    if len(functionargs)==4:
+        __friendly_form = False
+        a,m,n,s = functionargs
+    elif len(functionargs)==2:
+        __friendly_form = True
+        a,s = functionargs
+        m = safe_rows("'sparsecreatecrsfromdensebuf': incorrect parameters",a)
+        n = safe_cols("'sparsecreatecrsfromdensebuf': incorrect parameters",a)
+    else:
+        raise RuntimeError("Error while calling 'sparsecreatecrsfromdensebuf': function must have 2 or 4 parameters")
+    if not is_real_matrix(a):
+        raise ValueError("'a' parameter can't be cast to real_matrix")
+    __a = x_matrix(rows=0,cols=0,stride=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __m = x_int()
+    __m.val = int(m)
+    if __m.val!=m:
+        raise ValueError("Error while converting 'm' parameter to 'x_int'")
+    __n = x_int()
+    __n.val = int(n)
+    if __n.val!=n:
+        raise ValueError("Error while converting 'n' parameter to 'x_int'")
+    __s = s.ptr
+    try:
+        x_from_listlist(__a, a, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_sparsecreatecrsfromdensebuf(ctypes.byref(_error_msg), ctypes.byref(__a), ctypes.byref(__m), ctypes.byref(__n), ctypes.byref(__s), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'sparsecreatecrsfromdensebuf'")
+        return
+    finally:
+        x_matrix_clear(__a)
+
+
 _lib_alglib.alglib_xv2_sparsecreatesks.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
 _lib_alglib.alglib_xv2_sparsecreatesks.restype = ctypes.c_int32
 def sparsecreatesks(m, n, d, u):
@@ -6335,6 +6795,43 @@ def sparsegetlowercount(s):
         return __r__result
     finally:
         pass
+
+
+_lib_alglib.alglib_xv2_sparsescale.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_sparsescale.restype = ctypes.c_int32
+def sparsescale(s, scltype, scalerows, scalecols, colsfirst):
+    pass
+    __s = s.ptr
+    __scltype = x_int()
+    __scltype.val = int(scltype)
+    if __scltype.val!=scltype:
+        raise ValueError("Error while converting 'scltype' parameter to 'x_int'")
+    __scalerows = ctypes.c_uint64(scalerows)
+    if __scalerows.value!=0:
+        __scalerows = ctypes.c_uint64(1)
+    __scalecols = ctypes.c_uint64(scalecols)
+    if __scalecols.value!=0:
+        __scalecols = ctypes.c_uint64(1)
+    __colsfirst = ctypes.c_uint64(colsfirst)
+    if __colsfirst.value!=0:
+        __colsfirst = ctypes.c_uint64(1)
+    __r = x_vector(cnt=0,datatype=DT_REAL,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __c = x_vector(cnt=0,datatype=DT_REAL,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_sparsescale(ctypes.byref(_error_msg), ctypes.byref(__s), ctypes.byref(__scltype), ctypes.byref(__scalerows), ctypes.byref(__scalecols), ctypes.byref(__colsfirst), ctypes.byref(__r), ctypes.byref(__c), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'sparsescale'")
+        __r__r = list_from_x(__r)
+        __r__c = list_from_x(__c)
+        return (__r__r, __r__c)
+    finally:
+        x_vector_clear(__r)
+        x_vector_clear(__c)
 
 
 _lib_alglib.x_obj_free_eigsubspacestate.argtypes = [ctypes.c_void_p]
@@ -10600,170 +11097,6 @@ def x_to_sparsesolverreport_inplace(x,r):
     return
 
 
-_lib_alglib.alglib_xv2_sparsespdsolvesks.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
-_lib_alglib.alglib_xv2_sparsespdsolvesks.restype = ctypes.c_int32
-def sparsespdsolvesks(a, isupper, b):
-    pass
-    __a = a.ptr
-    __isupper = ctypes.c_uint64(isupper)
-    if __isupper.value!=0:
-        __isupper = ctypes.c_uint64(1)
-    if not is_real_vector(b):
-        raise ValueError("'b' parameter can't be cast to real_vector")
-    __b = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
-    __x = x_vector(cnt=0,datatype=DT_REAL,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
-    __rep = x_sparsesolverreport()
-    x_sparsesolverreport_zero_fields(__rep)
-    try:
-        x_from_list(__b, b, DT_REAL, X_CREATE)
-        _error_msg = ctypes.c_char_p(0)
-        __x__retval =  _lib_alglib.alglib_xv2_sparsespdsolvesks(ctypes.byref(_error_msg), ctypes.byref(__a), ctypes.byref(__isupper), ctypes.byref(__b), ctypes.byref(__x), ctypes.byref(__rep), 0)
-        if __x__retval!=0:
-            if __x__retval==X_ASSERTION_FAILED:
-                raise RuntimeError(_error_msg.value)
-            else:
-                raise RuntimeError("Error while calling 'sparsespdsolvesks'")
-        __r__x = list_from_x(__x)
-        __r__rep = sparsesolverreport_from_x(__rep)
-        return (__r__x, __r__rep)
-    finally:
-        x_vector_clear(__b)
-        x_vector_clear(__x)
-        x_sparsesolverreport_clear(__rep)
-
-
-_lib_alglib.alglib_xv2_sparsespdsolve.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
-_lib_alglib.alglib_xv2_sparsespdsolve.restype = ctypes.c_int32
-def sparsespdsolve(a, isupper, b):
-    pass
-    __a = a.ptr
-    __isupper = ctypes.c_uint64(isupper)
-    if __isupper.value!=0:
-        __isupper = ctypes.c_uint64(1)
-    if not is_real_vector(b):
-        raise ValueError("'b' parameter can't be cast to real_vector")
-    __b = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
-    __x = x_vector(cnt=0,datatype=DT_REAL,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
-    __rep = x_sparsesolverreport()
-    x_sparsesolverreport_zero_fields(__rep)
-    try:
-        x_from_list(__b, b, DT_REAL, X_CREATE)
-        _error_msg = ctypes.c_char_p(0)
-        __x__retval =  _lib_alglib.alglib_xv2_sparsespdsolve(ctypes.byref(_error_msg), ctypes.byref(__a), ctypes.byref(__isupper), ctypes.byref(__b), ctypes.byref(__x), ctypes.byref(__rep), 0)
-        if __x__retval!=0:
-            if __x__retval==X_ASSERTION_FAILED:
-                raise RuntimeError(_error_msg.value)
-            else:
-                raise RuntimeError("Error while calling 'sparsespdsolve'")
-        __r__x = list_from_x(__x)
-        __r__rep = sparsesolverreport_from_x(__rep)
-        return (__r__x, __r__rep)
-    finally:
-        x_vector_clear(__b)
-        x_vector_clear(__x)
-        x_sparsesolverreport_clear(__rep)
-
-
-_lib_alglib.alglib_xv2_sparsespdcholeskysolve.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
-_lib_alglib.alglib_xv2_sparsespdcholeskysolve.restype = ctypes.c_int32
-def sparsespdcholeskysolve(a, isupper, b):
-    pass
-    __a = a.ptr
-    __isupper = ctypes.c_uint64(isupper)
-    if __isupper.value!=0:
-        __isupper = ctypes.c_uint64(1)
-    if not is_real_vector(b):
-        raise ValueError("'b' parameter can't be cast to real_vector")
-    __b = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
-    __x = x_vector(cnt=0,datatype=DT_REAL,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
-    __rep = x_sparsesolverreport()
-    x_sparsesolverreport_zero_fields(__rep)
-    try:
-        x_from_list(__b, b, DT_REAL, X_CREATE)
-        _error_msg = ctypes.c_char_p(0)
-        __x__retval =  _lib_alglib.alglib_xv2_sparsespdcholeskysolve(ctypes.byref(_error_msg), ctypes.byref(__a), ctypes.byref(__isupper), ctypes.byref(__b), ctypes.byref(__x), ctypes.byref(__rep), 0)
-        if __x__retval!=0:
-            if __x__retval==X_ASSERTION_FAILED:
-                raise RuntimeError(_error_msg.value)
-            else:
-                raise RuntimeError("Error while calling 'sparsespdcholeskysolve'")
-        __r__x = list_from_x(__x)
-        __r__rep = sparsesolverreport_from_x(__rep)
-        return (__r__x, __r__rep)
-    finally:
-        x_vector_clear(__b)
-        x_vector_clear(__x)
-        x_sparsesolverreport_clear(__rep)
-
-
-_lib_alglib.alglib_xv2_sparsesolve.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
-_lib_alglib.alglib_xv2_sparsesolve.restype = ctypes.c_int32
-def sparsesolve(a, b):
-    pass
-    __a = a.ptr
-    if not is_real_vector(b):
-        raise ValueError("'b' parameter can't be cast to real_vector")
-    __b = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
-    __x = x_vector(cnt=0,datatype=DT_REAL,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
-    __rep = x_sparsesolverreport()
-    x_sparsesolverreport_zero_fields(__rep)
-    try:
-        x_from_list(__b, b, DT_REAL, X_CREATE)
-        _error_msg = ctypes.c_char_p(0)
-        __x__retval =  _lib_alglib.alglib_xv2_sparsesolve(ctypes.byref(_error_msg), ctypes.byref(__a), ctypes.byref(__b), ctypes.byref(__x), ctypes.byref(__rep), 0)
-        if __x__retval!=0:
-            if __x__retval==X_ASSERTION_FAILED:
-                raise RuntimeError(_error_msg.value)
-            else:
-                raise RuntimeError("Error while calling 'sparsesolve'")
-        __r__x = list_from_x(__x)
-        __r__rep = sparsesolverreport_from_x(__rep)
-        return (__r__x, __r__rep)
-    finally:
-        x_vector_clear(__b)
-        x_vector_clear(__x)
-        x_sparsesolverreport_clear(__rep)
-
-
-_lib_alglib.alglib_xv2_sparselusolve.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
-_lib_alglib.alglib_xv2_sparselusolve.restype = ctypes.c_int32
-def sparselusolve(a, p, q, b):
-    pass
-    __a = a.ptr
-    if not is_int_vector(p):
-        raise ValueError("'p' parameter can't be cast to int_vector")
-    __p = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
-    if not is_int_vector(q):
-        raise ValueError("'q' parameter can't be cast to int_vector")
-    __q = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
-    if not is_real_vector(b):
-        raise ValueError("'b' parameter can't be cast to real_vector")
-    __b = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
-    __x = x_vector(cnt=0,datatype=DT_REAL,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
-    __rep = x_sparsesolverreport()
-    x_sparsesolverreport_zero_fields(__rep)
-    try:
-        x_from_list(__p, p, DT_INT, X_CREATE)
-        x_from_list(__q, q, DT_INT, X_CREATE)
-        x_from_list(__b, b, DT_REAL, X_CREATE)
-        _error_msg = ctypes.c_char_p(0)
-        __x__retval =  _lib_alglib.alglib_xv2_sparselusolve(ctypes.byref(_error_msg), ctypes.byref(__a), ctypes.byref(__p), ctypes.byref(__q), ctypes.byref(__b), ctypes.byref(__x), ctypes.byref(__rep), 0)
-        if __x__retval!=0:
-            if __x__retval==X_ASSERTION_FAILED:
-                raise RuntimeError(_error_msg.value)
-            else:
-                raise RuntimeError("Error while calling 'sparselusolve'")
-        __r__x = list_from_x(__x)
-        __r__rep = sparsesolverreport_from_x(__rep)
-        return (__r__x, __r__rep)
-    finally:
-        x_vector_clear(__p)
-        x_vector_clear(__q)
-        x_vector_clear(__b)
-        x_vector_clear(__x)
-        x_sparsesolverreport_clear(__rep)
-
-
 _lib_alglib.x_obj_free_sparsesolverstate.argtypes = [ctypes.c_void_p]
 _lib_alglib.x_obj_free_sparsesolverstate.restype = None
 
@@ -11953,6 +12286,224 @@ def linlsqrrequesttermination(state):
         pass
 
 
+_lib_alglib.alglib_xv2_sparsespdsolvesks.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_sparsespdsolvesks.restype = ctypes.c_int32
+def sparsespdsolvesks(a, isupper, b):
+    pass
+    __a = a.ptr
+    __isupper = ctypes.c_uint64(isupper)
+    if __isupper.value!=0:
+        __isupper = ctypes.c_uint64(1)
+    if not is_real_vector(b):
+        raise ValueError("'b' parameter can't be cast to real_vector")
+    __b = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __x = x_vector(cnt=0,datatype=DT_REAL,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __rep = x_sparsesolverreport()
+    x_sparsesolverreport_zero_fields(__rep)
+    try:
+        x_from_list(__b, b, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_sparsespdsolvesks(ctypes.byref(_error_msg), ctypes.byref(__a), ctypes.byref(__isupper), ctypes.byref(__b), ctypes.byref(__x), ctypes.byref(__rep), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'sparsespdsolvesks'")
+        __r__x = list_from_x(__x)
+        __r__rep = sparsesolverreport_from_x(__rep)
+        return (__r__x, __r__rep)
+    finally:
+        x_vector_clear(__b)
+        x_vector_clear(__x)
+        x_sparsesolverreport_clear(__rep)
+
+
+_lib_alglib.alglib_xv2_sparsespdsolve.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_sparsespdsolve.restype = ctypes.c_int32
+def sparsespdsolve(a, isupper, b):
+    pass
+    __a = a.ptr
+    __isupper = ctypes.c_uint64(isupper)
+    if __isupper.value!=0:
+        __isupper = ctypes.c_uint64(1)
+    if not is_real_vector(b):
+        raise ValueError("'b' parameter can't be cast to real_vector")
+    __b = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __x = x_vector(cnt=0,datatype=DT_REAL,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __rep = x_sparsesolverreport()
+    x_sparsesolverreport_zero_fields(__rep)
+    try:
+        x_from_list(__b, b, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_sparsespdsolve(ctypes.byref(_error_msg), ctypes.byref(__a), ctypes.byref(__isupper), ctypes.byref(__b), ctypes.byref(__x), ctypes.byref(__rep), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'sparsespdsolve'")
+        __r__x = list_from_x(__x)
+        __r__rep = sparsesolverreport_from_x(__rep)
+        return (__r__x, __r__rep)
+    finally:
+        x_vector_clear(__b)
+        x_vector_clear(__x)
+        x_sparsesolverreport_clear(__rep)
+
+
+_lib_alglib.alglib_xv2_sparsespdcholeskysolve.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_sparsespdcholeskysolve.restype = ctypes.c_int32
+def sparsespdcholeskysolve(a, isupper, b):
+    pass
+    __a = a.ptr
+    __isupper = ctypes.c_uint64(isupper)
+    if __isupper.value!=0:
+        __isupper = ctypes.c_uint64(1)
+    if not is_real_vector(b):
+        raise ValueError("'b' parameter can't be cast to real_vector")
+    __b = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __x = x_vector(cnt=0,datatype=DT_REAL,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __rep = x_sparsesolverreport()
+    x_sparsesolverreport_zero_fields(__rep)
+    try:
+        x_from_list(__b, b, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_sparsespdcholeskysolve(ctypes.byref(_error_msg), ctypes.byref(__a), ctypes.byref(__isupper), ctypes.byref(__b), ctypes.byref(__x), ctypes.byref(__rep), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'sparsespdcholeskysolve'")
+        __r__x = list_from_x(__x)
+        __r__rep = sparsesolverreport_from_x(__rep)
+        return (__r__x, __r__rep)
+    finally:
+        x_vector_clear(__b)
+        x_vector_clear(__x)
+        x_sparsesolverreport_clear(__rep)
+
+
+_lib_alglib.alglib_xv2_sparsesolve.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_sparsesolve.restype = ctypes.c_int32
+def sparsesolve(*functionargs):
+    if len(functionargs)==3:
+        __friendly_form = False
+        a,b,solvertype = functionargs
+    elif len(functionargs)==2:
+        __friendly_form = True
+        a,b = functionargs
+        solvertype = 0
+    else:
+        raise RuntimeError("Error while calling 'sparsesolve': function must have 2 or 3 parameters")
+    __a = a.ptr
+    if not is_real_vector(b):
+        raise ValueError("'b' parameter can't be cast to real_vector")
+    __b = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __solvertype = x_int()
+    __solvertype.val = int(solvertype)
+    if __solvertype.val!=solvertype:
+        raise ValueError("Error while converting 'solvertype' parameter to 'x_int'")
+    __x = x_vector(cnt=0,datatype=DT_REAL,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __rep = x_sparsesolverreport()
+    x_sparsesolverreport_zero_fields(__rep)
+    try:
+        x_from_list(__b, b, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_sparsesolve(ctypes.byref(_error_msg), ctypes.byref(__a), ctypes.byref(__b), ctypes.byref(__solvertype), ctypes.byref(__x), ctypes.byref(__rep), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'sparsesolve'")
+        __r__x = list_from_x(__x)
+        __r__rep = sparsesolverreport_from_x(__rep)
+        return (__r__x, __r__rep)
+    finally:
+        x_vector_clear(__b)
+        x_vector_clear(__x)
+        x_sparsesolverreport_clear(__rep)
+
+
+_lib_alglib.alglib_xv2_sparsesolvelsreg.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_sparsesolvelsreg.restype = ctypes.c_int32
+def sparsesolvelsreg(*functionargs):
+    if len(functionargs)==4:
+        __friendly_form = False
+        a,b,reg,solvertype = functionargs
+    elif len(functionargs)==3:
+        __friendly_form = True
+        a,b,reg = functionargs
+        solvertype = 0
+    else:
+        raise RuntimeError("Error while calling 'sparsesolvelsreg': function must have 3 or 4 parameters")
+    __a = a.ptr
+    if not is_real_vector(b):
+        raise ValueError("'b' parameter can't be cast to real_vector")
+    __b = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __reg = ctypes.c_double(reg)
+    __solvertype = x_int()
+    __solvertype.val = int(solvertype)
+    if __solvertype.val!=solvertype:
+        raise ValueError("Error while converting 'solvertype' parameter to 'x_int'")
+    __x = x_vector(cnt=0,datatype=DT_REAL,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __rep = x_sparsesolverreport()
+    x_sparsesolverreport_zero_fields(__rep)
+    try:
+        x_from_list(__b, b, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_sparsesolvelsreg(ctypes.byref(_error_msg), ctypes.byref(__a), ctypes.byref(__b), ctypes.byref(__reg), ctypes.byref(__solvertype), ctypes.byref(__x), ctypes.byref(__rep), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'sparsesolvelsreg'")
+        __r__x = list_from_x(__x)
+        __r__rep = sparsesolverreport_from_x(__rep)
+        return (__r__x, __r__rep)
+    finally:
+        x_vector_clear(__b)
+        x_vector_clear(__x)
+        x_sparsesolverreport_clear(__rep)
+
+
+_lib_alglib.alglib_xv2_sparselusolve.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_sparselusolve.restype = ctypes.c_int32
+def sparselusolve(a, p, q, b):
+    pass
+    __a = a.ptr
+    if not is_int_vector(p):
+        raise ValueError("'p' parameter can't be cast to int_vector")
+    __p = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    if not is_int_vector(q):
+        raise ValueError("'q' parameter can't be cast to int_vector")
+    __q = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    if not is_real_vector(b):
+        raise ValueError("'b' parameter can't be cast to real_vector")
+    __b = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __x = x_vector(cnt=0,datatype=DT_REAL,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __rep = x_sparsesolverreport()
+    x_sparsesolverreport_zero_fields(__rep)
+    try:
+        x_from_list(__p, p, DT_INT, X_CREATE)
+        x_from_list(__q, q, DT_INT, X_CREATE)
+        x_from_list(__b, b, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_sparselusolve(ctypes.byref(_error_msg), ctypes.byref(__a), ctypes.byref(__p), ctypes.byref(__q), ctypes.byref(__b), ctypes.byref(__x), ctypes.byref(__rep), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'sparselusolve'")
+        __r__x = list_from_x(__x)
+        __r__rep = sparsesolverreport_from_x(__rep)
+        return (__r__x, __r__rep)
+    finally:
+        x_vector_clear(__p)
+        x_vector_clear(__q)
+        x_vector_clear(__b)
+        x_vector_clear(__x)
+        x_sparsesolverreport_clear(__rep)
+
+
 _lib_alglib.x_obj_free_nleqstate.argtypes = [ctypes.c_void_p]
 _lib_alglib.x_obj_free_nleqstate.restype = None
 _lib_alglib.x_nleqstate_get_needf.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
@@ -12160,6 +12711,10 @@ def nleqsetstpmax(state, stpmax):
 
 
 
+_lib_alglib.alglib_rcv2_nleq_set_protocol_v1.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_rcv2_nleq_set_protocol_v1.restype  = ctypes.c_int32
+
+
 def nleqsolve_fj(state, func, jac, rep = None, param = None):
     _xc_result = ctypes.c_uint8(0)
     _xc_msg = ctypes.c_char_p()
@@ -12174,6 +12729,12 @@ def nleqsolve_fj(state, func, jac, rep = None, param = None):
     _xc_j  = x_matrix()
     _lib_alglib.x_nleqstate_get_j(state.ptr, ctypes.byref(_xc_j))
     _py_j = create_real_matrix(_xc_j.rows,_xc_j.cols)
+    retval = _lib_alglib.alglib_rcv2_nleq_set_protocol_v1(ctypes.byref(_xc_msg), ctypes.byref(state.ptr), 0)
+    if retval!=0:
+        if retval==X_ASSERTION_FAILED:
+            raise RuntimeError(_xc_msg.value)
+        else:
+            raise RuntimeError("Error while calling 'alglib_rcv2_nleq_set_protocol_v1'")
     while True:
         retval = _lib_alglib.alglib_xv2_nleqiteration(ctypes.byref(_xc_msg), ctypes.byref(_xc_result), ctypes.byref(state.ptr), 0)
         if retval!=0:
@@ -13287,26 +13848,6 @@ def cmatrixtrinverse(*functionargs):
 
 _lib_alglib.x_obj_free_minlbfgsstate.argtypes = [ctypes.c_void_p]
 _lib_alglib.x_obj_free_minlbfgsstate.restype = None
-_lib_alglib.x_minlbfgsstate_get_needf.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlbfgsstate_get_needf.restype = None
-_lib_alglib.x_minlbfgsstate_set_needf.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlbfgsstate_set_needf.restype = None
-_lib_alglib.x_minlbfgsstate_get_needfg.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlbfgsstate_get_needfg.restype = None
-_lib_alglib.x_minlbfgsstate_set_needfg.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlbfgsstate_set_needfg.restype = None
-_lib_alglib.x_minlbfgsstate_get_xupdated.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlbfgsstate_get_xupdated.restype = None
-_lib_alglib.x_minlbfgsstate_set_xupdated.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlbfgsstate_set_xupdated.restype = None
-_lib_alglib.x_minlbfgsstate_get_f.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlbfgsstate_get_f.restype = None
-_lib_alglib.x_minlbfgsstate_set_f.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlbfgsstate_set_f.restype = None
-_lib_alglib.x_minlbfgsstate_get_g.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlbfgsstate_get_g.restype = None
-_lib_alglib.x_minlbfgsstate_get_x.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlbfgsstate_get_x.restype = None
 
 
 class minlbfgsstate(object):
@@ -13633,14 +14174,23 @@ def minlbfgssetprecscale(state):
 
 
 
+_lib_alglib.alglib_rcv2_minlbfgs_set_protocol_v2.argtypes    = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_rcv2_minlbfgs_set_protocol_v2.restype     = ctypes.c_int32
+_lib_alglib.alglib_rcv2_minlbfgs_offload_v2_request.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
+_lib_alglib.alglib_rcv2_minlbfgs_offload_v2_request.restype  = None
+
+
 def minlbfgsoptimize_f(state, func, rep = None, param = None):
     _xc_result = ctypes.c_uint8(0)
     _xc_msg = ctypes.c_char_p()
-    _xc_x  = x_vector()
-    _lib_alglib.x_minlbfgsstate_get_x(state.ptr, ctypes.byref(_xc_x))
-    _py_x = create_real_vector(_xc_x.cnt)
-    _xc_flag = ctypes.c_uint8()
-    _xc_f = ctypes.c_double()
+    buffers = _rcommv2_buffers()
+    request = _rcommv2_request(param, "minlbfgs")
+    retval = _lib_alglib.alglib_rcv2_minlbfgs_set_protocol_v2(ctypes.byref(_xc_msg), ctypes.byref(state.ptr), 0)
+    if retval!=0:
+        if retval==X_ASSERTION_FAILED:
+            raise RuntimeError(_xc_msg.value)
+        else:
+            raise RuntimeError("Error while calling 'alglib_rcv2_minlbfgs_set_protocol_v2'")
     while True:
         retval = _lib_alglib.alglib_xv2_minlbfgsiteration(ctypes.byref(_xc_msg), ctypes.byref(_xc_result), ctypes.byref(state.ptr), 0)
         if retval!=0:
@@ -13650,19 +14200,24 @@ def minlbfgsoptimize_f(state, func, rep = None, param = None):
                 raise RuntimeError("Error while calling 'minlbfgsiteration'")
         if not _xc_result:
             break
-        _lib_alglib.x_minlbfgsstate_get_needf(state.ptr, ctypes.byref(_xc_flag))
-        if  _xc_flag.value!=0:
-            copy_x_to_list(_xc_x, _py_x)
-
-            _xc_f.value = func(_py_x, param)
-            _lib_alglib.x_minlbfgsstate_set_f(state.ptr, ctypes.byref(_xc_f))
+        
+        #
+        # Reverse communication interface
+        #
+        request.fetch(state, _lib_alglib.alglib_rcv2_minlbfgs_offload_v2_request)
+        buffers.resize(request)
+        if request.request==3:
+            njobs = request.size*request.vars+request.size;
+            job_idx=0
+            while job_idx<njobs:
+                _process_v2request_3phase0(request, job_idx, func, True, buffers)
+                job_idx += 1
+            _process_v2request_3phase1(request)
+            request.send_reply()
             continue
-        _lib_alglib.x_minlbfgsstate_get_xupdated(state.ptr, ctypes.byref(_xc_flag))
-        if _xc_flag.value!=0 :
-            if not (rep is None):
-                copy_x_to_list(_xc_x, _py_x)
-                _lib_alglib.x_minlbfgsstate_get_f(state.ptr, ctypes.byref(_xc_f))
-                rep(_py_x, _xc_f.value, param)
+        if request.request==-1:
+            if rep is not None:
+                rep(request.reportx, request.reportf, param)
             continue
         raise RuntimeError("ALGLIB: error in 'minlbfgsoptimize' (some derivatives were not provided?)")
     return
@@ -13671,14 +14226,14 @@ def minlbfgsoptimize_f(state, func, rep = None, param = None):
 def minlbfgsoptimize_g(state, grad, rep = None, param = None):
     _xc_result = ctypes.c_uint8(0)
     _xc_msg = ctypes.c_char_p()
-    _xc_x  = x_vector()
-    _lib_alglib.x_minlbfgsstate_get_x(state.ptr, ctypes.byref(_xc_x))
-    _py_x = create_real_vector(_xc_x.cnt)
-    _xc_flag = ctypes.c_uint8()
-    _xc_f = ctypes.c_double()
-    _xc_g  = x_vector()
-    _lib_alglib.x_minlbfgsstate_get_g(state.ptr, ctypes.byref(_xc_g))
-    _py_g = create_real_vector(_xc_g.cnt)
+    buffers = _rcommv2_buffers()
+    request = _rcommv2_request(param, "minlbfgs")
+    retval = _lib_alglib.alglib_rcv2_minlbfgs_set_protocol_v2(ctypes.byref(_xc_msg), ctypes.byref(state.ptr), 0)
+    if retval!=0:
+        if retval==X_ASSERTION_FAILED:
+            raise RuntimeError(_xc_msg.value)
+        else:
+            raise RuntimeError("Error while calling 'alglib_rcv2_minlbfgs_set_protocol_v2'")
     while True:
         retval = _lib_alglib.alglib_xv2_minlbfgsiteration(ctypes.byref(_xc_msg), ctypes.byref(_xc_result), ctypes.byref(state.ptr), 0)
         if retval!=0:
@@ -13688,20 +14243,22 @@ def minlbfgsoptimize_g(state, grad, rep = None, param = None):
                 raise RuntimeError("Error while calling 'minlbfgsiteration'")
         if not _xc_result:
             break
-        _lib_alglib.x_minlbfgsstate_get_needfg(state.ptr, ctypes.byref(_xc_flag))
-        if  _xc_flag.value!=0:
-            copy_x_to_list(_xc_x, _py_x)
-
-            _xc_f.value = grad(_py_x, _py_g, param)
-            _lib_alglib.x_minlbfgsstate_set_f(state.ptr, ctypes.byref(_xc_f))
-            x_from_list(_xc_g, _py_g, DT_REAL, X_REWRITE)
+        
+        #
+        # Reverse communication interface
+        #
+        request.fetch(state, _lib_alglib.alglib_rcv2_minlbfgs_offload_v2_request)
+        buffers.resize(request)
+        if request.request==2:
+            qidx = 0
+            while qidx<request.size:
+                _process_v2request_2(request, qidx, grad, True, buffers)
+                qidx += 1
+            request.send_reply()
             continue
-        _lib_alglib.x_minlbfgsstate_get_xupdated(state.ptr, ctypes.byref(_xc_flag))
-        if _xc_flag.value!=0 :
-            if not (rep is None):
-                copy_x_to_list(_xc_x, _py_x)
-                _lib_alglib.x_minlbfgsstate_get_f(state.ptr, ctypes.byref(_xc_f))
-                rep(_py_x, _xc_f.value, param)
+        if request.request==-1:
+            if rep is not None:
+                rep(request.reportx, request.reportf, param)
             continue
         raise RuntimeError("ALGLIB: error in 'minlbfgsoptimize' (some derivatives were not provided?)")
     return
@@ -14363,6 +14920,10 @@ def minbleicsetstpmax(state, stpmax):
 
 
 
+_lib_alglib.alglib_rcv2_minbleic_set_protocol_v1.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_rcv2_minbleic_set_protocol_v1.restype  = ctypes.c_int32
+
+
 def minbleicoptimize_f(state, func, rep = None, param = None):
     _xc_result = ctypes.c_uint8(0)
     _xc_msg = ctypes.c_char_p()
@@ -14371,6 +14932,12 @@ def minbleicoptimize_f(state, func, rep = None, param = None):
     _py_x = create_real_vector(_xc_x.cnt)
     _xc_flag = ctypes.c_uint8()
     _xc_f = ctypes.c_double()
+    retval = _lib_alglib.alglib_rcv2_minbleic_set_protocol_v1(ctypes.byref(_xc_msg), ctypes.byref(state.ptr), 0)
+    if retval!=0:
+        if retval==X_ASSERTION_FAILED:
+            raise RuntimeError(_xc_msg.value)
+        else:
+            raise RuntimeError("Error while calling 'alglib_rcv2_minbleic_set_protocol_v1'")
     while True:
         retval = _lib_alglib.alglib_xv2_minbleiciteration(ctypes.byref(_xc_msg), ctypes.byref(_xc_result), ctypes.byref(state.ptr), 0)
         if retval!=0:
@@ -14409,6 +14976,12 @@ def minbleicoptimize_g(state, grad, rep = None, param = None):
     _xc_g  = x_vector()
     _lib_alglib.x_minbleicstate_get_g(state.ptr, ctypes.byref(_xc_g))
     _py_g = create_real_vector(_xc_g.cnt)
+    retval = _lib_alglib.alglib_rcv2_minbleic_set_protocol_v1(ctypes.byref(_xc_msg), ctypes.byref(state.ptr), 0)
+    if retval!=0:
+        if retval==X_ASSERTION_FAILED:
+            raise RuntimeError(_xc_msg.value)
+        else:
+            raise RuntimeError("Error while calling 'alglib_rcv2_minbleic_set_protocol_v1'")
     while True:
         retval = _lib_alglib.alglib_xv2_minbleiciteration(ctypes.byref(_xc_msg), ctypes.byref(_xc_result), ctypes.byref(state.ptr), 0)
         if retval!=0:
@@ -15550,44 +16123,6 @@ def minqpresultsbuf(state, x, rep):
 
 _lib_alglib.x_obj_free_minlmstate.argtypes = [ctypes.c_void_p]
 _lib_alglib.x_obj_free_minlmstate.restype = None
-_lib_alglib.x_minlmstate_get_needf.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlmstate_get_needf.restype = None
-_lib_alglib.x_minlmstate_set_needf.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlmstate_set_needf.restype = None
-_lib_alglib.x_minlmstate_get_needfg.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlmstate_get_needfg.restype = None
-_lib_alglib.x_minlmstate_set_needfg.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlmstate_set_needfg.restype = None
-_lib_alglib.x_minlmstate_get_needfgh.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlmstate_get_needfgh.restype = None
-_lib_alglib.x_minlmstate_set_needfgh.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlmstate_set_needfgh.restype = None
-_lib_alglib.x_minlmstate_get_needfi.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlmstate_get_needfi.restype = None
-_lib_alglib.x_minlmstate_set_needfi.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlmstate_set_needfi.restype = None
-_lib_alglib.x_minlmstate_get_needfij.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlmstate_get_needfij.restype = None
-_lib_alglib.x_minlmstate_set_needfij.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlmstate_set_needfij.restype = None
-_lib_alglib.x_minlmstate_get_xupdated.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlmstate_get_xupdated.restype = None
-_lib_alglib.x_minlmstate_set_xupdated.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlmstate_set_xupdated.restype = None
-_lib_alglib.x_minlmstate_get_f.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlmstate_get_f.restype = None
-_lib_alglib.x_minlmstate_set_f.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlmstate_set_f.restype = None
-_lib_alglib.x_minlmstate_get_fi.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlmstate_get_fi.restype = None
-_lib_alglib.x_minlmstate_get_g.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlmstate_get_g.restype = None
-_lib_alglib.x_minlmstate_get_h.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlmstate_get_h.restype = None
-_lib_alglib.x_minlmstate_get_j.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlmstate_get_j.restype = None
-_lib_alglib.x_minlmstate_get_x.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minlmstate_get_x.restype = None
 
 
 class minlmstate(object):
@@ -15755,41 +16290,6 @@ def minlmcreatev(*functionargs):
                 raise RuntimeError(_error_msg.value)
             else:
                 raise RuntimeError("Error while calling 'minlmcreatev'")
-        __r__state = minlmstate(__state)
-        return __r__state
-    finally:
-        x_vector_clear(__x)
-
-
-_lib_alglib.alglib_xv2_minlmcreatefgh.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
-_lib_alglib.alglib_xv2_minlmcreatefgh.restype = ctypes.c_int32
-def minlmcreatefgh(*functionargs):
-    if len(functionargs)==2:
-        __friendly_form = False
-        n,x = functionargs
-    elif len(functionargs)==1:
-        __friendly_form = True
-        x, = functionargs
-        n = safe_len("'minlmcreatefgh': incorrect parameters",x)
-    else:
-        raise RuntimeError("Error while calling 'minlmcreatefgh': function must have 1 or 2 parameters")
-    __n = x_int()
-    __n.val = int(n)
-    if __n.val!=n:
-        raise ValueError("Error while converting 'n' parameter to 'x_int'")
-    if not is_real_vector(x):
-        raise ValueError("'x' parameter can't be cast to real_vector")
-    __x = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
-    __state = ctypes.c_void_p(0)
-    try:
-        x_from_list(__x, x, DT_REAL, X_CREATE)
-        _error_msg = ctypes.c_char_p(0)
-        __x__retval =  _lib_alglib.alglib_xv2_minlmcreatefgh(ctypes.byref(_error_msg), ctypes.byref(__n), ctypes.byref(__x), ctypes.byref(__state), 0)
-        if __x__retval!=0:
-            if __x__retval==X_ASSERTION_FAILED:
-                raise RuntimeError(_error_msg.value)
-            else:
-                raise RuntimeError("Error while calling 'minlmcreatefgh'")
         __r__state = minlmstate(__state)
         return __r__state
     finally:
@@ -15977,16 +16477,23 @@ def minlmsetacctype(state, acctype):
 
 
 
+_lib_alglib.alglib_rcv2_minlm_set_protocol_v2.argtypes    = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_rcv2_minlm_set_protocol_v2.restype     = ctypes.c_int32
+_lib_alglib.alglib_rcv2_minlm_offload_v2_request.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
+_lib_alglib.alglib_rcv2_minlm_offload_v2_request.restype  = None
+
+
 def minlmoptimize_v(state, fvec, rep = None, param = None):
     _xc_result = ctypes.c_uint8(0)
     _xc_msg = ctypes.c_char_p()
-    _xc_x  = x_vector()
-    _lib_alglib.x_minlmstate_get_x(state.ptr, ctypes.byref(_xc_x))
-    _py_x = create_real_vector(_xc_x.cnt)
-    _xc_flag = ctypes.c_uint8()
-    _xc_fi  = x_vector()
-    _lib_alglib.x_minlmstate_get_fi(state.ptr, ctypes.byref(_xc_fi))
-    _py_fi = create_real_vector(_xc_fi.cnt)
+    buffers = _rcommv2_buffers()
+    request = _rcommv2_request(param, "minlm")
+    retval = _lib_alglib.alglib_rcv2_minlm_set_protocol_v2(ctypes.byref(_xc_msg), ctypes.byref(state.ptr), 0)
+    if retval!=0:
+        if retval==X_ASSERTION_FAILED:
+            raise RuntimeError(_xc_msg.value)
+        else:
+            raise RuntimeError("Error while calling 'alglib_rcv2_minlm_set_protocol_v2'")
     while True:
         retval = _lib_alglib.alglib_xv2_minlmiteration(ctypes.byref(_xc_msg), ctypes.byref(_xc_result), ctypes.byref(state.ptr), 0)
         if retval!=0:
@@ -15996,19 +16503,31 @@ def minlmoptimize_v(state, fvec, rep = None, param = None):
                 raise RuntimeError("Error while calling 'minlmiteration'")
         if not _xc_result:
             break
-        _lib_alglib.x_minlmstate_get_needfi(state.ptr, ctypes.byref(_xc_flag))
-        if  _xc_flag.value!=0:
-            copy_x_to_list(_xc_x, _py_x)
-
-            fvec(_py_x, _py_fi, param)
-            x_from_list(_xc_fi, _py_fi, DT_REAL, X_REWRITE)
+        
+        #
+        # Reverse communication interface
+        #
+        request.fetch(state, _lib_alglib.alglib_rcv2_minlm_offload_v2_request)
+        buffers.resize(request)
+        if request.request==3:
+            njobs = request.size*request.vars+request.size;
+            job_idx=0
+            while job_idx<njobs:
+                _process_v2request_3phase0(request, job_idx, fvec, False, buffers)
+                job_idx += 1
+            _process_v2request_3phase1(request)
+            request.send_reply()
             continue
-        _lib_alglib.x_minlmstate_get_xupdated(state.ptr, ctypes.byref(_xc_flag))
-        if _xc_flag.value!=0 :
-            if not (rep is None):
-                copy_x_to_list(_xc_x, _py_x)
-                _lib_alglib.x_minlmstate_get_f(state.ptr, ctypes.byref(_xc_f))
-                rep(_py_x, _xc_f.value, param)
+        if request.request==4:
+            qidx=0
+            while qidx<request.size:
+                _process_v2request_4(request, qidx, fvec, False, buffers)
+                qidx += 1
+            request.send_reply()
+            continue
+        if request.request==-1:
+            if rep is not None:
+                rep(request.reportx, request.reportf, param)
             continue
         raise RuntimeError("ALGLIB: error in 'minlmoptimize' (some derivatives were not provided?)")
     return
@@ -16017,16 +16536,14 @@ def minlmoptimize_v(state, fvec, rep = None, param = None):
 def minlmoptimize_vj(state, fvec, jac, rep = None, param = None):
     _xc_result = ctypes.c_uint8(0)
     _xc_msg = ctypes.c_char_p()
-    _xc_x  = x_vector()
-    _lib_alglib.x_minlmstate_get_x(state.ptr, ctypes.byref(_xc_x))
-    _py_x = create_real_vector(_xc_x.cnt)
-    _xc_flag = ctypes.c_uint8()
-    _xc_fi  = x_vector()
-    _lib_alglib.x_minlmstate_get_fi(state.ptr, ctypes.byref(_xc_fi))
-    _py_fi = create_real_vector(_xc_fi.cnt)
-    _xc_j  = x_matrix()
-    _lib_alglib.x_minlmstate_get_j(state.ptr, ctypes.byref(_xc_j))
-    _py_j = create_real_matrix(_xc_j.rows,_xc_j.cols)
+    buffers = _rcommv2_buffers()
+    request = _rcommv2_request(param, "minlm")
+    retval = _lib_alglib.alglib_rcv2_minlm_set_protocol_v2(ctypes.byref(_xc_msg), ctypes.byref(state.ptr), 0)
+    if retval!=0:
+        if retval==X_ASSERTION_FAILED:
+            raise RuntimeError(_xc_msg.value)
+        else:
+            raise RuntimeError("Error while calling 'alglib_rcv2_minlm_set_protocol_v2'")
     while True:
         retval = _lib_alglib.alglib_xv2_minlmiteration(ctypes.byref(_xc_msg), ctypes.byref(_xc_result), ctypes.byref(state.ptr), 0)
         if retval!=0:
@@ -16036,194 +16553,29 @@ def minlmoptimize_vj(state, fvec, jac, rep = None, param = None):
                 raise RuntimeError("Error while calling 'minlmiteration'")
         if not _xc_result:
             break
-        _lib_alglib.x_minlmstate_get_needfi(state.ptr, ctypes.byref(_xc_flag))
-        if  _xc_flag.value!=0:
-            copy_x_to_list(_xc_x, _py_x)
-
-            fvec(_py_x, _py_fi, param)
-            x_from_list(_xc_fi, _py_fi, DT_REAL, X_REWRITE)
+        
+        #
+        # Reverse communication interface
+        #
+        request.fetch(state, _lib_alglib.alglib_rcv2_minlm_offload_v2_request)
+        buffers.resize(request)
+        if request.request==2:
+            qidx = 0
+            while qidx<request.size:
+                _process_v2request_2(request, qidx, jac, False, buffers)
+                qidx += 1
+            request.send_reply()
             continue
-        _lib_alglib.x_minlmstate_get_needfij(state.ptr, ctypes.byref(_xc_flag))
-        if  _xc_flag.value!=0:
-            copy_x_to_list(_xc_x, _py_x)
-
-            jac(_py_x, _py_fi, _py_j, param)
-            x_from_list(_xc_fi, _py_fi, DT_REAL, X_REWRITE)
-            x_from_listlist(_xc_j, _py_j, DT_REAL, X_REWRITE)
+        if request.request==4:
+            qidx=0
+            while qidx<request.size:
+                _process_v2request_4(request, qidx, fvec, False, buffers)
+                qidx += 1
+            request.send_reply()
             continue
-        _lib_alglib.x_minlmstate_get_xupdated(state.ptr, ctypes.byref(_xc_flag))
-        if _xc_flag.value!=0 :
-            if not (rep is None):
-                copy_x_to_list(_xc_x, _py_x)
-                _lib_alglib.x_minlmstate_get_f(state.ptr, ctypes.byref(_xc_f))
-                rep(_py_x, _xc_f.value, param)
-            continue
-        raise RuntimeError("ALGLIB: error in 'minlmoptimize' (some derivatives were not provided?)")
-    return
-
-
-def minlmoptimize_fgh(state, func, grad, hess, rep = None, param = None):
-    _xc_result = ctypes.c_uint8(0)
-    _xc_msg = ctypes.c_char_p()
-    _xc_x  = x_vector()
-    _lib_alglib.x_minlmstate_get_x(state.ptr, ctypes.byref(_xc_x))
-    _py_x = create_real_vector(_xc_x.cnt)
-    _xc_flag = ctypes.c_uint8()
-    _xc_f = ctypes.c_double()
-    _xc_g  = x_vector()
-    _lib_alglib.x_minlmstate_get_g(state.ptr, ctypes.byref(_xc_g))
-    _py_g = create_real_vector(_xc_g.cnt)
-    _xc_h  = x_matrix()
-    _lib_alglib.x_minlmstate_get_h(state.ptr, ctypes.byref(_xc_h))
-    _py_h = create_real_matrix(_xc_h.rows,_xc_h.cols)
-    while True:
-        retval = _lib_alglib.alglib_xv2_minlmiteration(ctypes.byref(_xc_msg), ctypes.byref(_xc_result), ctypes.byref(state.ptr), 0)
-        if retval!=0:
-            if retval==X_ASSERTION_FAILED:
-                raise RuntimeError(_xc_msg.value)
-            else:
-                raise RuntimeError("Error while calling 'minlmiteration'")
-        if not _xc_result:
-            break
-        _lib_alglib.x_minlmstate_get_needf(state.ptr, ctypes.byref(_xc_flag))
-        if  _xc_flag.value!=0:
-            copy_x_to_list(_xc_x, _py_x)
-
-            _xc_f.value = func(_py_x, param)
-            _lib_alglib.x_minlmstate_set_f(state.ptr, ctypes.byref(_xc_f))
-            continue
-        _lib_alglib.x_minlmstate_get_needfg(state.ptr, ctypes.byref(_xc_flag))
-        if  _xc_flag.value!=0:
-            copy_x_to_list(_xc_x, _py_x)
-
-            _xc_f.value = grad(_py_x, _py_g, param)
-            _lib_alglib.x_minlmstate_set_f(state.ptr, ctypes.byref(_xc_f))
-            x_from_list(_xc_g, _py_g, DT_REAL, X_REWRITE)
-            continue
-        _lib_alglib.x_minlmstate_get_needfgh(state.ptr, ctypes.byref(_xc_flag))
-        if  _xc_flag.value!=0:
-            copy_x_to_list(_xc_x, _py_x)
-
-            _xc_f.value = hess(_py_x, _py_g, _py_h, param)
-            _lib_alglib.x_minlmstate_set_f(state.ptr, ctypes.byref(_xc_f))
-            x_from_list(_xc_g, _py_g, DT_REAL, X_REWRITE)
-            x_from_listlist(_xc_h, _py_h, DT_REAL, X_REWRITE)
-            continue
-        _lib_alglib.x_minlmstate_get_xupdated(state.ptr, ctypes.byref(_xc_flag))
-        if _xc_flag.value!=0 :
-            if not (rep is None):
-                copy_x_to_list(_xc_x, _py_x)
-                _lib_alglib.x_minlmstate_get_f(state.ptr, ctypes.byref(_xc_f))
-                rep(_py_x, _xc_f.value, param)
-            continue
-        raise RuntimeError("ALGLIB: error in 'minlmoptimize' (some derivatives were not provided?)")
-    return
-
-
-def minlmoptimize_fj(state, func, jac, rep = None, param = None):
-    _xc_result = ctypes.c_uint8(0)
-    _xc_msg = ctypes.c_char_p()
-    _xc_x  = x_vector()
-    _lib_alglib.x_minlmstate_get_x(state.ptr, ctypes.byref(_xc_x))
-    _py_x = create_real_vector(_xc_x.cnt)
-    _xc_flag = ctypes.c_uint8()
-    _xc_f = ctypes.c_double()
-    _xc_fi  = x_vector()
-    _lib_alglib.x_minlmstate_get_fi(state.ptr, ctypes.byref(_xc_fi))
-    _py_fi = create_real_vector(_xc_fi.cnt)
-    _xc_j  = x_matrix()
-    _lib_alglib.x_minlmstate_get_j(state.ptr, ctypes.byref(_xc_j))
-    _py_j = create_real_matrix(_xc_j.rows,_xc_j.cols)
-    while True:
-        retval = _lib_alglib.alglib_xv2_minlmiteration(ctypes.byref(_xc_msg), ctypes.byref(_xc_result), ctypes.byref(state.ptr), 0)
-        if retval!=0:
-            if retval==X_ASSERTION_FAILED:
-                raise RuntimeError(_xc_msg.value)
-            else:
-                raise RuntimeError("Error while calling 'minlmiteration'")
-        if not _xc_result:
-            break
-        _lib_alglib.x_minlmstate_get_needf(state.ptr, ctypes.byref(_xc_flag))
-        if  _xc_flag.value!=0:
-            copy_x_to_list(_xc_x, _py_x)
-
-            _xc_f.value = func(_py_x, param)
-            _lib_alglib.x_minlmstate_set_f(state.ptr, ctypes.byref(_xc_f))
-            continue
-        _lib_alglib.x_minlmstate_get_needfij(state.ptr, ctypes.byref(_xc_flag))
-        if  _xc_flag.value!=0:
-            copy_x_to_list(_xc_x, _py_x)
-
-            jac(_py_x, _py_fi, _py_j, param)
-            x_from_list(_xc_fi, _py_fi, DT_REAL, X_REWRITE)
-            x_from_listlist(_xc_j, _py_j, DT_REAL, X_REWRITE)
-            continue
-        _lib_alglib.x_minlmstate_get_xupdated(state.ptr, ctypes.byref(_xc_flag))
-        if _xc_flag.value!=0 :
-            if not (rep is None):
-                copy_x_to_list(_xc_x, _py_x)
-                _lib_alglib.x_minlmstate_get_f(state.ptr, ctypes.byref(_xc_f))
-                rep(_py_x, _xc_f.value, param)
-            continue
-        raise RuntimeError("ALGLIB: error in 'minlmoptimize' (some derivatives were not provided?)")
-    return
-
-
-def minlmoptimize_fgj(state, func, grad, jac, rep = None, param = None):
-    _xc_result = ctypes.c_uint8(0)
-    _xc_msg = ctypes.c_char_p()
-    _xc_x  = x_vector()
-    _lib_alglib.x_minlmstate_get_x(state.ptr, ctypes.byref(_xc_x))
-    _py_x = create_real_vector(_xc_x.cnt)
-    _xc_flag = ctypes.c_uint8()
-    _xc_f = ctypes.c_double()
-    _xc_g  = x_vector()
-    _lib_alglib.x_minlmstate_get_g(state.ptr, ctypes.byref(_xc_g))
-    _py_g = create_real_vector(_xc_g.cnt)
-    _xc_fi  = x_vector()
-    _lib_alglib.x_minlmstate_get_fi(state.ptr, ctypes.byref(_xc_fi))
-    _py_fi = create_real_vector(_xc_fi.cnt)
-    _xc_j  = x_matrix()
-    _lib_alglib.x_minlmstate_get_j(state.ptr, ctypes.byref(_xc_j))
-    _py_j = create_real_matrix(_xc_j.rows,_xc_j.cols)
-    while True:
-        retval = _lib_alglib.alglib_xv2_minlmiteration(ctypes.byref(_xc_msg), ctypes.byref(_xc_result), ctypes.byref(state.ptr), 0)
-        if retval!=0:
-            if retval==X_ASSERTION_FAILED:
-                raise RuntimeError(_xc_msg.value)
-            else:
-                raise RuntimeError("Error while calling 'minlmiteration'")
-        if not _xc_result:
-            break
-        _lib_alglib.x_minlmstate_get_needf(state.ptr, ctypes.byref(_xc_flag))
-        if  _xc_flag.value!=0:
-            copy_x_to_list(_xc_x, _py_x)
-
-            _xc_f.value = func(_py_x, param)
-            _lib_alglib.x_minlmstate_set_f(state.ptr, ctypes.byref(_xc_f))
-            continue
-        _lib_alglib.x_minlmstate_get_needfg(state.ptr, ctypes.byref(_xc_flag))
-        if  _xc_flag.value!=0:
-            copy_x_to_list(_xc_x, _py_x)
-
-            _xc_f.value = grad(_py_x, _py_g, param)
-            _lib_alglib.x_minlmstate_set_f(state.ptr, ctypes.byref(_xc_f))
-            x_from_list(_xc_g, _py_g, DT_REAL, X_REWRITE)
-            continue
-        _lib_alglib.x_minlmstate_get_needfij(state.ptr, ctypes.byref(_xc_flag))
-        if  _xc_flag.value!=0:
-            copy_x_to_list(_xc_x, _py_x)
-
-            jac(_py_x, _py_fi, _py_j, param)
-            x_from_list(_xc_fi, _py_fi, DT_REAL, X_REWRITE)
-            x_from_listlist(_xc_j, _py_j, DT_REAL, X_REWRITE)
-            continue
-        _lib_alglib.x_minlmstate_get_xupdated(state.ptr, ctypes.byref(_xc_flag))
-        if _xc_flag.value!=0 :
-            if not (rep is None):
-                copy_x_to_list(_xc_x, _py_x)
-                _lib_alglib.x_minlmstate_get_f(state.ptr, ctypes.byref(_xc_f))
-                rep(_py_x, _xc_f.value, param)
+        if request.request==-1:
+            if rep is not None:
+                rep(request.reportx, request.reportf, param)
             continue
         raise RuntimeError("ALGLIB: error in 'minlmoptimize' (some derivatives were not provided?)")
     return
@@ -16363,123 +16715,6 @@ def minlmrequesttermination(state):
         return
     finally:
         pass
-
-
-_lib_alglib.alglib_xv2_minlmcreatevgj.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
-_lib_alglib.alglib_xv2_minlmcreatevgj.restype = ctypes.c_int32
-def minlmcreatevgj(*functionargs):
-    if len(functionargs)==3:
-        __friendly_form = False
-        n,m,x = functionargs
-    elif len(functionargs)==2:
-        __friendly_form = True
-        m,x = functionargs
-        n = safe_len("'minlmcreatevgj': incorrect parameters",x)
-    else:
-        raise RuntimeError("Error while calling 'minlmcreatevgj': function must have 2 or 3 parameters")
-    __n = x_int()
-    __n.val = int(n)
-    if __n.val!=n:
-        raise ValueError("Error while converting 'n' parameter to 'x_int'")
-    __m = x_int()
-    __m.val = int(m)
-    if __m.val!=m:
-        raise ValueError("Error while converting 'm' parameter to 'x_int'")
-    if not is_real_vector(x):
-        raise ValueError("'x' parameter can't be cast to real_vector")
-    __x = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
-    __state = ctypes.c_void_p(0)
-    try:
-        x_from_list(__x, x, DT_REAL, X_CREATE)
-        _error_msg = ctypes.c_char_p(0)
-        __x__retval =  _lib_alglib.alglib_xv2_minlmcreatevgj(ctypes.byref(_error_msg), ctypes.byref(__n), ctypes.byref(__m), ctypes.byref(__x), ctypes.byref(__state), 0)
-        if __x__retval!=0:
-            if __x__retval==X_ASSERTION_FAILED:
-                raise RuntimeError(_error_msg.value)
-            else:
-                raise RuntimeError("Error while calling 'minlmcreatevgj'")
-        __r__state = minlmstate(__state)
-        return __r__state
-    finally:
-        x_vector_clear(__x)
-
-
-_lib_alglib.alglib_xv2_minlmcreatefgj.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
-_lib_alglib.alglib_xv2_minlmcreatefgj.restype = ctypes.c_int32
-def minlmcreatefgj(*functionargs):
-    if len(functionargs)==3:
-        __friendly_form = False
-        n,m,x = functionargs
-    elif len(functionargs)==2:
-        __friendly_form = True
-        m,x = functionargs
-        n = safe_len("'minlmcreatefgj': incorrect parameters",x)
-    else:
-        raise RuntimeError("Error while calling 'minlmcreatefgj': function must have 2 or 3 parameters")
-    __n = x_int()
-    __n.val = int(n)
-    if __n.val!=n:
-        raise ValueError("Error while converting 'n' parameter to 'x_int'")
-    __m = x_int()
-    __m.val = int(m)
-    if __m.val!=m:
-        raise ValueError("Error while converting 'm' parameter to 'x_int'")
-    if not is_real_vector(x):
-        raise ValueError("'x' parameter can't be cast to real_vector")
-    __x = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
-    __state = ctypes.c_void_p(0)
-    try:
-        x_from_list(__x, x, DT_REAL, X_CREATE)
-        _error_msg = ctypes.c_char_p(0)
-        __x__retval =  _lib_alglib.alglib_xv2_minlmcreatefgj(ctypes.byref(_error_msg), ctypes.byref(__n), ctypes.byref(__m), ctypes.byref(__x), ctypes.byref(__state), 0)
-        if __x__retval!=0:
-            if __x__retval==X_ASSERTION_FAILED:
-                raise RuntimeError(_error_msg.value)
-            else:
-                raise RuntimeError("Error while calling 'minlmcreatefgj'")
-        __r__state = minlmstate(__state)
-        return __r__state
-    finally:
-        x_vector_clear(__x)
-
-
-_lib_alglib.alglib_xv2_minlmcreatefj.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
-_lib_alglib.alglib_xv2_minlmcreatefj.restype = ctypes.c_int32
-def minlmcreatefj(*functionargs):
-    if len(functionargs)==3:
-        __friendly_form = False
-        n,m,x = functionargs
-    elif len(functionargs)==2:
-        __friendly_form = True
-        m,x = functionargs
-        n = safe_len("'minlmcreatefj': incorrect parameters",x)
-    else:
-        raise RuntimeError("Error while calling 'minlmcreatefj': function must have 2 or 3 parameters")
-    __n = x_int()
-    __n.val = int(n)
-    if __n.val!=n:
-        raise ValueError("Error while converting 'n' parameter to 'x_int'")
-    __m = x_int()
-    __m.val = int(m)
-    if __m.val!=m:
-        raise ValueError("Error while converting 'm' parameter to 'x_int'")
-    if not is_real_vector(x):
-        raise ValueError("'x' parameter can't be cast to real_vector")
-    __x = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
-    __state = ctypes.c_void_p(0)
-    try:
-        x_from_list(__x, x, DT_REAL, X_CREATE)
-        _error_msg = ctypes.c_char_p(0)
-        __x__retval =  _lib_alglib.alglib_xv2_minlmcreatefj(ctypes.byref(_error_msg), ctypes.byref(__n), ctypes.byref(__m), ctypes.byref(__x), ctypes.byref(__state), 0)
-        if __x__retval!=0:
-            if __x__retval==X_ASSERTION_FAILED:
-                raise RuntimeError(_error_msg.value)
-            else:
-                raise RuntimeError("Error while calling 'minlmcreatefj'")
-        __r__state = minlmstate(__state)
-        return __r__state
-    finally:
-        x_vector_clear(__x)
 
 
 _lib_alglib.x_obj_free_mincgstate.argtypes = [ctypes.c_void_p]
@@ -16840,6 +17075,10 @@ def mincgsetprecscale(state):
 
 
 
+_lib_alglib.alglib_rcv2_mincg_set_protocol_v1.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_rcv2_mincg_set_protocol_v1.restype  = ctypes.c_int32
+
+
 def mincgoptimize_f(state, func, rep = None, param = None):
     _xc_result = ctypes.c_uint8(0)
     _xc_msg = ctypes.c_char_p()
@@ -16848,6 +17087,12 @@ def mincgoptimize_f(state, func, rep = None, param = None):
     _py_x = create_real_vector(_xc_x.cnt)
     _xc_flag = ctypes.c_uint8()
     _xc_f = ctypes.c_double()
+    retval = _lib_alglib.alglib_rcv2_mincg_set_protocol_v1(ctypes.byref(_xc_msg), ctypes.byref(state.ptr), 0)
+    if retval!=0:
+        if retval==X_ASSERTION_FAILED:
+            raise RuntimeError(_xc_msg.value)
+        else:
+            raise RuntimeError("Error while calling 'alglib_rcv2_mincg_set_protocol_v1'")
     while True:
         retval = _lib_alglib.alglib_xv2_mincgiteration(ctypes.byref(_xc_msg), ctypes.byref(_xc_result), ctypes.byref(state.ptr), 0)
         if retval!=0:
@@ -16886,6 +17131,12 @@ def mincgoptimize_g(state, grad, rep = None, param = None):
     _xc_g  = x_vector()
     _lib_alglib.x_mincgstate_get_g(state.ptr, ctypes.byref(_xc_g))
     _py_g = create_real_vector(_xc_g.cnt)
+    retval = _lib_alglib.alglib_rcv2_mincg_set_protocol_v1(ctypes.byref(_xc_msg), ctypes.byref(state.ptr), 0)
+    if retval!=0:
+        if retval==X_ASSERTION_FAILED:
+            raise RuntimeError(_xc_msg.value)
+        else:
+            raise RuntimeError("Error while calling 'alglib_rcv2_mincg_set_protocol_v1'")
     while True:
         retval = _lib_alglib.alglib_xv2_mincgiteration(ctypes.byref(_xc_msg), ctypes.byref(_xc_result), ctypes.byref(state.ptr), 0)
         if retval!=0:
@@ -17131,6 +17382,486 @@ def mincgrequesttermination(state):
         return
     finally:
         pass
+
+
+_lib_alglib.x_obj_free_mindfstate.argtypes = [ctypes.c_void_p]
+_lib_alglib.x_obj_free_mindfstate.restype = None
+
+
+class mindfstate(object):
+    def __init__(self,ptr):
+        self.ptr = ptr
+        self.lib = _lib_alglib # make sure that _lib_alglib survives as long as object is here
+    def __del__(self):
+        self.lib.x_obj_free_mindfstate(self.ptr)
+
+
+class x_mindfreport(ctypes.Structure):
+    _pack_ = 8
+    _fields_ = [
+        ("iterationscount", x_int),
+        ("nfev", x_int),
+        ("bcerr", ctypes.c_double),
+        ("lcerr", ctypes.c_double),
+        ("nlcerr", ctypes.c_double),
+        ("terminationtype", x_int)
+        ]
+
+
+
+
+class mindfreport(object):
+    def __init__(self):
+        self.iterationscount = 0
+        self.nfev = 0
+        self.bcerr = 0
+        self.lcerr = 0
+        self.nlcerr = 0
+        self.terminationtype = 0
+
+
+def x_mindfreport_zero_fields(x):
+    x.iterationscount.val = 0
+    x.nfev.val = 0
+    x.bcerr = 0
+    x.lcerr = 0
+    x.nlcerr = 0
+    x.terminationtype.val = 0
+    return
+
+
+
+
+def x_mindfreport_clear(x):
+    x_mindfreport_zero_fields(x)
+    return
+
+
+
+
+def x_from_mindfreport(x,v):
+    x.iterationscount.val = int(v.iterationscount)
+    x.nfev.val = int(v.nfev)
+    x.bcerr = float(v.bcerr)
+    x.lcerr = float(v.lcerr)
+    x.nlcerr = float(v.nlcerr)
+    x.terminationtype.val = int(v.terminationtype)
+    return
+
+
+
+
+def mindfreport_from_x(x):
+    r = mindfreport()
+    r.iterationscount = x.iterationscount.val
+    r.nfev = x.nfev.val
+    r.bcerr = x.bcerr
+    r.lcerr = x.lcerr
+    r.nlcerr = x.nlcerr
+    r.terminationtype = x.terminationtype.val
+    return r
+
+
+
+
+def x_to_mindfreport_inplace(x,r):
+    r.iterationscount = x.iterationscount.val
+    r.nfev = x.nfev.val
+    r.bcerr = x.bcerr
+    r.lcerr = x.lcerr
+    r.nlcerr = x.nlcerr
+    r.terminationtype = x.terminationtype.val
+    return
+
+
+_lib_alglib.alglib_xv2_mindfcreate.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_mindfcreate.restype = ctypes.c_int32
+def mindfcreate(*functionargs):
+    if len(functionargs)==2:
+        __friendly_form = False
+        n,x = functionargs
+    elif len(functionargs)==1:
+        __friendly_form = True
+        x, = functionargs
+        n = safe_len("'mindfcreate': incorrect parameters",x)
+    else:
+        raise RuntimeError("Error while calling 'mindfcreate': function must have 1 or 2 parameters")
+    __n = x_int()
+    __n.val = int(n)
+    if __n.val!=n:
+        raise ValueError("Error while converting 'n' parameter to 'x_int'")
+    if not is_real_vector(x):
+        raise ValueError("'x' parameter can't be cast to real_vector")
+    __x = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __state = ctypes.c_void_p(0)
+    try:
+        x_from_list(__x, x, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_mindfcreate(ctypes.byref(_error_msg), ctypes.byref(__n), ctypes.byref(__x), ctypes.byref(__state), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'mindfcreate'")
+        __r__state = mindfstate(__state)
+        return __r__state
+    finally:
+        x_vector_clear(__x)
+
+
+_lib_alglib.alglib_xv2_mindfsetbc.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_mindfsetbc.restype = ctypes.c_int32
+def mindfsetbc(state, bndl, bndu):
+    pass
+    __state = state.ptr
+    if not is_real_vector(bndl):
+        raise ValueError("'bndl' parameter can't be cast to real_vector")
+    __bndl = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    if not is_real_vector(bndu):
+        raise ValueError("'bndu' parameter can't be cast to real_vector")
+    __bndu = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        x_from_list(__bndl, bndl, DT_REAL, X_CREATE)
+        x_from_list(__bndu, bndu, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_mindfsetbc(ctypes.byref(_error_msg), ctypes.byref(__state), ctypes.byref(__bndl), ctypes.byref(__bndu), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'mindfsetbc'")
+        return
+    finally:
+        x_vector_clear(__bndl)
+        x_vector_clear(__bndu)
+
+
+_lib_alglib.alglib_xv2_mindfsetlc2dense.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_mindfsetlc2dense.restype = ctypes.c_int32
+def mindfsetlc2dense(*functionargs):
+    if len(functionargs)==5:
+        __friendly_form = False
+        state,a,al,au,k = functionargs
+    elif len(functionargs)==4:
+        __friendly_form = True
+        state,a,al,au = functionargs
+        if safe_rows("'mindfsetlc2dense': incorrect parameters",a)!=safe_len("'mindfsetlc2dense': incorrect parameters",al) or safe_rows("'mindfsetlc2dense': incorrect parameters",a)!=safe_len("'mindfsetlc2dense': incorrect parameters",au):
+            raise RuntimeError("Error while calling 'mindfsetlc2dense': looks like one of arguments has wrong size")
+        k = safe_rows("'mindfsetlc2dense': incorrect parameters",a)
+    else:
+        raise RuntimeError("Error while calling 'mindfsetlc2dense': function must have 4 or 5 parameters")
+    __state = state.ptr
+    if not is_real_matrix(a):
+        raise ValueError("'a' parameter can't be cast to real_matrix")
+    __a = x_matrix(rows=0,cols=0,stride=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    if not is_real_vector(al):
+        raise ValueError("'al' parameter can't be cast to real_vector")
+    __al = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    if not is_real_vector(au):
+        raise ValueError("'au' parameter can't be cast to real_vector")
+    __au = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __k = x_int()
+    __k.val = int(k)
+    if __k.val!=k:
+        raise ValueError("Error while converting 'k' parameter to 'x_int'")
+    try:
+        x_from_listlist(__a, a, DT_REAL, X_CREATE)
+        x_from_list(__al, al, DT_REAL, X_CREATE)
+        x_from_list(__au, au, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_mindfsetlc2dense(ctypes.byref(_error_msg), ctypes.byref(__state), ctypes.byref(__a), ctypes.byref(__al), ctypes.byref(__au), ctypes.byref(__k), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'mindfsetlc2dense'")
+        return
+    finally:
+        x_matrix_clear(__a)
+        x_vector_clear(__al)
+        x_vector_clear(__au)
+
+
+_lib_alglib.alglib_xv2_mindfsetnlc2.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_mindfsetnlc2.restype = ctypes.c_int32
+def mindfsetnlc2(*functionargs):
+    if len(functionargs)==4:
+        __friendly_form = False
+        state,nl,nu,nnlc = functionargs
+    elif len(functionargs)==3:
+        __friendly_form = True
+        state,nl,nu = functionargs
+        if safe_len("'mindfsetnlc2': incorrect parameters",nl)!=safe_len("'mindfsetnlc2': incorrect parameters",nu):
+            raise RuntimeError("Error while calling 'mindfsetnlc2': looks like one of arguments has wrong size")
+        nnlc = safe_len("'mindfsetnlc2': incorrect parameters",nl)
+    else:
+        raise RuntimeError("Error while calling 'mindfsetnlc2': function must have 3 or 4 parameters")
+    __state = state.ptr
+    if not is_real_vector(nl):
+        raise ValueError("'nl' parameter can't be cast to real_vector")
+    __nl = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    if not is_real_vector(nu):
+        raise ValueError("'nu' parameter can't be cast to real_vector")
+    __nu = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __nnlc = x_int()
+    __nnlc.val = int(nnlc)
+    if __nnlc.val!=nnlc:
+        raise ValueError("Error while converting 'nnlc' parameter to 'x_int'")
+    try:
+        x_from_list(__nl, nl, DT_REAL, X_CREATE)
+        x_from_list(__nu, nu, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_mindfsetnlc2(ctypes.byref(_error_msg), ctypes.byref(__state), ctypes.byref(__nl), ctypes.byref(__nu), ctypes.byref(__nnlc), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'mindfsetnlc2'")
+        return
+    finally:
+        x_vector_clear(__nl)
+        x_vector_clear(__nu)
+
+
+_lib_alglib.alglib_xv2_mindfsetscale.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_mindfsetscale.restype = ctypes.c_int32
+def mindfsetscale(state, s):
+    pass
+    __state = state.ptr
+    if not is_real_vector(s):
+        raise ValueError("'s' parameter can't be cast to real_vector")
+    __s = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        x_from_list(__s, s, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_mindfsetscale(ctypes.byref(_error_msg), ctypes.byref(__state), ctypes.byref(__s), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'mindfsetscale'")
+        return
+    finally:
+        x_vector_clear(__s)
+
+
+_lib_alglib.alglib_xv2_mindfrequesttermination.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_mindfrequesttermination.restype = ctypes.c_int32
+def mindfrequesttermination(state):
+    pass
+    __state = state.ptr
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_mindfrequesttermination(ctypes.byref(_error_msg), ctypes.byref(__state), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'mindfrequesttermination'")
+        return
+    finally:
+        pass
+
+
+_lib_alglib.alglib_xv2_mindfsetalgogdemo.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_mindfsetalgogdemo.restype = ctypes.c_int32
+def mindfsetalgogdemo(*functionargs):
+    if len(functionargs)==3:
+        __friendly_form = False
+        state,epochscnt,popsize = functionargs
+    elif len(functionargs)==2:
+        __friendly_form = True
+        state,epochscnt = functionargs
+        popsize = 0
+    else:
+        raise RuntimeError("Error while calling 'mindfsetalgogdemo': function must have 2 or 3 parameters")
+    __state = state.ptr
+    __epochscnt = x_int()
+    __epochscnt.val = int(epochscnt)
+    if __epochscnt.val!=epochscnt:
+        raise ValueError("Error while converting 'epochscnt' parameter to 'x_int'")
+    __popsize = x_int()
+    __popsize.val = int(popsize)
+    if __popsize.val!=popsize:
+        raise ValueError("Error while converting 'popsize' parameter to 'x_int'")
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_mindfsetalgogdemo(ctypes.byref(_error_msg), ctypes.byref(__state), ctypes.byref(__epochscnt), ctypes.byref(__popsize), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'mindfsetalgogdemo'")
+        return
+    finally:
+        pass
+
+
+_lib_alglib.alglib_xv2_mindfsetgdemopenalty.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_mindfsetgdemopenalty.restype = ctypes.c_int32
+def mindfsetgdemopenalty(state, rho1, rho2):
+    pass
+    __state = state.ptr
+    __rho1 = ctypes.c_double(rho1)
+    __rho2 = ctypes.c_double(rho2)
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_mindfsetgdemopenalty(ctypes.byref(_error_msg), ctypes.byref(__state), ctypes.byref(__rho1), ctypes.byref(__rho2), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'mindfsetgdemopenalty'")
+        return
+    finally:
+        pass
+
+
+_lib_alglib.alglib_xv2_mindfsetalgogdemofixed.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_mindfsetalgogdemofixed.restype = ctypes.c_int32
+def mindfsetalgogdemofixed(state, epochscnt, strategy, crossoverprob, differentialweight, popsize):
+    pass
+    __state = state.ptr
+    __epochscnt = x_int()
+    __epochscnt.val = int(epochscnt)
+    if __epochscnt.val!=epochscnt:
+        raise ValueError("Error while converting 'epochscnt' parameter to 'x_int'")
+    __strategy = x_int()
+    __strategy.val = int(strategy)
+    if __strategy.val!=strategy:
+        raise ValueError("Error while converting 'strategy' parameter to 'x_int'")
+    __crossoverprob = ctypes.c_double(crossoverprob)
+    __differentialweight = ctypes.c_double(differentialweight)
+    __popsize = x_int()
+    __popsize.val = int(popsize)
+    if __popsize.val!=popsize:
+        raise ValueError("Error while converting 'popsize' parameter to 'x_int'")
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_mindfsetalgogdemofixed(ctypes.byref(_error_msg), ctypes.byref(__state), ctypes.byref(__epochscnt), ctypes.byref(__strategy), ctypes.byref(__crossoverprob), ctypes.byref(__differentialweight), ctypes.byref(__popsize), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'mindfsetalgogdemofixed'")
+        return
+    finally:
+        pass
+
+
+
+
+_lib_alglib.alglib_rcv2_mindf_set_protocol_v2.argtypes    = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_rcv2_mindf_set_protocol_v2.restype     = ctypes.c_int32
+_lib_alglib.alglib_rcv2_mindf_offload_v2_request.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
+_lib_alglib.alglib_rcv2_mindf_offload_v2_request.restype  = None
+
+
+def mindfoptimize_v(state, fvec, rep = None, param = None):
+    _xc_result = ctypes.c_uint8(0)
+    _xc_msg = ctypes.c_char_p()
+    buffers = _rcommv2_buffers()
+    request = _rcommv2_request(param, "mindf")
+    retval = _lib_alglib.alglib_rcv2_mindf_set_protocol_v2(ctypes.byref(_xc_msg), ctypes.byref(state.ptr), 0)
+    if retval!=0:
+        if retval==X_ASSERTION_FAILED:
+            raise RuntimeError(_xc_msg.value)
+        else:
+            raise RuntimeError("Error while calling 'alglib_rcv2_mindf_set_protocol_v2'")
+    while True:
+        retval = _lib_alglib.alglib_xv2_mindfiteration(ctypes.byref(_xc_msg), ctypes.byref(_xc_result), ctypes.byref(state.ptr), 0)
+        if retval!=0:
+            if retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_xc_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'mindfiteration'")
+        if not _xc_result:
+            break
+        
+        #
+        # Reverse communication interface
+        #
+        request.fetch(state, _lib_alglib.alglib_rcv2_mindf_offload_v2_request)
+        buffers.resize(request)
+        if request.request==3:
+            njobs = request.size*request.vars+request.size;
+            job_idx=0
+            while job_idx<njobs:
+                _process_v2request_3phase0(request, job_idx, fvec, False, buffers)
+                job_idx += 1
+            _process_v2request_3phase1(request)
+            request.send_reply()
+            continue
+        if request.request==4:
+            qidx=0
+            while qidx<request.size:
+                _process_v2request_4(request, qidx, fvec, False, buffers)
+                qidx += 1
+            request.send_reply()
+            continue
+        if request.request==-1:
+            if rep is not None:
+                rep(request.reportx, request.reportf, param)
+            continue
+        raise RuntimeError("ALGLIB: error in 'mindfoptimize' (some derivatives were not provided?)")
+    return
+
+
+_lib_alglib.alglib_xv2_mindfresults.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_mindfresults.restype = ctypes.c_int32
+def mindfresults(state):
+    pass
+    __state = state.ptr
+    __x = x_vector(cnt=0,datatype=DT_REAL,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __rep = x_mindfreport()
+    x_mindfreport_zero_fields(__rep)
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_mindfresults(ctypes.byref(_error_msg), ctypes.byref(__state), ctypes.byref(__x), ctypes.byref(__rep), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'mindfresults'")
+        __r__x = list_from_x(__x)
+        __r__rep = mindfreport_from_x(__rep)
+        return (__r__x, __r__rep)
+    finally:
+        x_vector_clear(__x)
+        x_mindfreport_clear(__rep)
+
+
+_lib_alglib.alglib_xv2_mindfresultsbuf.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_mindfresultsbuf.restype = ctypes.c_int32
+def mindfresultsbuf(state, x, rep):
+    pass
+    __state = state.ptr
+    if not is_real_vector(x):
+        raise ValueError("'x' parameter can't be cast to real_vector")
+    __x = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __rep = x_mindfreport()
+    x_mindfreport_zero_fields(__rep)
+    try:
+        x_from_list(__x, x, DT_REAL, X_CREATE)
+        x_from_mindfreport(__rep, rep)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_mindfresultsbuf(ctypes.byref(_error_msg), ctypes.byref(__state), ctypes.byref(__x), ctypes.byref(__rep), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'mindfresultsbuf'")
+        __r__x = list_from_x(__x)
+        x_to_mindfreport_inplace(__rep, rep)
+        return __r__x
+    finally:
+        x_vector_clear(__x)
+        x_mindfreport_clear(__rep)
 
 
 _lib_alglib.x_obj_free_minlpstate.argtypes = [ctypes.c_void_p]
@@ -17688,30 +18419,476 @@ def minlpresultsbuf(state, x, rep):
         x_minlpreport_clear(__rep)
 
 
+_lib_alglib.x_obj_free_nlsstate.argtypes = [ctypes.c_void_p]
+_lib_alglib.x_obj_free_nlsstate.restype = None
+
+
+class nlsstate(object):
+    def __init__(self,ptr):
+        self.ptr = ptr
+        self.lib = _lib_alglib # make sure that _lib_alglib survives as long as object is here
+    def __del__(self):
+        self.lib.x_obj_free_nlsstate(self.ptr)
+
+
+class x_nlsreport(ctypes.Structure):
+    _pack_ = 8
+    _fields_ = [
+        ("iterationscount", x_int),
+        ("terminationtype", x_int),
+        ("nfunc", x_int)
+        ]
+
+
+
+
+class nlsreport(object):
+    def __init__(self):
+        self.iterationscount = 0
+        self.terminationtype = 0
+        self.nfunc = 0
+
+
+def x_nlsreport_zero_fields(x):
+    x.iterationscount.val = 0
+    x.terminationtype.val = 0
+    x.nfunc.val = 0
+    return
+
+
+
+
+def x_nlsreport_clear(x):
+    x_nlsreport_zero_fields(x)
+    return
+
+
+
+
+def x_from_nlsreport(x,v):
+    x.iterationscount.val = int(v.iterationscount)
+    x.terminationtype.val = int(v.terminationtype)
+    x.nfunc.val = int(v.nfunc)
+    return
+
+
+
+
+def nlsreport_from_x(x):
+    r = nlsreport()
+    r.iterationscount = x.iterationscount.val
+    r.terminationtype = x.terminationtype.val
+    r.nfunc = x.nfunc.val
+    return r
+
+
+
+
+def x_to_nlsreport_inplace(x,r):
+    r.iterationscount = x.iterationscount.val
+    r.terminationtype = x.terminationtype.val
+    r.nfunc = x.nfunc.val
+    return
+
+
+_lib_alglib.alglib_xv2_nlscreatedfo.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_nlscreatedfo.restype = ctypes.c_int32
+def nlscreatedfo(*functionargs):
+    if len(functionargs)==3:
+        __friendly_form = False
+        n,m,x = functionargs
+    elif len(functionargs)==2:
+        __friendly_form = True
+        m,x = functionargs
+        n = safe_len("'nlscreatedfo': incorrect parameters",x)
+    else:
+        raise RuntimeError("Error while calling 'nlscreatedfo': function must have 2 or 3 parameters")
+    __n = x_int()
+    __n.val = int(n)
+    if __n.val!=n:
+        raise ValueError("Error while converting 'n' parameter to 'x_int'")
+    __m = x_int()
+    __m.val = int(m)
+    if __m.val!=m:
+        raise ValueError("Error while converting 'm' parameter to 'x_int'")
+    if not is_real_vector(x):
+        raise ValueError("'x' parameter can't be cast to real_vector")
+    __x = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __state = ctypes.c_void_p(0)
+    try:
+        x_from_list(__x, x, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_nlscreatedfo(ctypes.byref(_error_msg), ctypes.byref(__n), ctypes.byref(__m), ctypes.byref(__x), ctypes.byref(__state), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'nlscreatedfo'")
+        __r__state = nlsstate(__state)
+        return __r__state
+    finally:
+        x_vector_clear(__x)
+
+
+_lib_alglib.alglib_xv2_nlssetalgo2ps.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_nlssetalgo2ps.restype = ctypes.c_int32
+def nlssetalgo2ps(*functionargs):
+    if len(functionargs)==2:
+        __friendly_form = False
+        state,nnoisyrestarts = functionargs
+    elif len(functionargs)==1:
+        __friendly_form = True
+        state, = functionargs
+        nnoisyrestarts = 0
+    else:
+        raise RuntimeError("Error while calling 'nlssetalgo2ps': function must have 1 or 2 parameters")
+    __state = state.ptr
+    __nnoisyrestarts = x_int()
+    __nnoisyrestarts.val = int(nnoisyrestarts)
+    if __nnoisyrestarts.val!=nnoisyrestarts:
+        raise ValueError("Error while converting 'nnoisyrestarts' parameter to 'x_int'")
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_nlssetalgo2ps(ctypes.byref(_error_msg), ctypes.byref(__state), ctypes.byref(__nnoisyrestarts), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'nlssetalgo2ps'")
+        return
+    finally:
+        pass
+
+
+_lib_alglib.alglib_xv2_nlssetalgodfolsa.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_nlssetalgodfolsa.restype = ctypes.c_int32
+def nlssetalgodfolsa(*functionargs):
+    if len(functionargs)==2:
+        __friendly_form = False
+        state,nnoisyrestarts = functionargs
+    elif len(functionargs)==1:
+        __friendly_form = True
+        state, = functionargs
+        nnoisyrestarts = 0
+    else:
+        raise RuntimeError("Error while calling 'nlssetalgodfolsa': function must have 1 or 2 parameters")
+    __state = state.ptr
+    __nnoisyrestarts = x_int()
+    __nnoisyrestarts.val = int(nnoisyrestarts)
+    if __nnoisyrestarts.val!=nnoisyrestarts:
+        raise ValueError("Error while converting 'nnoisyrestarts' parameter to 'x_int'")
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_nlssetalgodfolsa(ctypes.byref(_error_msg), ctypes.byref(__state), ctypes.byref(__nnoisyrestarts), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'nlssetalgodfolsa'")
+        return
+    finally:
+        pass
+
+
+_lib_alglib.alglib_xv2_nlssetcond.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_nlssetcond.restype = ctypes.c_int32
+def nlssetcond(state, epsx, maxits):
+    pass
+    __state = state.ptr
+    __epsx = ctypes.c_double(epsx)
+    __maxits = x_int()
+    __maxits.val = int(maxits)
+    if __maxits.val!=maxits:
+        raise ValueError("Error while converting 'maxits' parameter to 'x_int'")
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_nlssetcond(ctypes.byref(_error_msg), ctypes.byref(__state), ctypes.byref(__epsx), ctypes.byref(__maxits), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'nlssetcond'")
+        return
+    finally:
+        pass
+
+
+_lib_alglib.alglib_xv2_nlssetxrep.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_nlssetxrep.restype = ctypes.c_int32
+def nlssetxrep(state, needxrep):
+    pass
+    __state = state.ptr
+    __needxrep = ctypes.c_uint64(needxrep)
+    if __needxrep.value!=0:
+        __needxrep = ctypes.c_uint64(1)
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_nlssetxrep(ctypes.byref(_error_msg), ctypes.byref(__state), ctypes.byref(__needxrep), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'nlssetxrep'")
+        return
+    finally:
+        pass
+
+
+_lib_alglib.alglib_xv2_nlssetscale.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_nlssetscale.restype = ctypes.c_int32
+def nlssetscale(state, s):
+    pass
+    __state = state.ptr
+    if not is_real_vector(s):
+        raise ValueError("'s' parameter can't be cast to real_vector")
+    __s = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        x_from_list(__s, s, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_nlssetscale(ctypes.byref(_error_msg), ctypes.byref(__state), ctypes.byref(__s), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'nlssetscale'")
+        return
+    finally:
+        x_vector_clear(__s)
+
+
+_lib_alglib.alglib_xv2_nlssetbc.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_nlssetbc.restype = ctypes.c_int32
+def nlssetbc(state, bndl, bndu):
+    pass
+    __state = state.ptr
+    if not is_real_vector(bndl):
+        raise ValueError("'bndl' parameter can't be cast to real_vector")
+    __bndl = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    if not is_real_vector(bndu):
+        raise ValueError("'bndu' parameter can't be cast to real_vector")
+    __bndu = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        x_from_list(__bndl, bndl, DT_REAL, X_CREATE)
+        x_from_list(__bndu, bndu, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_nlssetbc(ctypes.byref(_error_msg), ctypes.byref(__state), ctypes.byref(__bndl), ctypes.byref(__bndu), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'nlssetbc'")
+        return
+    finally:
+        x_vector_clear(__bndl)
+        x_vector_clear(__bndu)
+
+
+
+
+_lib_alglib.alglib_rcv2_nls_set_protocol_v2.argtypes    = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_rcv2_nls_set_protocol_v2.restype     = ctypes.c_int32
+_lib_alglib.alglib_rcv2_nls_offload_v2_request.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
+_lib_alglib.alglib_rcv2_nls_offload_v2_request.restype  = None
+
+
+def nlsoptimize_v(state, fvec, rep = None, param = None):
+    _xc_result = ctypes.c_uint8(0)
+    _xc_msg = ctypes.c_char_p()
+    buffers = _rcommv2_buffers()
+    request = _rcommv2_request(param, "nls")
+    retval = _lib_alglib.alglib_rcv2_nls_set_protocol_v2(ctypes.byref(_xc_msg), ctypes.byref(state.ptr), 0)
+    if retval!=0:
+        if retval==X_ASSERTION_FAILED:
+            raise RuntimeError(_xc_msg.value)
+        else:
+            raise RuntimeError("Error while calling 'alglib_rcv2_nls_set_protocol_v2'")
+    while True:
+        retval = _lib_alglib.alglib_xv2_nlsiteration(ctypes.byref(_xc_msg), ctypes.byref(_xc_result), ctypes.byref(state.ptr), 0)
+        if retval!=0:
+            if retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_xc_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'nlsiteration'")
+        if not _xc_result:
+            break
+        
+        #
+        # Reverse communication interface
+        #
+        request.fetch(state, _lib_alglib.alglib_rcv2_nls_offload_v2_request)
+        buffers.resize(request)
+        if request.request==3:
+            njobs = request.size*request.vars+request.size;
+            job_idx=0
+            while job_idx<njobs:
+                _process_v2request_3phase0(request, job_idx, fvec, False, buffers)
+                job_idx += 1
+            _process_v2request_3phase1(request)
+            request.send_reply()
+            continue
+        if request.request==4:
+            qidx=0
+            while qidx<request.size:
+                _process_v2request_4(request, qidx, fvec, False, buffers)
+                qidx += 1
+            request.send_reply()
+            continue
+        if request.request==-1:
+            if rep is not None:
+                rep(request.reportx, request.reportf, param)
+            continue
+        raise RuntimeError("ALGLIB: error in 'nlsoptimize' (some derivatives were not provided?)")
+    return
+
+
+def nlsoptimize_vj(state, fvec, jac, rep = None, param = None):
+    _xc_result = ctypes.c_uint8(0)
+    _xc_msg = ctypes.c_char_p()
+    buffers = _rcommv2_buffers()
+    request = _rcommv2_request(param, "nls")
+    retval = _lib_alglib.alglib_rcv2_nls_set_protocol_v2(ctypes.byref(_xc_msg), ctypes.byref(state.ptr), 0)
+    if retval!=0:
+        if retval==X_ASSERTION_FAILED:
+            raise RuntimeError(_xc_msg.value)
+        else:
+            raise RuntimeError("Error while calling 'alglib_rcv2_nls_set_protocol_v2'")
+    while True:
+        retval = _lib_alglib.alglib_xv2_nlsiteration(ctypes.byref(_xc_msg), ctypes.byref(_xc_result), ctypes.byref(state.ptr), 0)
+        if retval!=0:
+            if retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_xc_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'nlsiteration'")
+        if not _xc_result:
+            break
+        
+        #
+        # Reverse communication interface
+        #
+        request.fetch(state, _lib_alglib.alglib_rcv2_nls_offload_v2_request)
+        buffers.resize(request)
+        if request.request==2:
+            qidx = 0
+            while qidx<request.size:
+                _process_v2request_2(request, qidx, jac, False, buffers)
+                qidx += 1
+            request.send_reply()
+            continue
+        if request.request==4:
+            qidx=0
+            while qidx<request.size:
+                _process_v2request_4(request, qidx, fvec, False, buffers)
+                qidx += 1
+            request.send_reply()
+            continue
+        if request.request==-1:
+            if rep is not None:
+                rep(request.reportx, request.reportf, param)
+            continue
+        raise RuntimeError("ALGLIB: error in 'nlsoptimize' (some derivatives were not provided?)")
+    return
+
+
+_lib_alglib.alglib_xv2_nlsresults.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_nlsresults.restype = ctypes.c_int32
+def nlsresults(state):
+    pass
+    __state = state.ptr
+    __x = x_vector(cnt=0,datatype=DT_REAL,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __rep = x_nlsreport()
+    x_nlsreport_zero_fields(__rep)
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_nlsresults(ctypes.byref(_error_msg), ctypes.byref(__state), ctypes.byref(__x), ctypes.byref(__rep), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'nlsresults'")
+        __r__x = list_from_x(__x)
+        __r__rep = nlsreport_from_x(__rep)
+        return (__r__x, __r__rep)
+    finally:
+        x_vector_clear(__x)
+        x_nlsreport_clear(__rep)
+
+
+_lib_alglib.alglib_xv2_nlsresultsbuf.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_nlsresultsbuf.restype = ctypes.c_int32
+def nlsresultsbuf(state, x, rep):
+    pass
+    __state = state.ptr
+    if not is_real_vector(x):
+        raise ValueError("'x' parameter can't be cast to real_vector")
+    __x = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __rep = x_nlsreport()
+    x_nlsreport_zero_fields(__rep)
+    try:
+        x_from_list(__x, x, DT_REAL, X_CREATE)
+        x_from_nlsreport(__rep, rep)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_nlsresultsbuf(ctypes.byref(_error_msg), ctypes.byref(__state), ctypes.byref(__x), ctypes.byref(__rep), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'nlsresultsbuf'")
+        __r__x = list_from_x(__x)
+        x_to_nlsreport_inplace(__rep, rep)
+        return __r__x
+    finally:
+        x_vector_clear(__x)
+        x_nlsreport_clear(__rep)
+
+
+_lib_alglib.alglib_xv2_nlsrestartfrom.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_nlsrestartfrom.restype = ctypes.c_int32
+def nlsrestartfrom(state, x):
+    pass
+    __state = state.ptr
+    if not is_real_vector(x):
+        raise ValueError("'x' parameter can't be cast to real_vector")
+    __x = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        x_from_list(__x, x, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_nlsrestartfrom(ctypes.byref(_error_msg), ctypes.byref(__state), ctypes.byref(__x), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'nlsrestartfrom'")
+        return
+    finally:
+        x_vector_clear(__x)
+
+
+_lib_alglib.alglib_xv2_nlsrequesttermination.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_nlsrequesttermination.restype = ctypes.c_int32
+def nlsrequesttermination(state):
+    pass
+    __state = state.ptr
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_nlsrequesttermination(ctypes.byref(_error_msg), ctypes.byref(__state), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'nlsrequesttermination'")
+        return
+    finally:
+        pass
+
+
 _lib_alglib.x_obj_free_minnlcstate.argtypes = [ctypes.c_void_p]
 _lib_alglib.x_obj_free_minnlcstate.restype = None
-_lib_alglib.x_minnlcstate_get_needfi.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minnlcstate_get_needfi.restype = None
-_lib_alglib.x_minnlcstate_set_needfi.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minnlcstate_set_needfi.restype = None
-_lib_alglib.x_minnlcstate_get_needfij.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minnlcstate_get_needfij.restype = None
-_lib_alglib.x_minnlcstate_set_needfij.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minnlcstate_set_needfij.restype = None
-_lib_alglib.x_minnlcstate_get_xupdated.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minnlcstate_get_xupdated.restype = None
-_lib_alglib.x_minnlcstate_set_xupdated.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minnlcstate_set_xupdated.restype = None
-_lib_alglib.x_minnlcstate_get_f.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minnlcstate_get_f.restype = None
-_lib_alglib.x_minnlcstate_set_f.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minnlcstate_set_f.restype = None
-_lib_alglib.x_minnlcstate_get_fi.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minnlcstate_get_fi.restype = None
-_lib_alglib.x_minnlcstate_get_j.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minnlcstate_get_j.restype = None
-_lib_alglib.x_minnlcstate_get_x.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_minnlcstate_get_x.restype = None
 
 
 class minnlcstate(object):
@@ -17990,6 +19167,47 @@ def minnlcsetnlc(state, nlec, nlic):
         pass
 
 
+_lib_alglib.alglib_xv2_minnlcsetnlc2.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_minnlcsetnlc2.restype = ctypes.c_int32
+def minnlcsetnlc2(*functionargs):
+    if len(functionargs)==4:
+        __friendly_form = False
+        state,nl,nu,nnlc = functionargs
+    elif len(functionargs)==3:
+        __friendly_form = True
+        state,nl,nu = functionargs
+        if safe_len("'minnlcsetnlc2': incorrect parameters",nl)!=safe_len("'minnlcsetnlc2': incorrect parameters",nu):
+            raise RuntimeError("Error while calling 'minnlcsetnlc2': looks like one of arguments has wrong size")
+        nnlc = safe_len("'minnlcsetnlc2': incorrect parameters",nl)
+    else:
+        raise RuntimeError("Error while calling 'minnlcsetnlc2': function must have 3 or 4 parameters")
+    __state = state.ptr
+    if not is_real_vector(nl):
+        raise ValueError("'nl' parameter can't be cast to real_vector")
+    __nl = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    if not is_real_vector(nu):
+        raise ValueError("'nu' parameter can't be cast to real_vector")
+    __nu = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __nnlc = x_int()
+    __nnlc.val = int(nnlc)
+    if __nnlc.val!=nnlc:
+        raise ValueError("Error while converting 'nnlc' parameter to 'x_int'")
+    try:
+        x_from_list(__nl, nl, DT_REAL, X_CREATE)
+        x_from_list(__nu, nu, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_minnlcsetnlc2(ctypes.byref(_error_msg), ctypes.byref(__state), ctypes.byref(__nl), ctypes.byref(__nu), ctypes.byref(__nnlc), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'minnlcsetnlc2'")
+        return
+    finally:
+        x_vector_clear(__nl)
+        x_vector_clear(__nu)
+
+
 _lib_alglib.alglib_xv2_minnlcsetcond.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
 _lib_alglib.alglib_xv2_minnlcsetcond.restype = ctypes.c_int32
 def minnlcsetcond(state, epsx, maxits):
@@ -18009,6 +19227,31 @@ def minnlcsetcond(state, epsx, maxits):
                 raise RuntimeError(_error_msg.value)
             else:
                 raise RuntimeError("Error while calling 'minnlcsetcond'")
+        return
+    finally:
+        pass
+
+
+_lib_alglib.alglib_xv2_minnlcsetcond3.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_minnlcsetcond3.restype = ctypes.c_int32
+def minnlcsetcond3(state, epsf, epsx, maxits):
+    pass
+    __state = state.ptr
+    __epsf = ctypes.c_double(epsf)
+    __epsx = ctypes.c_double(epsx)
+    __maxits = x_int()
+    __maxits.val = int(maxits)
+    if __maxits.val!=maxits:
+        raise ValueError("Error while converting 'maxits' parameter to 'x_int'")
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_minnlcsetcond3(ctypes.byref(_error_msg), ctypes.byref(__state), ctypes.byref(__epsf), ctypes.byref(__epsx), ctypes.byref(__maxits), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'minnlcsetcond3'")
         return
     finally:
         pass
@@ -18036,90 +19279,6 @@ def minnlcsetscale(state, s):
         x_vector_clear(__s)
 
 
-_lib_alglib.alglib_xv2_minnlcsetprecinexact.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
-_lib_alglib.alglib_xv2_minnlcsetprecinexact.restype = ctypes.c_int32
-def minnlcsetprecinexact(state):
-    pass
-    __state = state.ptr
-    try:
-        pass
-        _error_msg = ctypes.c_char_p(0)
-        __x__retval =  _lib_alglib.alglib_xv2_minnlcsetprecinexact(ctypes.byref(_error_msg), ctypes.byref(__state), 0)
-        if __x__retval!=0:
-            if __x__retval==X_ASSERTION_FAILED:
-                raise RuntimeError(_error_msg.value)
-            else:
-                raise RuntimeError("Error while calling 'minnlcsetprecinexact'")
-        return
-    finally:
-        pass
-
-
-_lib_alglib.alglib_xv2_minnlcsetprecexactlowrank.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
-_lib_alglib.alglib_xv2_minnlcsetprecexactlowrank.restype = ctypes.c_int32
-def minnlcsetprecexactlowrank(state, updatefreq):
-    pass
-    __state = state.ptr
-    __updatefreq = x_int()
-    __updatefreq.val = int(updatefreq)
-    if __updatefreq.val!=updatefreq:
-        raise ValueError("Error while converting 'updatefreq' parameter to 'x_int'")
-    try:
-        pass
-        _error_msg = ctypes.c_char_p(0)
-        __x__retval =  _lib_alglib.alglib_xv2_minnlcsetprecexactlowrank(ctypes.byref(_error_msg), ctypes.byref(__state), ctypes.byref(__updatefreq), 0)
-        if __x__retval!=0:
-            if __x__retval==X_ASSERTION_FAILED:
-                raise RuntimeError(_error_msg.value)
-            else:
-                raise RuntimeError("Error while calling 'minnlcsetprecexactlowrank'")
-        return
-    finally:
-        pass
-
-
-_lib_alglib.alglib_xv2_minnlcsetprecexactrobust.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
-_lib_alglib.alglib_xv2_minnlcsetprecexactrobust.restype = ctypes.c_int32
-def minnlcsetprecexactrobust(state, updatefreq):
-    pass
-    __state = state.ptr
-    __updatefreq = x_int()
-    __updatefreq.val = int(updatefreq)
-    if __updatefreq.val!=updatefreq:
-        raise ValueError("Error while converting 'updatefreq' parameter to 'x_int'")
-    try:
-        pass
-        _error_msg = ctypes.c_char_p(0)
-        __x__retval =  _lib_alglib.alglib_xv2_minnlcsetprecexactrobust(ctypes.byref(_error_msg), ctypes.byref(__state), ctypes.byref(__updatefreq), 0)
-        if __x__retval!=0:
-            if __x__retval==X_ASSERTION_FAILED:
-                raise RuntimeError(_error_msg.value)
-            else:
-                raise RuntimeError("Error while calling 'minnlcsetprecexactrobust'")
-        return
-    finally:
-        pass
-
-
-_lib_alglib.alglib_xv2_minnlcsetprecnone.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
-_lib_alglib.alglib_xv2_minnlcsetprecnone.restype = ctypes.c_int32
-def minnlcsetprecnone(state):
-    pass
-    __state = state.ptr
-    try:
-        pass
-        _error_msg = ctypes.c_char_p(0)
-        __x__retval =  _lib_alglib.alglib_xv2_minnlcsetprecnone(ctypes.byref(_error_msg), ctypes.byref(__state), 0)
-        if __x__retval!=0:
-            if __x__retval==X_ASSERTION_FAILED:
-                raise RuntimeError(_error_msg.value)
-            else:
-                raise RuntimeError("Error while calling 'minnlcsetprecnone'")
-        return
-    finally:
-        pass
-
-
 _lib_alglib.alglib_xv2_minnlcsetstpmax.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
 _lib_alglib.alglib_xv2_minnlcsetstpmax.restype = ctypes.c_int32
 def minnlcsetstpmax(state, stpmax):
@@ -18140,25 +19299,24 @@ def minnlcsetstpmax(state, stpmax):
         pass
 
 
-_lib_alglib.alglib_xv2_minnlcsetalgoaul.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
-_lib_alglib.alglib_xv2_minnlcsetalgoaul.restype = ctypes.c_int32
-def minnlcsetalgoaul(state, rho, itscnt):
+_lib_alglib.alglib_xv2_minnlcsetalgoaul2.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_minnlcsetalgoaul2.restype = ctypes.c_int32
+def minnlcsetalgoaul2(state, maxouterits):
     pass
     __state = state.ptr
-    __rho = ctypes.c_double(rho)
-    __itscnt = x_int()
-    __itscnt.val = int(itscnt)
-    if __itscnt.val!=itscnt:
-        raise ValueError("Error while converting 'itscnt' parameter to 'x_int'")
+    __maxouterits = x_int()
+    __maxouterits.val = int(maxouterits)
+    if __maxouterits.val!=maxouterits:
+        raise ValueError("Error while converting 'maxouterits' parameter to 'x_int'")
     try:
         pass
         _error_msg = ctypes.c_char_p(0)
-        __x__retval =  _lib_alglib.alglib_xv2_minnlcsetalgoaul(ctypes.byref(_error_msg), ctypes.byref(__state), ctypes.byref(__rho), ctypes.byref(__itscnt), 0)
+        __x__retval =  _lib_alglib.alglib_xv2_minnlcsetalgoaul2(ctypes.byref(_error_msg), ctypes.byref(__state), ctypes.byref(__maxouterits), 0)
         if __x__retval!=0:
             if __x__retval==X_ASSERTION_FAILED:
                 raise RuntimeError(_error_msg.value)
             else:
-                raise RuntimeError("Error while calling 'minnlcsetalgoaul'")
+                raise RuntimeError("Error while calling 'minnlcsetalgoaul2'")
         return
     finally:
         pass
@@ -18183,6 +19341,44 @@ def minnlcsetalgoslp(state):
         pass
 
 
+_lib_alglib.alglib_xv2_minnlcsetalgosl1qp.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_minnlcsetalgosl1qp.restype = ctypes.c_int32
+def minnlcsetalgosl1qp(state):
+    pass
+    __state = state.ptr
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_minnlcsetalgosl1qp(ctypes.byref(_error_msg), ctypes.byref(__state), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'minnlcsetalgosl1qp'")
+        return
+    finally:
+        pass
+
+
+_lib_alglib.alglib_xv2_minnlcsetalgosl1qpbfgs.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_minnlcsetalgosl1qpbfgs.restype = ctypes.c_int32
+def minnlcsetalgosl1qpbfgs(state):
+    pass
+    __state = state.ptr
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_minnlcsetalgosl1qpbfgs(ctypes.byref(_error_msg), ctypes.byref(__state), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'minnlcsetalgosl1qpbfgs'")
+        return
+    finally:
+        pass
+
+
 _lib_alglib.alglib_xv2_minnlcsetalgosqp.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
 _lib_alglib.alglib_xv2_minnlcsetalgosqp.restype = ctypes.c_int32
 def minnlcsetalgosqp(state):
@@ -18197,6 +19393,25 @@ def minnlcsetalgosqp(state):
                 raise RuntimeError(_error_msg.value)
             else:
                 raise RuntimeError("Error while calling 'minnlcsetalgosqp'")
+        return
+    finally:
+        pass
+
+
+_lib_alglib.alglib_xv2_minnlcsetalgosqpbfgs.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_minnlcsetalgosqpbfgs.restype = ctypes.c_int32
+def minnlcsetalgosqpbfgs(state):
+    pass
+    __state = state.ptr
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_minnlcsetalgosqpbfgs(ctypes.byref(_error_msg), ctypes.byref(__state), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'minnlcsetalgosqpbfgs'")
         return
     finally:
         pass
@@ -18226,16 +19441,23 @@ def minnlcsetxrep(state, needxrep):
 
 
 
+_lib_alglib.alglib_rcv2_minnlc_set_protocol_v2.argtypes    = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_rcv2_minnlc_set_protocol_v2.restype     = ctypes.c_int32
+_lib_alglib.alglib_rcv2_minnlc_offload_v2_request.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
+_lib_alglib.alglib_rcv2_minnlc_offload_v2_request.restype  = None
+
+
 def minnlcoptimize_v(state, fvec, rep = None, param = None):
     _xc_result = ctypes.c_uint8(0)
     _xc_msg = ctypes.c_char_p()
-    _xc_x  = x_vector()
-    _lib_alglib.x_minnlcstate_get_x(state.ptr, ctypes.byref(_xc_x))
-    _py_x = create_real_vector(_xc_x.cnt)
-    _xc_flag = ctypes.c_uint8()
-    _xc_fi  = x_vector()
-    _lib_alglib.x_minnlcstate_get_fi(state.ptr, ctypes.byref(_xc_fi))
-    _py_fi = create_real_vector(_xc_fi.cnt)
+    buffers = _rcommv2_buffers()
+    request = _rcommv2_request(param, "minnlc")
+    retval = _lib_alglib.alglib_rcv2_minnlc_set_protocol_v2(ctypes.byref(_xc_msg), ctypes.byref(state.ptr), 0)
+    if retval!=0:
+        if retval==X_ASSERTION_FAILED:
+            raise RuntimeError(_xc_msg.value)
+        else:
+            raise RuntimeError("Error while calling 'alglib_rcv2_minnlc_set_protocol_v2'")
     while True:
         retval = _lib_alglib.alglib_xv2_minnlciteration(ctypes.byref(_xc_msg), ctypes.byref(_xc_result), ctypes.byref(state.ptr), 0)
         if retval!=0:
@@ -18245,19 +19467,24 @@ def minnlcoptimize_v(state, fvec, rep = None, param = None):
                 raise RuntimeError("Error while calling 'minnlciteration'")
         if not _xc_result:
             break
-        _lib_alglib.x_minnlcstate_get_needfi(state.ptr, ctypes.byref(_xc_flag))
-        if  _xc_flag.value!=0:
-            copy_x_to_list(_xc_x, _py_x)
-
-            fvec(_py_x, _py_fi, param)
-            x_from_list(_xc_fi, _py_fi, DT_REAL, X_REWRITE)
+        
+        #
+        # Reverse communication interface
+        #
+        request.fetch(state, _lib_alglib.alglib_rcv2_minnlc_offload_v2_request)
+        buffers.resize(request)
+        if request.request==3:
+            njobs = request.size*request.vars+request.size;
+            job_idx=0
+            while job_idx<njobs:
+                _process_v2request_3phase0(request, job_idx, fvec, False, buffers)
+                job_idx += 1
+            _process_v2request_3phase1(request)
+            request.send_reply()
             continue
-        _lib_alglib.x_minnlcstate_get_xupdated(state.ptr, ctypes.byref(_xc_flag))
-        if _xc_flag.value!=0 :
-            if not (rep is None):
-                copy_x_to_list(_xc_x, _py_x)
-                _lib_alglib.x_minnlcstate_get_f(state.ptr, ctypes.byref(_xc_f))
-                rep(_py_x, _xc_f.value, param)
+        if request.request==-1:
+            if rep is not None:
+                rep(request.reportx, request.reportf, param)
             continue
         raise RuntimeError("ALGLIB: error in 'minnlcoptimize' (some derivatives were not provided?)")
     return
@@ -18266,16 +19493,14 @@ def minnlcoptimize_v(state, fvec, rep = None, param = None):
 def minnlcoptimize_j(state, jac, rep = None, param = None):
     _xc_result = ctypes.c_uint8(0)
     _xc_msg = ctypes.c_char_p()
-    _xc_x  = x_vector()
-    _lib_alglib.x_minnlcstate_get_x(state.ptr, ctypes.byref(_xc_x))
-    _py_x = create_real_vector(_xc_x.cnt)
-    _xc_flag = ctypes.c_uint8()
-    _xc_fi  = x_vector()
-    _lib_alglib.x_minnlcstate_get_fi(state.ptr, ctypes.byref(_xc_fi))
-    _py_fi = create_real_vector(_xc_fi.cnt)
-    _xc_j  = x_matrix()
-    _lib_alglib.x_minnlcstate_get_j(state.ptr, ctypes.byref(_xc_j))
-    _py_j = create_real_matrix(_xc_j.rows,_xc_j.cols)
+    buffers = _rcommv2_buffers()
+    request = _rcommv2_request(param, "minnlc")
+    retval = _lib_alglib.alglib_rcv2_minnlc_set_protocol_v2(ctypes.byref(_xc_msg), ctypes.byref(state.ptr), 0)
+    if retval!=0:
+        if retval==X_ASSERTION_FAILED:
+            raise RuntimeError(_xc_msg.value)
+        else:
+            raise RuntimeError("Error while calling 'alglib_rcv2_minnlc_set_protocol_v2'")
     while True:
         retval = _lib_alglib.alglib_xv2_minnlciteration(ctypes.byref(_xc_msg), ctypes.byref(_xc_result), ctypes.byref(state.ptr), 0)
         if retval!=0:
@@ -18285,20 +19510,22 @@ def minnlcoptimize_j(state, jac, rep = None, param = None):
                 raise RuntimeError("Error while calling 'minnlciteration'")
         if not _xc_result:
             break
-        _lib_alglib.x_minnlcstate_get_needfij(state.ptr, ctypes.byref(_xc_flag))
-        if  _xc_flag.value!=0:
-            copy_x_to_list(_xc_x, _py_x)
-
-            jac(_py_x, _py_fi, _py_j, param)
-            x_from_list(_xc_fi, _py_fi, DT_REAL, X_REWRITE)
-            x_from_listlist(_xc_j, _py_j, DT_REAL, X_REWRITE)
+        
+        #
+        # Reverse communication interface
+        #
+        request.fetch(state, _lib_alglib.alglib_rcv2_minnlc_offload_v2_request)
+        buffers.resize(request)
+        if request.request==2:
+            qidx = 0
+            while qidx<request.size:
+                _process_v2request_2(request, qidx, jac, False, buffers)
+                qidx += 1
+            request.send_reply()
             continue
-        _lib_alglib.x_minnlcstate_get_xupdated(state.ptr, ctypes.byref(_xc_flag))
-        if _xc_flag.value!=0 :
-            if not (rep is None):
-                copy_x_to_list(_xc_x, _py_x)
-                _lib_alglib.x_minnlcstate_get_f(state.ptr, ctypes.byref(_xc_f))
-                rep(_py_x, _xc_f.value, param)
+        if request.request==-1:
+            if rep is not None:
+                rep(request.reportx, request.reportf, param)
             continue
         raise RuntimeError("ALGLIB: error in 'minnlcoptimize' (some derivatives were not provided?)")
     return
@@ -19092,6 +20319,10 @@ def minmosetxrep(state, needxrep):
 
 
 
+_lib_alglib.alglib_rcv2_minmo_set_protocol_v1.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_rcv2_minmo_set_protocol_v1.restype  = ctypes.c_int32
+
+
 def minmooptimize_v(state, fvec, rep = None, param = None):
     _xc_result = ctypes.c_uint8(0)
     _xc_msg = ctypes.c_char_p()
@@ -19102,6 +20333,12 @@ def minmooptimize_v(state, fvec, rep = None, param = None):
     _xc_fi  = x_vector()
     _lib_alglib.x_minmostate_get_fi(state.ptr, ctypes.byref(_xc_fi))
     _py_fi = create_real_vector(_xc_fi.cnt)
+    retval = _lib_alglib.alglib_rcv2_minmo_set_protocol_v1(ctypes.byref(_xc_msg), ctypes.byref(state.ptr), 0)
+    if retval!=0:
+        if retval==X_ASSERTION_FAILED:
+            raise RuntimeError(_xc_msg.value)
+        else:
+            raise RuntimeError("Error while calling 'alglib_rcv2_minmo_set_protocol_v1'")
     while True:
         retval = _lib_alglib.alglib_xv2_minmoiteration(ctypes.byref(_xc_msg), ctypes.byref(_xc_result), ctypes.byref(state.ptr), 0)
         if retval!=0:
@@ -19142,6 +20379,12 @@ def minmooptimize_j(state, jac, rep = None, param = None):
     _xc_j  = x_matrix()
     _lib_alglib.x_minmostate_get_j(state.ptr, ctypes.byref(_xc_j))
     _py_j = create_real_matrix(_xc_j.rows,_xc_j.cols)
+    retval = _lib_alglib.alglib_rcv2_minmo_set_protocol_v1(ctypes.byref(_xc_msg), ctypes.byref(state.ptr), 0)
+    if retval!=0:
+        if retval==X_ASSERTION_FAILED:
+            raise RuntimeError(_xc_msg.value)
+        else:
+            raise RuntimeError("Error while calling 'alglib_rcv2_minmo_set_protocol_v1'")
     while True:
         retval = _lib_alglib.alglib_xv2_minmoiteration(ctypes.byref(_xc_msg), ctypes.byref(_xc_result), ctypes.byref(state.ptr), 0)
         if retval!=0:
@@ -19639,6 +20882,10 @@ def minnsrequesttermination(state):
 
 
 
+_lib_alglib.alglib_rcv2_minns_set_protocol_v1.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_rcv2_minns_set_protocol_v1.restype  = ctypes.c_int32
+
+
 def minnsoptimize_v(state, fvec, rep = None, param = None):
     _xc_result = ctypes.c_uint8(0)
     _xc_msg = ctypes.c_char_p()
@@ -19649,6 +20896,12 @@ def minnsoptimize_v(state, fvec, rep = None, param = None):
     _xc_fi  = x_vector()
     _lib_alglib.x_minnsstate_get_fi(state.ptr, ctypes.byref(_xc_fi))
     _py_fi = create_real_vector(_xc_fi.cnt)
+    retval = _lib_alglib.alglib_rcv2_minns_set_protocol_v1(ctypes.byref(_xc_msg), ctypes.byref(state.ptr), 0)
+    if retval!=0:
+        if retval==X_ASSERTION_FAILED:
+            raise RuntimeError(_xc_msg.value)
+        else:
+            raise RuntimeError("Error while calling 'alglib_rcv2_minns_set_protocol_v1'")
     while True:
         retval = _lib_alglib.alglib_xv2_minnsiteration(ctypes.byref(_xc_msg), ctypes.byref(_xc_result), ctypes.byref(state.ptr), 0)
         if retval!=0:
@@ -19689,6 +20942,12 @@ def minnsoptimize_j(state, jac, rep = None, param = None):
     _xc_j  = x_matrix()
     _lib_alglib.x_minnsstate_get_j(state.ptr, ctypes.byref(_xc_j))
     _py_j = create_real_matrix(_xc_j.rows,_xc_j.cols)
+    retval = _lib_alglib.alglib_rcv2_minns_set_protocol_v1(ctypes.byref(_xc_msg), ctypes.byref(state.ptr), 0)
+    if retval!=0:
+        if retval==X_ASSERTION_FAILED:
+            raise RuntimeError(_xc_msg.value)
+        else:
+            raise RuntimeError("Error while calling 'alglib_rcv2_minns_set_protocol_v1'")
     while True:
         retval = _lib_alglib.alglib_xv2_minnsiteration(ctypes.byref(_xc_msg), ctypes.byref(_xc_result), ctypes.byref(state.ptr), 0)
         if retval!=0:
@@ -20110,6 +21369,10 @@ def minasasetstpmax(state, stpmax):
 
 
 
+_lib_alglib.alglib_rcv2_minasa_set_protocol_v1.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_rcv2_minasa_set_protocol_v1.restype  = ctypes.c_int32
+
+
 def minasaoptimize_g(state, grad, rep = None, param = None):
     _xc_result = ctypes.c_uint8(0)
     _xc_msg = ctypes.c_char_p()
@@ -20121,6 +21384,12 @@ def minasaoptimize_g(state, grad, rep = None, param = None):
     _xc_g  = x_vector()
     _lib_alglib.x_minasastate_get_g(state.ptr, ctypes.byref(_xc_g))
     _py_g = create_real_vector(_xc_g.cnt)
+    retval = _lib_alglib.alglib_rcv2_minasa_set_protocol_v1(ctypes.byref(_xc_msg), ctypes.byref(state.ptr), 0)
+    if retval!=0:
+        if retval==X_ASSERTION_FAILED:
+            raise RuntimeError(_xc_msg.value)
+        else:
+            raise RuntimeError("Error while calling 'alglib_rcv2_minasa_set_protocol_v1'")
     while True:
         retval = _lib_alglib.alglib_xv2_minasaiteration(ctypes.byref(_xc_msg), ctypes.byref(_xc_result), ctypes.byref(state.ptr), 0)
         if retval!=0:
@@ -20582,6 +21851,10 @@ def minbcsetstpmax(state, stpmax):
 
 
 
+_lib_alglib.alglib_rcv2_minbc_set_protocol_v1.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_rcv2_minbc_set_protocol_v1.restype  = ctypes.c_int32
+
+
 def minbcoptimize_f(state, func, rep = None, param = None):
     _xc_result = ctypes.c_uint8(0)
     _xc_msg = ctypes.c_char_p()
@@ -20590,6 +21863,12 @@ def minbcoptimize_f(state, func, rep = None, param = None):
     _py_x = create_real_vector(_xc_x.cnt)
     _xc_flag = ctypes.c_uint8()
     _xc_f = ctypes.c_double()
+    retval = _lib_alglib.alglib_rcv2_minbc_set_protocol_v1(ctypes.byref(_xc_msg), ctypes.byref(state.ptr), 0)
+    if retval!=0:
+        if retval==X_ASSERTION_FAILED:
+            raise RuntimeError(_xc_msg.value)
+        else:
+            raise RuntimeError("Error while calling 'alglib_rcv2_minbc_set_protocol_v1'")
     while True:
         retval = _lib_alglib.alglib_xv2_minbciteration(ctypes.byref(_xc_msg), ctypes.byref(_xc_result), ctypes.byref(state.ptr), 0)
         if retval!=0:
@@ -20628,6 +21907,12 @@ def minbcoptimize_g(state, grad, rep = None, param = None):
     _xc_g  = x_vector()
     _lib_alglib.x_minbcstate_get_g(state.ptr, ctypes.byref(_xc_g))
     _py_g = create_real_vector(_xc_g.cnt)
+    retval = _lib_alglib.alglib_rcv2_minbc_set_protocol_v1(ctypes.byref(_xc_msg), ctypes.byref(state.ptr), 0)
+    if retval!=0:
+        if retval==X_ASSERTION_FAILED:
+            raise RuntimeError(_xc_msg.value)
+        else:
+            raise RuntimeError("Error while calling 'alglib_rcv2_minbc_set_protocol_v1'")
     while True:
         retval = _lib_alglib.alglib_xv2_minbciteration(ctypes.byref(_xc_msg), ctypes.byref(_xc_result), ctypes.byref(state.ptr), 0)
         if retval!=0:
@@ -25943,6 +27228,108 @@ def idwfit(state):
         x_idwreport_clear(__rep)
 
 
+_lib_alglib.alglib_xv2_idwpeekprogress.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_idwpeekprogress.restype = ctypes.c_int32
+def idwpeekprogress(s):
+    pass
+    __result = ctypes.c_double(0)
+    __s = s.ptr
+    try:
+        pass
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_idwpeekprogress(ctypes.byref(_error_msg), ctypes.byref(__result), ctypes.byref(__s), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'idwpeekprogress'")
+        __r__result = __result.value
+        return __r__result
+    finally:
+        pass
+
+
+_lib_alglib.alglib_xv2_idwgridcalc2v.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_idwgridcalc2v.restype = ctypes.c_int32
+def idwgridcalc2v(s, x0, n0, x1, n1):
+    pass
+    __s = s.ptr
+    if not is_real_vector(x0):
+        raise ValueError("'x0' parameter can't be cast to real_vector")
+    __x0 = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __n0 = x_int()
+    __n0.val = int(n0)
+    if __n0.val!=n0:
+        raise ValueError("Error while converting 'n0' parameter to 'x_int'")
+    if not is_real_vector(x1):
+        raise ValueError("'x1' parameter can't be cast to real_vector")
+    __x1 = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __n1 = x_int()
+    __n1.val = int(n1)
+    if __n1.val!=n1:
+        raise ValueError("Error while converting 'n1' parameter to 'x_int'")
+    __y = x_vector(cnt=0,datatype=DT_REAL,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        x_from_list(__x0, x0, DT_REAL, X_CREATE)
+        x_from_list(__x1, x1, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_idwgridcalc2v(ctypes.byref(_error_msg), ctypes.byref(__s), ctypes.byref(__x0), ctypes.byref(__n0), ctypes.byref(__x1), ctypes.byref(__n1), ctypes.byref(__y), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'idwgridcalc2v'")
+        __r__y = list_from_x(__y)
+        return __r__y
+    finally:
+        x_vector_clear(__x0)
+        x_vector_clear(__x1)
+        x_vector_clear(__y)
+
+
+_lib_alglib.alglib_xv2_idwgridcalc2vsubset.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_idwgridcalc2vsubset.restype = ctypes.c_int32
+def idwgridcalc2vsubset(s, x0, n0, x1, n1, flagy):
+    pass
+    __s = s.ptr
+    if not is_real_vector(x0):
+        raise ValueError("'x0' parameter can't be cast to real_vector")
+    __x0 = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __n0 = x_int()
+    __n0.val = int(n0)
+    if __n0.val!=n0:
+        raise ValueError("Error while converting 'n0' parameter to 'x_int'")
+    if not is_real_vector(x1):
+        raise ValueError("'x1' parameter can't be cast to real_vector")
+    __x1 = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __n1 = x_int()
+    __n1.val = int(n1)
+    if __n1.val!=n1:
+        raise ValueError("Error while converting 'n1' parameter to 'x_int'")
+    if not is_bool_vector(flagy):
+        raise ValueError("'flagy' parameter can't be cast to bool_vector")
+    __flagy = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __y = x_vector(cnt=0,datatype=DT_REAL,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        x_from_list(__x0, x0, DT_REAL, X_CREATE)
+        x_from_list(__x1, x1, DT_REAL, X_CREATE)
+        x_from_list(__flagy, flagy, DT_BOOL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_idwgridcalc2vsubset(ctypes.byref(_error_msg), ctypes.byref(__s), ctypes.byref(__x0), ctypes.byref(__n0), ctypes.byref(__x1), ctypes.byref(__n1), ctypes.byref(__flagy), ctypes.byref(__y), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'idwgridcalc2vsubset'")
+        __r__y = list_from_x(__y)
+        return __r__y
+    finally:
+        x_vector_clear(__x0)
+        x_vector_clear(__x1)
+        x_vector_clear(__flagy)
+        x_vector_clear(__y)
+
+
 _lib_alglib.alglib_xv2_polynomialbar2cheb.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
 _lib_alglib.alglib_xv2_polynomialbar2cheb.restype = ctypes.c_int32
 def polynomialbar2cheb(p, a, b):
@@ -27112,6 +28499,48 @@ def spline1dbuildakima(*functionargs):
         x_vector_clear(__y)
 
 
+_lib_alglib.alglib_xv2_spline1dbuildakimamod.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_spline1dbuildakimamod.restype = ctypes.c_int32
+def spline1dbuildakimamod(*functionargs):
+    if len(functionargs)==3:
+        __friendly_form = False
+        x,y,n = functionargs
+    elif len(functionargs)==2:
+        __friendly_form = True
+        x,y = functionargs
+        if safe_len("'spline1dbuildakimamod': incorrect parameters",x)!=safe_len("'spline1dbuildakimamod': incorrect parameters",y):
+            raise RuntimeError("Error while calling 'spline1dbuildakimamod': looks like one of arguments has wrong size")
+        n = safe_len("'spline1dbuildakimamod': incorrect parameters",x)
+    else:
+        raise RuntimeError("Error while calling 'spline1dbuildakimamod': function must have 2 or 3 parameters")
+    if not is_real_vector(x):
+        raise ValueError("'x' parameter can't be cast to real_vector")
+    __x = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    if not is_real_vector(y):
+        raise ValueError("'y' parameter can't be cast to real_vector")
+    __y = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __n = x_int()
+    __n.val = int(n)
+    if __n.val!=n:
+        raise ValueError("Error while converting 'n' parameter to 'x_int'")
+    __c = ctypes.c_void_p(0)
+    try:
+        x_from_list(__x, x, DT_REAL, X_CREATE)
+        x_from_list(__y, y, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_spline1dbuildakimamod(ctypes.byref(_error_msg), ctypes.byref(__x), ctypes.byref(__y), ctypes.byref(__n), ctypes.byref(__c), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'spline1dbuildakimamod'")
+        __r__c = spline1dinterpolant(__c)
+        return __r__c
+    finally:
+        x_vector_clear(__x)
+        x_vector_clear(__y)
+
+
 _lib_alglib.alglib_xv2_spline1dcalc.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
 _lib_alglib.alglib_xv2_spline1dcalc.restype = ctypes.c_int32
 def spline1dcalc(c, x):
@@ -27641,34 +29070,6 @@ def x_to_lsfitreport_inplace(x,r):
 
 _lib_alglib.x_obj_free_lsfitstate.argtypes = [ctypes.c_void_p]
 _lib_alglib.x_obj_free_lsfitstate.restype = None
-_lib_alglib.x_lsfitstate_get_needf.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_lsfitstate_get_needf.restype = None
-_lib_alglib.x_lsfitstate_set_needf.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_lsfitstate_set_needf.restype = None
-_lib_alglib.x_lsfitstate_get_needfg.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_lsfitstate_get_needfg.restype = None
-_lib_alglib.x_lsfitstate_set_needfg.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_lsfitstate_set_needfg.restype = None
-_lib_alglib.x_lsfitstate_get_needfgh.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_lsfitstate_get_needfgh.restype = None
-_lib_alglib.x_lsfitstate_set_needfgh.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_lsfitstate_set_needfgh.restype = None
-_lib_alglib.x_lsfitstate_get_xupdated.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_lsfitstate_get_xupdated.restype = None
-_lib_alglib.x_lsfitstate_set_xupdated.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_lsfitstate_set_xupdated.restype = None
-_lib_alglib.x_lsfitstate_get_c.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_lsfitstate_get_c.restype = None
-_lib_alglib.x_lsfitstate_get_f.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_lsfitstate_get_f.restype = None
-_lib_alglib.x_lsfitstate_set_f.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_lsfitstate_set_f.restype = None
-_lib_alglib.x_lsfitstate_get_g.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_lsfitstate_get_g.restype = None
-_lib_alglib.x_lsfitstate_get_h.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_lsfitstate_get_h.restype = None
-_lib_alglib.x_lsfitstate_get_x.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_lib_alglib.x_lsfitstate_get_x.restype = None
 
 
 class lsfitstate(object):
@@ -28840,22 +30241,22 @@ def lsfitcreatef(*functionargs):
         x_vector_clear(__c)
 
 
-_lib_alglib.alglib_xv2_lsfitcreatewfg.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_lsfitcreatewfg.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
 _lib_alglib.alglib_xv2_lsfitcreatewfg.restype = ctypes.c_int32
 def lsfitcreatewfg(*functionargs):
-    if len(functionargs)==8:
+    if len(functionargs)==7:
         __friendly_form = False
-        x,y,w,c,n,m,k,cheapfg = functionargs
-    elif len(functionargs)==5:
+        x,y,w,c,n,m,k = functionargs
+    elif len(functionargs)==4:
         __friendly_form = True
-        x,y,w,c,cheapfg = functionargs
+        x,y,w,c = functionargs
         if safe_rows("'lsfitcreatewfg': incorrect parameters",x)!=safe_len("'lsfitcreatewfg': incorrect parameters",y) or safe_rows("'lsfitcreatewfg': incorrect parameters",x)!=safe_len("'lsfitcreatewfg': incorrect parameters",w):
             raise RuntimeError("Error while calling 'lsfitcreatewfg': looks like one of arguments has wrong size")
         n = safe_rows("'lsfitcreatewfg': incorrect parameters",x)
         m = safe_cols("'lsfitcreatewfg': incorrect parameters",x)
         k = safe_len("'lsfitcreatewfg': incorrect parameters",c)
     else:
-        raise RuntimeError("Error while calling 'lsfitcreatewfg': function must have 5 or 8 parameters")
+        raise RuntimeError("Error while calling 'lsfitcreatewfg': function must have 4 or 7 parameters")
     if not is_real_matrix(x):
         raise ValueError("'x' parameter can't be cast to real_matrix")
     __x = x_matrix(rows=0,cols=0,stride=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
@@ -28880,9 +30281,6 @@ def lsfitcreatewfg(*functionargs):
     __k.val = int(k)
     if __k.val!=k:
         raise ValueError("Error while converting 'k' parameter to 'x_int'")
-    __cheapfg = ctypes.c_uint64(cheapfg)
-    if __cheapfg.value!=0:
-        __cheapfg = ctypes.c_uint64(1)
     __state = ctypes.c_void_p(0)
     try:
         x_from_listlist(__x, x, DT_REAL, X_CREATE)
@@ -28890,7 +30288,7 @@ def lsfitcreatewfg(*functionargs):
         x_from_list(__w, w, DT_REAL, X_CREATE)
         x_from_list(__c, c, DT_REAL, X_CREATE)
         _error_msg = ctypes.c_char_p(0)
-        __x__retval =  _lib_alglib.alglib_xv2_lsfitcreatewfg(ctypes.byref(_error_msg), ctypes.byref(__x), ctypes.byref(__y), ctypes.byref(__w), ctypes.byref(__c), ctypes.byref(__n), ctypes.byref(__m), ctypes.byref(__k), ctypes.byref(__cheapfg), ctypes.byref(__state), 0)
+        __x__retval =  _lib_alglib.alglib_xv2_lsfitcreatewfg(ctypes.byref(_error_msg), ctypes.byref(__x), ctypes.byref(__y), ctypes.byref(__w), ctypes.byref(__c), ctypes.byref(__n), ctypes.byref(__m), ctypes.byref(__k), ctypes.byref(__state), 0)
         if __x__retval!=0:
             if __x__retval==X_ASSERTION_FAILED:
                 raise RuntimeError(_error_msg.value)
@@ -28905,144 +30303,22 @@ def lsfitcreatewfg(*functionargs):
         x_vector_clear(__c)
 
 
-_lib_alglib.alglib_xv2_lsfitcreatefg.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_lsfitcreatefg.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
 _lib_alglib.alglib_xv2_lsfitcreatefg.restype = ctypes.c_int32
 def lsfitcreatefg(*functionargs):
-    if len(functionargs)==7:
-        __friendly_form = False
-        x,y,c,n,m,k,cheapfg = functionargs
-    elif len(functionargs)==4:
-        __friendly_form = True
-        x,y,c,cheapfg = functionargs
-        if safe_rows("'lsfitcreatefg': incorrect parameters",x)!=safe_len("'lsfitcreatefg': incorrect parameters",y):
-            raise RuntimeError("Error while calling 'lsfitcreatefg': looks like one of arguments has wrong size")
-        n = safe_rows("'lsfitcreatefg': incorrect parameters",x)
-        m = safe_cols("'lsfitcreatefg': incorrect parameters",x)
-        k = safe_len("'lsfitcreatefg': incorrect parameters",c)
-    else:
-        raise RuntimeError("Error while calling 'lsfitcreatefg': function must have 4 or 7 parameters")
-    if not is_real_matrix(x):
-        raise ValueError("'x' parameter can't be cast to real_matrix")
-    __x = x_matrix(rows=0,cols=0,stride=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
-    if not is_real_vector(y):
-        raise ValueError("'y' parameter can't be cast to real_vector")
-    __y = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
-    if not is_real_vector(c):
-        raise ValueError("'c' parameter can't be cast to real_vector")
-    __c = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
-    __n = x_int()
-    __n.val = int(n)
-    if __n.val!=n:
-        raise ValueError("Error while converting 'n' parameter to 'x_int'")
-    __m = x_int()
-    __m.val = int(m)
-    if __m.val!=m:
-        raise ValueError("Error while converting 'm' parameter to 'x_int'")
-    __k = x_int()
-    __k.val = int(k)
-    if __k.val!=k:
-        raise ValueError("Error while converting 'k' parameter to 'x_int'")
-    __cheapfg = ctypes.c_uint64(cheapfg)
-    if __cheapfg.value!=0:
-        __cheapfg = ctypes.c_uint64(1)
-    __state = ctypes.c_void_p(0)
-    try:
-        x_from_listlist(__x, x, DT_REAL, X_CREATE)
-        x_from_list(__y, y, DT_REAL, X_CREATE)
-        x_from_list(__c, c, DT_REAL, X_CREATE)
-        _error_msg = ctypes.c_char_p(0)
-        __x__retval =  _lib_alglib.alglib_xv2_lsfitcreatefg(ctypes.byref(_error_msg), ctypes.byref(__x), ctypes.byref(__y), ctypes.byref(__c), ctypes.byref(__n), ctypes.byref(__m), ctypes.byref(__k), ctypes.byref(__cheapfg), ctypes.byref(__state), 0)
-        if __x__retval!=0:
-            if __x__retval==X_ASSERTION_FAILED:
-                raise RuntimeError(_error_msg.value)
-            else:
-                raise RuntimeError("Error while calling 'lsfitcreatefg'")
-        __r__state = lsfitstate(__state)
-        return __r__state
-    finally:
-        x_matrix_clear(__x)
-        x_vector_clear(__y)
-        x_vector_clear(__c)
-
-
-_lib_alglib.alglib_xv2_lsfitcreatewfgh.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
-_lib_alglib.alglib_xv2_lsfitcreatewfgh.restype = ctypes.c_int32
-def lsfitcreatewfgh(*functionargs):
-    if len(functionargs)==7:
-        __friendly_form = False
-        x,y,w,c,n,m,k = functionargs
-    elif len(functionargs)==4:
-        __friendly_form = True
-        x,y,w,c = functionargs
-        if safe_rows("'lsfitcreatewfgh': incorrect parameters",x)!=safe_len("'lsfitcreatewfgh': incorrect parameters",y) or safe_rows("'lsfitcreatewfgh': incorrect parameters",x)!=safe_len("'lsfitcreatewfgh': incorrect parameters",w):
-            raise RuntimeError("Error while calling 'lsfitcreatewfgh': looks like one of arguments has wrong size")
-        n = safe_rows("'lsfitcreatewfgh': incorrect parameters",x)
-        m = safe_cols("'lsfitcreatewfgh': incorrect parameters",x)
-        k = safe_len("'lsfitcreatewfgh': incorrect parameters",c)
-    else:
-        raise RuntimeError("Error while calling 'lsfitcreatewfgh': function must have 4 or 7 parameters")
-    if not is_real_matrix(x):
-        raise ValueError("'x' parameter can't be cast to real_matrix")
-    __x = x_matrix(rows=0,cols=0,stride=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
-    if not is_real_vector(y):
-        raise ValueError("'y' parameter can't be cast to real_vector")
-    __y = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
-    if not is_real_vector(w):
-        raise ValueError("'w' parameter can't be cast to real_vector")
-    __w = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
-    if not is_real_vector(c):
-        raise ValueError("'c' parameter can't be cast to real_vector")
-    __c = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
-    __n = x_int()
-    __n.val = int(n)
-    if __n.val!=n:
-        raise ValueError("Error while converting 'n' parameter to 'x_int'")
-    __m = x_int()
-    __m.val = int(m)
-    if __m.val!=m:
-        raise ValueError("Error while converting 'm' parameter to 'x_int'")
-    __k = x_int()
-    __k.val = int(k)
-    if __k.val!=k:
-        raise ValueError("Error while converting 'k' parameter to 'x_int'")
-    __state = ctypes.c_void_p(0)
-    try:
-        x_from_listlist(__x, x, DT_REAL, X_CREATE)
-        x_from_list(__y, y, DT_REAL, X_CREATE)
-        x_from_list(__w, w, DT_REAL, X_CREATE)
-        x_from_list(__c, c, DT_REAL, X_CREATE)
-        _error_msg = ctypes.c_char_p(0)
-        __x__retval =  _lib_alglib.alglib_xv2_lsfitcreatewfgh(ctypes.byref(_error_msg), ctypes.byref(__x), ctypes.byref(__y), ctypes.byref(__w), ctypes.byref(__c), ctypes.byref(__n), ctypes.byref(__m), ctypes.byref(__k), ctypes.byref(__state), 0)
-        if __x__retval!=0:
-            if __x__retval==X_ASSERTION_FAILED:
-                raise RuntimeError(_error_msg.value)
-            else:
-                raise RuntimeError("Error while calling 'lsfitcreatewfgh'")
-        __r__state = lsfitstate(__state)
-        return __r__state
-    finally:
-        x_matrix_clear(__x)
-        x_vector_clear(__y)
-        x_vector_clear(__w)
-        x_vector_clear(__c)
-
-
-_lib_alglib.alglib_xv2_lsfitcreatefgh.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
-_lib_alglib.alglib_xv2_lsfitcreatefgh.restype = ctypes.c_int32
-def lsfitcreatefgh(*functionargs):
     if len(functionargs)==6:
         __friendly_form = False
         x,y,c,n,m,k = functionargs
     elif len(functionargs)==3:
         __friendly_form = True
         x,y,c = functionargs
-        if safe_rows("'lsfitcreatefgh': incorrect parameters",x)!=safe_len("'lsfitcreatefgh': incorrect parameters",y):
-            raise RuntimeError("Error while calling 'lsfitcreatefgh': looks like one of arguments has wrong size")
-        n = safe_rows("'lsfitcreatefgh': incorrect parameters",x)
-        m = safe_cols("'lsfitcreatefgh': incorrect parameters",x)
-        k = safe_len("'lsfitcreatefgh': incorrect parameters",c)
+        if safe_rows("'lsfitcreatefg': incorrect parameters",x)!=safe_len("'lsfitcreatefg': incorrect parameters",y):
+            raise RuntimeError("Error while calling 'lsfitcreatefg': looks like one of arguments has wrong size")
+        n = safe_rows("'lsfitcreatefg': incorrect parameters",x)
+        m = safe_cols("'lsfitcreatefg': incorrect parameters",x)
+        k = safe_len("'lsfitcreatefg': incorrect parameters",c)
     else:
-        raise RuntimeError("Error while calling 'lsfitcreatefgh': function must have 3 or 6 parameters")
+        raise RuntimeError("Error while calling 'lsfitcreatefg': function must have 3 or 6 parameters")
     if not is_real_matrix(x):
         raise ValueError("'x' parameter can't be cast to real_matrix")
     __x = x_matrix(rows=0,cols=0,stride=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
@@ -29070,12 +30346,12 @@ def lsfitcreatefgh(*functionargs):
         x_from_list(__y, y, DT_REAL, X_CREATE)
         x_from_list(__c, c, DT_REAL, X_CREATE)
         _error_msg = ctypes.c_char_p(0)
-        __x__retval =  _lib_alglib.alglib_xv2_lsfitcreatefgh(ctypes.byref(_error_msg), ctypes.byref(__x), ctypes.byref(__y), ctypes.byref(__c), ctypes.byref(__n), ctypes.byref(__m), ctypes.byref(__k), ctypes.byref(__state), 0)
+        __x__retval =  _lib_alglib.alglib_xv2_lsfitcreatefg(ctypes.byref(_error_msg), ctypes.byref(__x), ctypes.byref(__y), ctypes.byref(__c), ctypes.byref(__n), ctypes.byref(__m), ctypes.byref(__k), ctypes.byref(__state), 0)
         if __x__retval!=0:
             if __x__retval==X_ASSERTION_FAILED:
                 raise RuntimeError(_error_msg.value)
             else:
-                raise RuntimeError("Error while calling 'lsfitcreatefgh'")
+                raise RuntimeError("Error while calling 'lsfitcreatefg'")
         __r__state = lsfitstate(__state)
         return __r__state
     finally:
@@ -29242,17 +30518,23 @@ def lsfitsetlc(*functionargs):
 
 
 
+_lib_alglib.alglib_rcv2_lsfit_set_protocol_v2.argtypes    = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_rcv2_lsfit_set_protocol_v2.restype     = ctypes.c_int32
+_lib_alglib.alglib_rcv2_lsfit_offload_v2_request.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
+_lib_alglib.alglib_rcv2_lsfit_offload_v2_request.restype  = None
+
+
 def lsfitfit_f(state, func, rep = None, param = None):
     _xc_result = ctypes.c_uint8(0)
     _xc_msg = ctypes.c_char_p()
-    _xc_c  = x_vector()
-    _lib_alglib.x_lsfitstate_get_c(state.ptr, ctypes.byref(_xc_c))
-    _py_c = create_real_vector(_xc_c.cnt)
-    _xc_x  = x_vector()
-    _lib_alglib.x_lsfitstate_get_x(state.ptr, ctypes.byref(_xc_x))
-    _py_x = create_real_vector(_xc_x.cnt)
-    _xc_flag = ctypes.c_uint8()
-    _xc_f = ctypes.c_double()
+    buffers = _rcommv2_buffers()
+    request = _rcommv2_request(param, "lsfit")
+    retval = _lib_alglib.alglib_rcv2_lsfit_set_protocol_v2(ctypes.byref(_xc_msg), ctypes.byref(state.ptr), 0)
+    if retval!=0:
+        if retval==X_ASSERTION_FAILED:
+            raise RuntimeError(_xc_msg.value)
+        else:
+            raise RuntimeError("Error while calling 'alglib_rcv2_lsfit_set_protocol_v2'")
     while True:
         retval = _lib_alglib.alglib_xv2_lsfititeration(ctypes.byref(_xc_msg), ctypes.byref(_xc_result), ctypes.byref(state.ptr), 0)
         if retval!=0:
@@ -29262,19 +30544,31 @@ def lsfitfit_f(state, func, rep = None, param = None):
                 raise RuntimeError("Error while calling 'lsfititeration'")
         if not _xc_result:
             break
-        _lib_alglib.x_lsfitstate_get_needf(state.ptr, ctypes.byref(_xc_flag))
-        if  _xc_flag.value!=0:
-            copy_x_to_list(_xc_c, _py_c)
-            copy_x_to_list(_xc_x, _py_x)
-            _xc_f.value = func(_py_c, _py_x, param)
-            _lib_alglib.x_lsfitstate_set_f(state.ptr, ctypes.byref(_xc_f))
+        
+        #
+        # Reverse communication interface
+        #
+        request.fetch(state, _lib_alglib.alglib_rcv2_lsfit_offload_v2_request)
+        buffers.resize(request)
+        if request.request==3:
+            njobs = request.size*request.vars+request.size;
+            job_idx=0
+            while job_idx<njobs:
+                _process_v2request_3phase0(request, job_idx, func, True, buffers)
+                job_idx += 1
+            _process_v2request_3phase1(request)
+            request.send_reply()
             continue
-        _lib_alglib.x_lsfitstate_get_xupdated(state.ptr, ctypes.byref(_xc_flag))
-        if _xc_flag.value!=0 :
-            if not (rep is None):
-                copy_x_to_list(_xc_c, _py_c)
-                _lib_alglib.x_lsfitstate_get_f(state.ptr, ctypes.byref(_xc_f))
-                rep(_py_c, _xc_f.value, param)
+        if request.request==4:
+            qidx=0
+            while qidx<request.size:
+                _process_v2request_4(request, qidx, func, True, buffers)
+                qidx += 1
+            request.send_reply()
+            continue
+        if request.request==-1:
+            if rep is not None:
+                rep(request.reportx, request.reportf, param)
             continue
         raise RuntimeError("ALGLIB: error in 'lsfitfit' (some derivatives were not provided?)")
     return
@@ -29283,17 +30577,14 @@ def lsfitfit_f(state, func, rep = None, param = None):
 def lsfitfit_fg(state, func, grad, rep = None, param = None):
     _xc_result = ctypes.c_uint8(0)
     _xc_msg = ctypes.c_char_p()
-    _xc_c  = x_vector()
-    _lib_alglib.x_lsfitstate_get_c(state.ptr, ctypes.byref(_xc_c))
-    _py_c = create_real_vector(_xc_c.cnt)
-    _xc_x  = x_vector()
-    _lib_alglib.x_lsfitstate_get_x(state.ptr, ctypes.byref(_xc_x))
-    _py_x = create_real_vector(_xc_x.cnt)
-    _xc_flag = ctypes.c_uint8()
-    _xc_f = ctypes.c_double()
-    _xc_g  = x_vector()
-    _lib_alglib.x_lsfitstate_get_g(state.ptr, ctypes.byref(_xc_g))
-    _py_g = create_real_vector(_xc_g.cnt)
+    buffers = _rcommv2_buffers()
+    request = _rcommv2_request(param, "lsfit")
+    retval = _lib_alglib.alglib_rcv2_lsfit_set_protocol_v2(ctypes.byref(_xc_msg), ctypes.byref(state.ptr), 0)
+    if retval!=0:
+        if retval==X_ASSERTION_FAILED:
+            raise RuntimeError(_xc_msg.value)
+        else:
+            raise RuntimeError("Error while calling 'alglib_rcv2_lsfit_set_protocol_v2'")
     while True:
         retval = _lib_alglib.alglib_xv2_lsfititeration(ctypes.byref(_xc_msg), ctypes.byref(_xc_result), ctypes.byref(state.ptr), 0)
         if retval!=0:
@@ -29303,88 +30594,29 @@ def lsfitfit_fg(state, func, grad, rep = None, param = None):
                 raise RuntimeError("Error while calling 'lsfititeration'")
         if not _xc_result:
             break
-        _lib_alglib.x_lsfitstate_get_needf(state.ptr, ctypes.byref(_xc_flag))
-        if  _xc_flag.value!=0:
-            copy_x_to_list(_xc_c, _py_c)
-            copy_x_to_list(_xc_x, _py_x)
-            _xc_f.value = func(_py_c, _py_x, param)
-            _lib_alglib.x_lsfitstate_set_f(state.ptr, ctypes.byref(_xc_f))
+        
+        #
+        # Reverse communication interface
+        #
+        request.fetch(state, _lib_alglib.alglib_rcv2_lsfit_offload_v2_request)
+        buffers.resize(request)
+        if request.request==2:
+            qidx = 0
+            while qidx<request.size:
+                _process_v2request_2(request, qidx, grad, True, buffers)
+                qidx += 1
+            request.send_reply()
             continue
-        _lib_alglib.x_lsfitstate_get_needfg(state.ptr, ctypes.byref(_xc_flag))
-        if  _xc_flag.value!=0:
-            copy_x_to_list(_xc_c, _py_c)
-            copy_x_to_list(_xc_x, _py_x)
-            _xc_f.value = grad(_py_c, _py_x, _py_g, param)
-            _lib_alglib.x_lsfitstate_set_f(state.ptr, ctypes.byref(_xc_f))
-            x_from_list(_xc_g, _py_g, DT_REAL, X_REWRITE)
+        if request.request==4:
+            qidx=0
+            while qidx<request.size:
+                _process_v2request_4(request, qidx, func, True, buffers)
+                qidx += 1
+            request.send_reply()
             continue
-        _lib_alglib.x_lsfitstate_get_xupdated(state.ptr, ctypes.byref(_xc_flag))
-        if _xc_flag.value!=0 :
-            if not (rep is None):
-                copy_x_to_list(_xc_c, _py_c)
-                _lib_alglib.x_lsfitstate_get_f(state.ptr, ctypes.byref(_xc_f))
-                rep(_py_c, _xc_f.value, param)
-            continue
-        raise RuntimeError("ALGLIB: error in 'lsfitfit' (some derivatives were not provided?)")
-    return
-
-
-def lsfitfit_fgh(state, func, grad, hess, rep = None, param = None):
-    _xc_result = ctypes.c_uint8(0)
-    _xc_msg = ctypes.c_char_p()
-    _xc_c  = x_vector()
-    _lib_alglib.x_lsfitstate_get_c(state.ptr, ctypes.byref(_xc_c))
-    _py_c = create_real_vector(_xc_c.cnt)
-    _xc_x  = x_vector()
-    _lib_alglib.x_lsfitstate_get_x(state.ptr, ctypes.byref(_xc_x))
-    _py_x = create_real_vector(_xc_x.cnt)
-    _xc_flag = ctypes.c_uint8()
-    _xc_f = ctypes.c_double()
-    _xc_g  = x_vector()
-    _lib_alglib.x_lsfitstate_get_g(state.ptr, ctypes.byref(_xc_g))
-    _py_g = create_real_vector(_xc_g.cnt)
-    _xc_h  = x_matrix()
-    _lib_alglib.x_lsfitstate_get_h(state.ptr, ctypes.byref(_xc_h))
-    _py_h = create_real_matrix(_xc_h.rows,_xc_h.cols)
-    while True:
-        retval = _lib_alglib.alglib_xv2_lsfititeration(ctypes.byref(_xc_msg), ctypes.byref(_xc_result), ctypes.byref(state.ptr), 0)
-        if retval!=0:
-            if retval==X_ASSERTION_FAILED:
-                raise RuntimeError(_xc_msg.value)
-            else:
-                raise RuntimeError("Error while calling 'lsfititeration'")
-        if not _xc_result:
-            break
-        _lib_alglib.x_lsfitstate_get_needf(state.ptr, ctypes.byref(_xc_flag))
-        if  _xc_flag.value!=0:
-            copy_x_to_list(_xc_c, _py_c)
-            copy_x_to_list(_xc_x, _py_x)
-            _xc_f.value = func(_py_c, _py_x, param)
-            _lib_alglib.x_lsfitstate_set_f(state.ptr, ctypes.byref(_xc_f))
-            continue
-        _lib_alglib.x_lsfitstate_get_needfg(state.ptr, ctypes.byref(_xc_flag))
-        if  _xc_flag.value!=0:
-            copy_x_to_list(_xc_c, _py_c)
-            copy_x_to_list(_xc_x, _py_x)
-            _xc_f.value = grad(_py_c, _py_x, _py_g, param)
-            _lib_alglib.x_lsfitstate_set_f(state.ptr, ctypes.byref(_xc_f))
-            x_from_list(_xc_g, _py_g, DT_REAL, X_REWRITE)
-            continue
-        _lib_alglib.x_lsfitstate_get_needfgh(state.ptr, ctypes.byref(_xc_flag))
-        if  _xc_flag.value!=0:
-            copy_x_to_list(_xc_c, _py_c)
-            copy_x_to_list(_xc_x, _py_x)
-            _xc_f.value = hess(_py_c, _py_x, _py_g, _py_h, param)
-            _lib_alglib.x_lsfitstate_set_f(state.ptr, ctypes.byref(_xc_f))
-            x_from_list(_xc_g, _py_g, DT_REAL, X_REWRITE)
-            x_from_listlist(_xc_h, _py_h, DT_REAL, X_REWRITE)
-            continue
-        _lib_alglib.x_lsfitstate_get_xupdated(state.ptr, ctypes.byref(_xc_flag))
-        if _xc_flag.value!=0 :
-            if not (rep is None):
-                copy_x_to_list(_xc_c, _py_c)
-                _lib_alglib.x_lsfitstate_get_f(state.ptr, ctypes.byref(_xc_f))
-                rep(_py_c, _xc_f.value, param)
+        if request.request==-1:
+            if rep is not None:
+                rep(request.reportx, request.reportf, param)
             continue
         raise RuntimeError("ALGLIB: error in 'lsfitfit' (some derivatives were not provided?)")
     return
@@ -29573,9 +30805,9 @@ def fitspheremz(xy, npoints, nx):
         x_vector_clear(__cx)
 
 
-_lib_alglib.alglib_xv2_fitspherex.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_fitspherex.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
 _lib_alglib.alglib_xv2_fitspherex.restype = ctypes.c_int32
-def fitspherex(xy, npoints, nx, problemtype, epsx, aulits, penalty):
+def fitspherex(xy, npoints, nx, problemtype, epsx, aulits):
     pass
     if not is_real_matrix(xy):
         raise ValueError("'xy' parameter can't be cast to real_matrix")
@@ -29597,14 +30829,13 @@ def fitspherex(xy, npoints, nx, problemtype, epsx, aulits, penalty):
     __aulits.val = int(aulits)
     if __aulits.val!=aulits:
         raise ValueError("Error while converting 'aulits' parameter to 'x_int'")
-    __penalty = ctypes.c_double(penalty)
     __cx = x_vector(cnt=0,datatype=DT_REAL,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
     __rlo = ctypes.c_double(0)
     __rhi = ctypes.c_double(0)
     try:
         x_from_listlist(__xy, xy, DT_REAL, X_CREATE)
         _error_msg = ctypes.c_char_p(0)
-        __x__retval =  _lib_alglib.alglib_xv2_fitspherex(ctypes.byref(_error_msg), ctypes.byref(__xy), ctypes.byref(__npoints), ctypes.byref(__nx), ctypes.byref(__problemtype), ctypes.byref(__epsx), ctypes.byref(__aulits), ctypes.byref(__penalty), ctypes.byref(__cx), ctypes.byref(__rlo), ctypes.byref(__rhi), 0)
+        __x__retval =  _lib_alglib.alglib_xv2_fitspherex(ctypes.byref(_error_msg), ctypes.byref(__xy), ctypes.byref(__npoints), ctypes.byref(__nx), ctypes.byref(__problemtype), ctypes.byref(__epsx), ctypes.byref(__aulits), ctypes.byref(__cx), ctypes.byref(__rlo), ctypes.byref(__rhi), 0)
         if __x__retval!=0:
             if __x__retval==X_ASSERTION_FAILED:
                 raise RuntimeError(_error_msg.value)
@@ -30826,8 +32057,17 @@ def spline2dbuildbilinearmissingbuf(x, n, y, m, f, missing, d, c):
 
 _lib_alglib.alglib_xv2_spline2dbuildbicubicv.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
 _lib_alglib.alglib_xv2_spline2dbuildbicubicv.restype = ctypes.c_int32
-def spline2dbuildbicubicv(x, n, y, m, f, d):
-    pass
+def spline2dbuildbicubicv(*functionargs):
+    if len(functionargs)==6:
+        __friendly_form = False
+        x,n,y,m,f,d = functionargs
+    elif len(functionargs)==4:
+        __friendly_form = True
+        x,y,f,d = functionargs
+        n = safe_len("'spline2dbuildbicubicv': incorrect parameters",x)
+        m = safe_len("'spline2dbuildbicubicv': incorrect parameters",y)
+    else:
+        raise RuntimeError("Error while calling 'spline2dbuildbicubicv': function must have 4 or 6 parameters")
     if not is_real_vector(x):
         raise ValueError("'x' parameter can't be cast to real_vector")
     __x = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
@@ -30867,6 +32107,170 @@ def spline2dbuildbicubicv(x, n, y, m, f, d):
         x_vector_clear(__x)
         x_vector_clear(__y)
         x_vector_clear(__f)
+
+
+_lib_alglib.alglib_xv2_spline2dbuildclampedv.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_spline2dbuildclampedv.restype = ctypes.c_int32
+def spline2dbuildclampedv(*functionargs):
+    if len(functionargs)==15:
+        __friendly_form = False
+        x,n,y,m,bndbtm,bndtypebtm,bndtop,bndtypetop,bndlft,bndtypelft,bndrgt,bndtypergt,mixedd,f,d = functionargs
+    elif len(functionargs)==13:
+        __friendly_form = True
+        x,y,bndbtm,bndtypebtm,bndtop,bndtypetop,bndlft,bndtypelft,bndrgt,bndtypergt,mixedd,f,d = functionargs
+        n = safe_len("'spline2dbuildclampedv': incorrect parameters",x)
+        m = safe_len("'spline2dbuildclampedv': incorrect parameters",y)
+    else:
+        raise RuntimeError("Error while calling 'spline2dbuildclampedv': function must have 13 or 15 parameters")
+    if not is_real_vector(x):
+        raise ValueError("'x' parameter can't be cast to real_vector")
+    __x = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __n = x_int()
+    __n.val = int(n)
+    if __n.val!=n:
+        raise ValueError("Error while converting 'n' parameter to 'x_int'")
+    if not is_real_vector(y):
+        raise ValueError("'y' parameter can't be cast to real_vector")
+    __y = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __m = x_int()
+    __m.val = int(m)
+    if __m.val!=m:
+        raise ValueError("Error while converting 'm' parameter to 'x_int'")
+    if not is_real_vector(bndbtm):
+        raise ValueError("'bndbtm' parameter can't be cast to real_vector")
+    __bndbtm = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __bndtypebtm = x_int()
+    __bndtypebtm.val = int(bndtypebtm)
+    if __bndtypebtm.val!=bndtypebtm:
+        raise ValueError("Error while converting 'bndtypebtm' parameter to 'x_int'")
+    if not is_real_vector(bndtop):
+        raise ValueError("'bndtop' parameter can't be cast to real_vector")
+    __bndtop = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __bndtypetop = x_int()
+    __bndtypetop.val = int(bndtypetop)
+    if __bndtypetop.val!=bndtypetop:
+        raise ValueError("Error while converting 'bndtypetop' parameter to 'x_int'")
+    if not is_real_vector(bndlft):
+        raise ValueError("'bndlft' parameter can't be cast to real_vector")
+    __bndlft = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __bndtypelft = x_int()
+    __bndtypelft.val = int(bndtypelft)
+    if __bndtypelft.val!=bndtypelft:
+        raise ValueError("Error while converting 'bndtypelft' parameter to 'x_int'")
+    if not is_real_vector(bndrgt):
+        raise ValueError("'bndrgt' parameter can't be cast to real_vector")
+    __bndrgt = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __bndtypergt = x_int()
+    __bndtypergt.val = int(bndtypergt)
+    if __bndtypergt.val!=bndtypergt:
+        raise ValueError("Error while converting 'bndtypergt' parameter to 'x_int'")
+    if not is_real_vector(mixedd):
+        raise ValueError("'mixedd' parameter can't be cast to real_vector")
+    __mixedd = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    if not is_real_vector(f):
+        raise ValueError("'f' parameter can't be cast to real_vector")
+    __f = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __d = x_int()
+    __d.val = int(d)
+    if __d.val!=d:
+        raise ValueError("Error while converting 'd' parameter to 'x_int'")
+    __c = ctypes.c_void_p(0)
+    try:
+        x_from_list(__x, x, DT_REAL, X_CREATE)
+        x_from_list(__y, y, DT_REAL, X_CREATE)
+        x_from_list(__bndbtm, bndbtm, DT_REAL, X_CREATE)
+        x_from_list(__bndtop, bndtop, DT_REAL, X_CREATE)
+        x_from_list(__bndlft, bndlft, DT_REAL, X_CREATE)
+        x_from_list(__bndrgt, bndrgt, DT_REAL, X_CREATE)
+        x_from_list(__mixedd, mixedd, DT_REAL, X_CREATE)
+        x_from_list(__f, f, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_spline2dbuildclampedv(ctypes.byref(_error_msg), ctypes.byref(__x), ctypes.byref(__n), ctypes.byref(__y), ctypes.byref(__m), ctypes.byref(__bndbtm), ctypes.byref(__bndtypebtm), ctypes.byref(__bndtop), ctypes.byref(__bndtypetop), ctypes.byref(__bndlft), ctypes.byref(__bndtypelft), ctypes.byref(__bndrgt), ctypes.byref(__bndtypergt), ctypes.byref(__mixedd), ctypes.byref(__f), ctypes.byref(__d), ctypes.byref(__c), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'spline2dbuildclampedv'")
+        __r__c = spline2dinterpolant(__c)
+        return __r__c
+    finally:
+        x_vector_clear(__x)
+        x_vector_clear(__y)
+        x_vector_clear(__bndbtm)
+        x_vector_clear(__bndtop)
+        x_vector_clear(__bndlft)
+        x_vector_clear(__bndrgt)
+        x_vector_clear(__mixedd)
+        x_vector_clear(__f)
+
+
+_lib_alglib.alglib_xv2_spline2dbuildhermitev.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_spline2dbuildhermitev.restype = ctypes.c_int32
+def spline2dbuildhermitev(*functionargs):
+    if len(functionargs)==9:
+        __friendly_form = False
+        x,n,y,m,f,dfdx,dfdy,d2fdxdy,d = functionargs
+    elif len(functionargs)==7:
+        __friendly_form = True
+        x,y,f,dfdx,dfdy,d2fdxdy,d = functionargs
+        n = safe_len("'spline2dbuildhermitev': incorrect parameters",x)
+        m = safe_len("'spline2dbuildhermitev': incorrect parameters",y)
+    else:
+        raise RuntimeError("Error while calling 'spline2dbuildhermitev': function must have 7 or 9 parameters")
+    if not is_real_vector(x):
+        raise ValueError("'x' parameter can't be cast to real_vector")
+    __x = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __n = x_int()
+    __n.val = int(n)
+    if __n.val!=n:
+        raise ValueError("Error while converting 'n' parameter to 'x_int'")
+    if not is_real_vector(y):
+        raise ValueError("'y' parameter can't be cast to real_vector")
+    __y = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __m = x_int()
+    __m.val = int(m)
+    if __m.val!=m:
+        raise ValueError("Error while converting 'm' parameter to 'x_int'")
+    if not is_real_vector(f):
+        raise ValueError("'f' parameter can't be cast to real_vector")
+    __f = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    if not is_real_vector(dfdx):
+        raise ValueError("'dfdx' parameter can't be cast to real_vector")
+    __dfdx = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    if not is_real_vector(dfdy):
+        raise ValueError("'dfdy' parameter can't be cast to real_vector")
+    __dfdy = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    if not is_real_vector(d2fdxdy):
+        raise ValueError("'d2fdxdy' parameter can't be cast to real_vector")
+    __d2fdxdy = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __d = x_int()
+    __d.val = int(d)
+    if __d.val!=d:
+        raise ValueError("Error while converting 'd' parameter to 'x_int'")
+    __c = ctypes.c_void_p(0)
+    try:
+        x_from_list(__x, x, DT_REAL, X_CREATE)
+        x_from_list(__y, y, DT_REAL, X_CREATE)
+        x_from_list(__f, f, DT_REAL, X_CREATE)
+        x_from_list(__dfdx, dfdx, DT_REAL, X_CREATE)
+        x_from_list(__dfdy, dfdy, DT_REAL, X_CREATE)
+        x_from_list(__d2fdxdy, d2fdxdy, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_spline2dbuildhermitev(ctypes.byref(_error_msg), ctypes.byref(__x), ctypes.byref(__n), ctypes.byref(__y), ctypes.byref(__m), ctypes.byref(__f), ctypes.byref(__dfdx), ctypes.byref(__dfdy), ctypes.byref(__d2fdxdy), ctypes.byref(__d), ctypes.byref(__c), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'spline2dbuildhermitev'")
+        __r__c = spline2dinterpolant(__c)
+        return __r__c
+    finally:
+        x_vector_clear(__x)
+        x_vector_clear(__y)
+        x_vector_clear(__f)
+        x_vector_clear(__dfdx)
+        x_vector_clear(__dfdy)
+        x_vector_clear(__d2fdxdy)
 
 
 _lib_alglib.alglib_xv2_spline2dbuildbicubicvbuf.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
@@ -33656,6 +35060,45 @@ def fftr1d(*functionargs):
         x_vector_clear(__f)
 
 
+_lib_alglib.alglib_xv2_fftr1dbuf.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_fftr1dbuf.restype = ctypes.c_int32
+def fftr1dbuf(*functionargs):
+    if len(functionargs)==3:
+        __friendly_form = False
+        a,n,f = functionargs
+    elif len(functionargs)==2:
+        __friendly_form = True
+        a,f = functionargs
+        n = safe_len("'fftr1dbuf': incorrect parameters",a)
+    else:
+        raise RuntimeError("Error while calling 'fftr1dbuf': function must have 2 or 3 parameters")
+    if not is_real_vector(a):
+        raise ValueError("'a' parameter can't be cast to real_vector")
+    __a = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __n = x_int()
+    __n.val = int(n)
+    if __n.val!=n:
+        raise ValueError("Error while converting 'n' parameter to 'x_int'")
+    if not is_complex_vector(f):
+        raise ValueError("'f' parameter can't be cast to complex_vector")
+    __f = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        x_from_list(__a, a, DT_REAL, X_CREATE)
+        x_from_list(__f, f, DT_COMPLEX, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_fftr1dbuf(ctypes.byref(_error_msg), ctypes.byref(__a), ctypes.byref(__n), ctypes.byref(__f), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'fftr1dbuf'")
+        __r__f = list_from_x(__f)
+        return __r__f
+    finally:
+        x_vector_clear(__a)
+        x_vector_clear(__f)
+
+
 _lib_alglib.alglib_xv2_fftr1dinv.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
 _lib_alglib.alglib_xv2_fftr1dinv.restype = ctypes.c_int32
 def fftr1dinv(*functionargs):
@@ -33685,6 +35128,45 @@ def fftr1dinv(*functionargs):
                 raise RuntimeError(_error_msg.value)
             else:
                 raise RuntimeError("Error while calling 'fftr1dinv'")
+        __r__a = list_from_x(__a)
+        return __r__a
+    finally:
+        x_vector_clear(__f)
+        x_vector_clear(__a)
+
+
+_lib_alglib.alglib_xv2_fftr1dinvbuf.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_fftr1dinvbuf.restype = ctypes.c_int32
+def fftr1dinvbuf(*functionargs):
+    if len(functionargs)==3:
+        __friendly_form = False
+        f,n,a = functionargs
+    elif len(functionargs)==2:
+        __friendly_form = True
+        f,a = functionargs
+        n = safe_len("'fftr1dinvbuf': incorrect parameters",f)
+    else:
+        raise RuntimeError("Error while calling 'fftr1dinvbuf': function must have 2 or 3 parameters")
+    if not is_complex_vector(f):
+        raise ValueError("'f' parameter can't be cast to complex_vector")
+    __f = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __n = x_int()
+    __n.val = int(n)
+    if __n.val!=n:
+        raise ValueError("Error while converting 'n' parameter to 'x_int'")
+    if not is_real_vector(a):
+        raise ValueError("'a' parameter can't be cast to real_vector")
+    __a = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        x_from_list(__f, f, DT_COMPLEX, X_CREATE)
+        x_from_list(__a, a, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_fftr1dinvbuf(ctypes.byref(_error_msg), ctypes.byref(__f), ctypes.byref(__n), ctypes.byref(__a), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'fftr1dinvbuf'")
         __r__a = list_from_x(__a)
         return __r__a
     finally:
@@ -33781,6 +35263,46 @@ def convc1d(a, m, b, n):
         x_vector_clear(__r)
 
 
+_lib_alglib.alglib_xv2_convc1dbuf.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_convc1dbuf.restype = ctypes.c_int32
+def convc1dbuf(a, m, b, n, r):
+    pass
+    if not is_complex_vector(a):
+        raise ValueError("'a' parameter can't be cast to complex_vector")
+    __a = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __m = x_int()
+    __m.val = int(m)
+    if __m.val!=m:
+        raise ValueError("Error while converting 'm' parameter to 'x_int'")
+    if not is_complex_vector(b):
+        raise ValueError("'b' parameter can't be cast to complex_vector")
+    __b = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __n = x_int()
+    __n.val = int(n)
+    if __n.val!=n:
+        raise ValueError("Error while converting 'n' parameter to 'x_int'")
+    if not is_complex_vector(r):
+        raise ValueError("'r' parameter can't be cast to complex_vector")
+    __r = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        x_from_list(__a, a, DT_COMPLEX, X_CREATE)
+        x_from_list(__b, b, DT_COMPLEX, X_CREATE)
+        x_from_list(__r, r, DT_COMPLEX, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_convc1dbuf(ctypes.byref(_error_msg), ctypes.byref(__a), ctypes.byref(__m), ctypes.byref(__b), ctypes.byref(__n), ctypes.byref(__r), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'convc1dbuf'")
+        __r__r = list_from_x(__r)
+        return __r__r
+    finally:
+        x_vector_clear(__a)
+        x_vector_clear(__b)
+        x_vector_clear(__r)
+
+
 _lib_alglib.alglib_xv2_convc1dinv.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
 _lib_alglib.alglib_xv2_convc1dinv.restype = ctypes.c_int32
 def convc1dinv(a, m, b, n):
@@ -33810,6 +35332,46 @@ def convc1dinv(a, m, b, n):
                 raise RuntimeError(_error_msg.value)
             else:
                 raise RuntimeError("Error while calling 'convc1dinv'")
+        __r__r = list_from_x(__r)
+        return __r__r
+    finally:
+        x_vector_clear(__a)
+        x_vector_clear(__b)
+        x_vector_clear(__r)
+
+
+_lib_alglib.alglib_xv2_convc1dinvbuf.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_convc1dinvbuf.restype = ctypes.c_int32
+def convc1dinvbuf(a, m, b, n, r):
+    pass
+    if not is_complex_vector(a):
+        raise ValueError("'a' parameter can't be cast to complex_vector")
+    __a = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __m = x_int()
+    __m.val = int(m)
+    if __m.val!=m:
+        raise ValueError("Error while converting 'm' parameter to 'x_int'")
+    if not is_complex_vector(b):
+        raise ValueError("'b' parameter can't be cast to complex_vector")
+    __b = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __n = x_int()
+    __n.val = int(n)
+    if __n.val!=n:
+        raise ValueError("Error while converting 'n' parameter to 'x_int'")
+    if not is_complex_vector(r):
+        raise ValueError("'r' parameter can't be cast to complex_vector")
+    __r = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        x_from_list(__a, a, DT_COMPLEX, X_CREATE)
+        x_from_list(__b, b, DT_COMPLEX, X_CREATE)
+        x_from_list(__r, r, DT_COMPLEX, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_convc1dinvbuf(ctypes.byref(_error_msg), ctypes.byref(__a), ctypes.byref(__m), ctypes.byref(__b), ctypes.byref(__n), ctypes.byref(__r), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'convc1dinvbuf'")
         __r__r = list_from_x(__r)
         return __r__r
     finally:
@@ -33855,6 +35417,46 @@ def convc1dcircular(s, m, r, n):
         x_vector_clear(__c)
 
 
+_lib_alglib.alglib_xv2_convc1dcircularbuf.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_convc1dcircularbuf.restype = ctypes.c_int32
+def convc1dcircularbuf(s, m, r, n, c):
+    pass
+    if not is_complex_vector(s):
+        raise ValueError("'s' parameter can't be cast to complex_vector")
+    __s = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __m = x_int()
+    __m.val = int(m)
+    if __m.val!=m:
+        raise ValueError("Error while converting 'm' parameter to 'x_int'")
+    if not is_complex_vector(r):
+        raise ValueError("'r' parameter can't be cast to complex_vector")
+    __r = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __n = x_int()
+    __n.val = int(n)
+    if __n.val!=n:
+        raise ValueError("Error while converting 'n' parameter to 'x_int'")
+    if not is_complex_vector(c):
+        raise ValueError("'c' parameter can't be cast to complex_vector")
+    __c = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        x_from_list(__s, s, DT_COMPLEX, X_CREATE)
+        x_from_list(__r, r, DT_COMPLEX, X_CREATE)
+        x_from_list(__c, c, DT_COMPLEX, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_convc1dcircularbuf(ctypes.byref(_error_msg), ctypes.byref(__s), ctypes.byref(__m), ctypes.byref(__r), ctypes.byref(__n), ctypes.byref(__c), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'convc1dcircularbuf'")
+        __r__c = list_from_x(__c)
+        return __r__c
+    finally:
+        x_vector_clear(__s)
+        x_vector_clear(__r)
+        x_vector_clear(__c)
+
+
 _lib_alglib.alglib_xv2_convc1dcircularinv.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
 _lib_alglib.alglib_xv2_convc1dcircularinv.restype = ctypes.c_int32
 def convc1dcircularinv(a, m, b, n):
@@ -33884,6 +35486,46 @@ def convc1dcircularinv(a, m, b, n):
                 raise RuntimeError(_error_msg.value)
             else:
                 raise RuntimeError("Error while calling 'convc1dcircularinv'")
+        __r__r = list_from_x(__r)
+        return __r__r
+    finally:
+        x_vector_clear(__a)
+        x_vector_clear(__b)
+        x_vector_clear(__r)
+
+
+_lib_alglib.alglib_xv2_convc1dcircularinvbuf.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_convc1dcircularinvbuf.restype = ctypes.c_int32
+def convc1dcircularinvbuf(a, m, b, n, r):
+    pass
+    if not is_complex_vector(a):
+        raise ValueError("'a' parameter can't be cast to complex_vector")
+    __a = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __m = x_int()
+    __m.val = int(m)
+    if __m.val!=m:
+        raise ValueError("Error while converting 'm' parameter to 'x_int'")
+    if not is_complex_vector(b):
+        raise ValueError("'b' parameter can't be cast to complex_vector")
+    __b = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __n = x_int()
+    __n.val = int(n)
+    if __n.val!=n:
+        raise ValueError("Error while converting 'n' parameter to 'x_int'")
+    if not is_complex_vector(r):
+        raise ValueError("'r' parameter can't be cast to complex_vector")
+    __r = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        x_from_list(__a, a, DT_COMPLEX, X_CREATE)
+        x_from_list(__b, b, DT_COMPLEX, X_CREATE)
+        x_from_list(__r, r, DT_COMPLEX, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_convc1dcircularinvbuf(ctypes.byref(_error_msg), ctypes.byref(__a), ctypes.byref(__m), ctypes.byref(__b), ctypes.byref(__n), ctypes.byref(__r), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'convc1dcircularinvbuf'")
         __r__r = list_from_x(__r)
         return __r__r
     finally:
@@ -33929,6 +35571,46 @@ def convr1d(a, m, b, n):
         x_vector_clear(__r)
 
 
+_lib_alglib.alglib_xv2_convr1dbuf.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_convr1dbuf.restype = ctypes.c_int32
+def convr1dbuf(a, m, b, n, r):
+    pass
+    if not is_real_vector(a):
+        raise ValueError("'a' parameter can't be cast to real_vector")
+    __a = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __m = x_int()
+    __m.val = int(m)
+    if __m.val!=m:
+        raise ValueError("Error while converting 'm' parameter to 'x_int'")
+    if not is_real_vector(b):
+        raise ValueError("'b' parameter can't be cast to real_vector")
+    __b = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __n = x_int()
+    __n.val = int(n)
+    if __n.val!=n:
+        raise ValueError("Error while converting 'n' parameter to 'x_int'")
+    if not is_real_vector(r):
+        raise ValueError("'r' parameter can't be cast to real_vector")
+    __r = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        x_from_list(__a, a, DT_REAL, X_CREATE)
+        x_from_list(__b, b, DT_REAL, X_CREATE)
+        x_from_list(__r, r, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_convr1dbuf(ctypes.byref(_error_msg), ctypes.byref(__a), ctypes.byref(__m), ctypes.byref(__b), ctypes.byref(__n), ctypes.byref(__r), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'convr1dbuf'")
+        __r__r = list_from_x(__r)
+        return __r__r
+    finally:
+        x_vector_clear(__a)
+        x_vector_clear(__b)
+        x_vector_clear(__r)
+
+
 _lib_alglib.alglib_xv2_convr1dinv.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
 _lib_alglib.alglib_xv2_convr1dinv.restype = ctypes.c_int32
 def convr1dinv(a, m, b, n):
@@ -33958,6 +35640,46 @@ def convr1dinv(a, m, b, n):
                 raise RuntimeError(_error_msg.value)
             else:
                 raise RuntimeError("Error while calling 'convr1dinv'")
+        __r__r = list_from_x(__r)
+        return __r__r
+    finally:
+        x_vector_clear(__a)
+        x_vector_clear(__b)
+        x_vector_clear(__r)
+
+
+_lib_alglib.alglib_xv2_convr1dinvbuf.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_convr1dinvbuf.restype = ctypes.c_int32
+def convr1dinvbuf(a, m, b, n, r):
+    pass
+    if not is_real_vector(a):
+        raise ValueError("'a' parameter can't be cast to real_vector")
+    __a = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __m = x_int()
+    __m.val = int(m)
+    if __m.val!=m:
+        raise ValueError("Error while converting 'm' parameter to 'x_int'")
+    if not is_real_vector(b):
+        raise ValueError("'b' parameter can't be cast to real_vector")
+    __b = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __n = x_int()
+    __n.val = int(n)
+    if __n.val!=n:
+        raise ValueError("Error while converting 'n' parameter to 'x_int'")
+    if not is_real_vector(r):
+        raise ValueError("'r' parameter can't be cast to real_vector")
+    __r = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        x_from_list(__a, a, DT_REAL, X_CREATE)
+        x_from_list(__b, b, DT_REAL, X_CREATE)
+        x_from_list(__r, r, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_convr1dinvbuf(ctypes.byref(_error_msg), ctypes.byref(__a), ctypes.byref(__m), ctypes.byref(__b), ctypes.byref(__n), ctypes.byref(__r), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'convr1dinvbuf'")
         __r__r = list_from_x(__r)
         return __r__r
     finally:
@@ -34003,6 +35725,46 @@ def convr1dcircular(s, m, r, n):
         x_vector_clear(__c)
 
 
+_lib_alglib.alglib_xv2_convr1dcircularbuf.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_convr1dcircularbuf.restype = ctypes.c_int32
+def convr1dcircularbuf(s, m, r, n, c):
+    pass
+    if not is_real_vector(s):
+        raise ValueError("'s' parameter can't be cast to real_vector")
+    __s = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __m = x_int()
+    __m.val = int(m)
+    if __m.val!=m:
+        raise ValueError("Error while converting 'm' parameter to 'x_int'")
+    if not is_real_vector(r):
+        raise ValueError("'r' parameter can't be cast to real_vector")
+    __r = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __n = x_int()
+    __n.val = int(n)
+    if __n.val!=n:
+        raise ValueError("Error while converting 'n' parameter to 'x_int'")
+    if not is_real_vector(c):
+        raise ValueError("'c' parameter can't be cast to real_vector")
+    __c = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        x_from_list(__s, s, DT_REAL, X_CREATE)
+        x_from_list(__r, r, DT_REAL, X_CREATE)
+        x_from_list(__c, c, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_convr1dcircularbuf(ctypes.byref(_error_msg), ctypes.byref(__s), ctypes.byref(__m), ctypes.byref(__r), ctypes.byref(__n), ctypes.byref(__c), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'convr1dcircularbuf'")
+        __r__c = list_from_x(__c)
+        return __r__c
+    finally:
+        x_vector_clear(__s)
+        x_vector_clear(__r)
+        x_vector_clear(__c)
+
+
 _lib_alglib.alglib_xv2_convr1dcircularinv.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
 _lib_alglib.alglib_xv2_convr1dcircularinv.restype = ctypes.c_int32
 def convr1dcircularinv(a, m, b, n):
@@ -34032,6 +35794,46 @@ def convr1dcircularinv(a, m, b, n):
                 raise RuntimeError(_error_msg.value)
             else:
                 raise RuntimeError("Error while calling 'convr1dcircularinv'")
+        __r__r = list_from_x(__r)
+        return __r__r
+    finally:
+        x_vector_clear(__a)
+        x_vector_clear(__b)
+        x_vector_clear(__r)
+
+
+_lib_alglib.alglib_xv2_convr1dcircularinvbuf.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_convr1dcircularinvbuf.restype = ctypes.c_int32
+def convr1dcircularinvbuf(a, m, b, n, r):
+    pass
+    if not is_real_vector(a):
+        raise ValueError("'a' parameter can't be cast to real_vector")
+    __a = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __m = x_int()
+    __m.val = int(m)
+    if __m.val!=m:
+        raise ValueError("Error while converting 'm' parameter to 'x_int'")
+    if not is_real_vector(b):
+        raise ValueError("'b' parameter can't be cast to real_vector")
+    __b = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __n = x_int()
+    __n.val = int(n)
+    if __n.val!=n:
+        raise ValueError("Error while converting 'n' parameter to 'x_int'")
+    if not is_real_vector(r):
+        raise ValueError("'r' parameter can't be cast to real_vector")
+    __r = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        x_from_list(__a, a, DT_REAL, X_CREATE)
+        x_from_list(__b, b, DT_REAL, X_CREATE)
+        x_from_list(__r, r, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_convr1dcircularinvbuf(ctypes.byref(_error_msg), ctypes.byref(__a), ctypes.byref(__m), ctypes.byref(__b), ctypes.byref(__n), ctypes.byref(__r), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'convr1dcircularinvbuf'")
         __r__r = list_from_x(__r)
         return __r__r
     finally:
@@ -34077,6 +35879,46 @@ def corrc1d(signal, n, pattern, m):
         x_vector_clear(__r)
 
 
+_lib_alglib.alglib_xv2_corrc1dbuf.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_corrc1dbuf.restype = ctypes.c_int32
+def corrc1dbuf(signal, n, pattern, m, r):
+    pass
+    if not is_complex_vector(signal):
+        raise ValueError("'signal' parameter can't be cast to complex_vector")
+    __signal = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __n = x_int()
+    __n.val = int(n)
+    if __n.val!=n:
+        raise ValueError("Error while converting 'n' parameter to 'x_int'")
+    if not is_complex_vector(pattern):
+        raise ValueError("'pattern' parameter can't be cast to complex_vector")
+    __pattern = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __m = x_int()
+    __m.val = int(m)
+    if __m.val!=m:
+        raise ValueError("Error while converting 'm' parameter to 'x_int'")
+    if not is_complex_vector(r):
+        raise ValueError("'r' parameter can't be cast to complex_vector")
+    __r = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        x_from_list(__signal, signal, DT_COMPLEX, X_CREATE)
+        x_from_list(__pattern, pattern, DT_COMPLEX, X_CREATE)
+        x_from_list(__r, r, DT_COMPLEX, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_corrc1dbuf(ctypes.byref(_error_msg), ctypes.byref(__signal), ctypes.byref(__n), ctypes.byref(__pattern), ctypes.byref(__m), ctypes.byref(__r), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'corrc1dbuf'")
+        __r__r = list_from_x(__r)
+        return __r__r
+    finally:
+        x_vector_clear(__signal)
+        x_vector_clear(__pattern)
+        x_vector_clear(__r)
+
+
 _lib_alglib.alglib_xv2_corrc1dcircular.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
 _lib_alglib.alglib_xv2_corrc1dcircular.restype = ctypes.c_int32
 def corrc1dcircular(signal, m, pattern, n):
@@ -34106,6 +35948,46 @@ def corrc1dcircular(signal, m, pattern, n):
                 raise RuntimeError(_error_msg.value)
             else:
                 raise RuntimeError("Error while calling 'corrc1dcircular'")
+        __r__c = list_from_x(__c)
+        return __r__c
+    finally:
+        x_vector_clear(__signal)
+        x_vector_clear(__pattern)
+        x_vector_clear(__c)
+
+
+_lib_alglib.alglib_xv2_corrc1dcircularbuf.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_corrc1dcircularbuf.restype = ctypes.c_int32
+def corrc1dcircularbuf(signal, m, pattern, n, c):
+    pass
+    if not is_complex_vector(signal):
+        raise ValueError("'signal' parameter can't be cast to complex_vector")
+    __signal = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __m = x_int()
+    __m.val = int(m)
+    if __m.val!=m:
+        raise ValueError("Error while converting 'm' parameter to 'x_int'")
+    if not is_complex_vector(pattern):
+        raise ValueError("'pattern' parameter can't be cast to complex_vector")
+    __pattern = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __n = x_int()
+    __n.val = int(n)
+    if __n.val!=n:
+        raise ValueError("Error while converting 'n' parameter to 'x_int'")
+    if not is_complex_vector(c):
+        raise ValueError("'c' parameter can't be cast to complex_vector")
+    __c = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        x_from_list(__signal, signal, DT_COMPLEX, X_CREATE)
+        x_from_list(__pattern, pattern, DT_COMPLEX, X_CREATE)
+        x_from_list(__c, c, DT_COMPLEX, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_corrc1dcircularbuf(ctypes.byref(_error_msg), ctypes.byref(__signal), ctypes.byref(__m), ctypes.byref(__pattern), ctypes.byref(__n), ctypes.byref(__c), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'corrc1dcircularbuf'")
         __r__c = list_from_x(__c)
         return __r__c
     finally:
@@ -34151,6 +36033,46 @@ def corrr1d(signal, n, pattern, m):
         x_vector_clear(__r)
 
 
+_lib_alglib.alglib_xv2_corrr1dbuf.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_corrr1dbuf.restype = ctypes.c_int32
+def corrr1dbuf(signal, n, pattern, m, r):
+    pass
+    if not is_real_vector(signal):
+        raise ValueError("'signal' parameter can't be cast to real_vector")
+    __signal = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __n = x_int()
+    __n.val = int(n)
+    if __n.val!=n:
+        raise ValueError("Error while converting 'n' parameter to 'x_int'")
+    if not is_real_vector(pattern):
+        raise ValueError("'pattern' parameter can't be cast to real_vector")
+    __pattern = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __m = x_int()
+    __m.val = int(m)
+    if __m.val!=m:
+        raise ValueError("Error while converting 'm' parameter to 'x_int'")
+    if not is_real_vector(r):
+        raise ValueError("'r' parameter can't be cast to real_vector")
+    __r = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        x_from_list(__signal, signal, DT_REAL, X_CREATE)
+        x_from_list(__pattern, pattern, DT_REAL, X_CREATE)
+        x_from_list(__r, r, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_corrr1dbuf(ctypes.byref(_error_msg), ctypes.byref(__signal), ctypes.byref(__n), ctypes.byref(__pattern), ctypes.byref(__m), ctypes.byref(__r), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'corrr1dbuf'")
+        __r__r = list_from_x(__r)
+        return __r__r
+    finally:
+        x_vector_clear(__signal)
+        x_vector_clear(__pattern)
+        x_vector_clear(__r)
+
+
 _lib_alglib.alglib_xv2_corrr1dcircular.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
 _lib_alglib.alglib_xv2_corrr1dcircular.restype = ctypes.c_int32
 def corrr1dcircular(signal, m, pattern, n):
@@ -34180,6 +36102,46 @@ def corrr1dcircular(signal, m, pattern, n):
                 raise RuntimeError(_error_msg.value)
             else:
                 raise RuntimeError("Error while calling 'corrr1dcircular'")
+        __r__c = list_from_x(__c)
+        return __r__c
+    finally:
+        x_vector_clear(__signal)
+        x_vector_clear(__pattern)
+        x_vector_clear(__c)
+
+
+_lib_alglib.alglib_xv2_corrr1dcircularbuf.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64]
+_lib_alglib.alglib_xv2_corrr1dcircularbuf.restype = ctypes.c_int32
+def corrr1dcircularbuf(signal, m, pattern, n, c):
+    pass
+    if not is_real_vector(signal):
+        raise ValueError("'signal' parameter can't be cast to real_vector")
+    __signal = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __m = x_int()
+    __m.val = int(m)
+    if __m.val!=m:
+        raise ValueError("Error while converting 'm' parameter to 'x_int'")
+    if not is_real_vector(pattern):
+        raise ValueError("'pattern' parameter can't be cast to real_vector")
+    __pattern = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    __n = x_int()
+    __n.val = int(n)
+    if __n.val!=n:
+        raise ValueError("Error while converting 'n' parameter to 'x_int'")
+    if not is_real_vector(c):
+        raise ValueError("'c' parameter can't be cast to real_vector")
+    __c = x_vector(cnt=0,datatype=0,owner=OWN_CALLER,last_action=0,ptr=x_multiptr(p_ptr=0))
+    try:
+        x_from_list(__signal, signal, DT_REAL, X_CREATE)
+        x_from_list(__pattern, pattern, DT_REAL, X_CREATE)
+        x_from_list(__c, c, DT_REAL, X_CREATE)
+        _error_msg = ctypes.c_char_p(0)
+        __x__retval =  _lib_alglib.alglib_xv2_corrr1dcircularbuf(ctypes.byref(_error_msg), ctypes.byref(__signal), ctypes.byref(__m), ctypes.byref(__pattern), ctypes.byref(__n), ctypes.byref(__c), 0)
+        if __x__retval!=0:
+            if __x__retval==X_ASSERTION_FAILED:
+                raise RuntimeError(_error_msg.value)
+            else:
+                raise RuntimeError("Error while calling 'corrr1dcircularbuf'")
         __r__c = list_from_x(__c)
         return __r__c
     finally:

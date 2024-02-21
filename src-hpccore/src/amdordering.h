@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -66,6 +66,7 @@ typedef struct
     ae_vector approxd;
     ae_vector optionalexactd;
     ae_vector isvertex;
+    ae_vector eligible;
     ae_vector vbegin;
     ae_vector vprev;
     ae_vector vnext;
@@ -102,6 +103,7 @@ typedef struct
     ae_bool checkexactdegrees;
     ae_vector iseliminated;
     ae_vector issupernode;
+    ae_vector iseligible;
     amdknset setsuper;
     amdknset seta;
     amdknset sete;

@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -103,6 +103,7 @@ typedef struct
     double trimthreshold;
     ae_vector xbase;
     ae_int_t rstimer;
+    ae_int_t protocolversion;
     ae_vector x;
     double f;
     ae_vector g;
@@ -1055,6 +1056,12 @@ It has no effect with default preconditioner.
 void mincgsetprecvarpart(mincgstate* state,
      /* Real    */ const ae_vector* d2,
      ae_state *_state);
+
+
+/*************************************************************************
+Set V1 reverse communication protocol
+*************************************************************************/
+void mincgsetprotocolv1(mincgstate* state, ae_state *_state);
 void _mincgstate_init(void* _p, ae_state *_state, ae_bool make_automatic);
 void _mincgstate_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
 void _mincgstate_clear(void* _p);

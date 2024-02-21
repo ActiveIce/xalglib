@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -114,6 +114,7 @@ typedef struct
     ae_matrix cleic;
     ae_int_t ng;
     ae_int_t nh;
+    ae_int_t protocolversion;
     ae_vector x;
     double f;
     ae_vector fi;
@@ -847,6 +848,12 @@ INPUT PARAMETERS:
 void minnsrestartfrom(minnsstate* state,
      /* Real    */ const ae_vector* x,
      ae_state *_state);
+
+
+/*************************************************************************
+Set V1 reverse communication protocol
+*************************************************************************/
+void minnssetprotocolv1(minnsstate* state, ae_state *_state);
 void _minnsqp_init(void* _p, ae_state *_state, ae_bool make_automatic);
 void _minnsqp_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
 void _minnsqp_clear(void* _p);

@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -48,6 +48,7 @@ static void amdordering_knsinit(ae_int_t k,
      ae_state *_state);
 static void amdordering_knsinitfroma(const sparsematrix* a,
      ae_int_t n,
+     ae_bool ignorediagonal,
      amdknset* sa,
      ae_state *_state);
 static void amdordering_knsstartenumeration(amdknset* sa,
@@ -130,6 +131,8 @@ static void amdordering_mtxclearrow(amdllmatrix* a,
      ae_state *_state);
 static void amdordering_vtxinit(const sparsematrix* a,
      ae_int_t n,
+     /* Boolean */ const ae_vector* eligible,
+     ae_bool haseligible,
      ae_bool checkexactdegrees,
      amdvertexset* s,
      ae_state *_state);
@@ -293,6 +296,7 @@ ae_int_t generateamdpermutationx(const sparsematrix* a,
     ae_int_t cnt1;
     ae_int_t tau;
     double meand;
+    ae_int_t neligible;
     ae_int_t d;
     ae_int_t result;
 
@@ -307,7 +311,7 @@ ae_int_t generateamdpermutationx(const sparsematrix* a,
     buf->checkexactdegrees = extendeddebug;
     buf->extendeddebug = extendeddebug;
     amdordering_mtxinit(n, &buf->mtxl, _state);
-    amdordering_knsinitfroma(a, n, &buf->seta, _state);
+    amdordering_knsinitfroma(a, n, ae_true, &buf->seta, _state);
     amdordering_knsinit(n, n, setprealloc, &buf->setsuper, _state);
     for(i=0; i<=n-1; i++)
     {
@@ -325,7 +329,12 @@ ae_int_t generateamdpermutationx(const sparsematrix* a,
         buf->invperm.ptr.p_int[i] = i;
         buf->columnswaps.ptr.p_int[i] = i;
     }
-    amdordering_vtxinit(a, n, buf->checkexactdegrees, &buf->vertexdegrees, _state);
+    bsetallocv(n, ae_true, &buf->iseligible, _state);
+    if( amdtype==1 )
+    {
+        bcopyv(n, eligible, &buf->iseligible, _state);
+    }
+    amdordering_vtxinit(a, n, &buf->iseligible, ae_true, buf->checkexactdegrees, &buf->vertexdegrees, _state);
     bsetallocv(n, ae_true, &buf->issupernode, _state);
     bsetallocv(n, ae_false, &buf->iseliminated, _state);
     isetallocv(n, -1, &buf->arrwe, _state);
@@ -361,22 +370,28 @@ ae_int_t generateamdpermutationx(const sparsematrix* a,
             buf->dbga.ptr.pp_double[i][i] = (double)(1);
         }
     }
+    neligible = n;
     tau = 0;
     if( amdtype==1 )
     {
         ae_assert(eligible->cnt>=n, "GenerateAMDPermutationX: length(Eligible)<N", _state);
         meand = 0.0;
+        neligible = 0;
         for(i=0; i<=n-1; i++)
         {
-            d = amdordering_vtxgetapprox(&buf->vertexdegrees, i, _state);
-            meand = meand+(double)d;
+            if( eligible->ptr.p_bool[i] )
+            {
+                d = amdordering_vtxgetapprox(&buf->vertexdegrees, i, _state);
+                meand = meand+(double)d;
+                neligible = neligible+1;
+            }
         }
-        meand = meand/(double)n;
-        tau = ae_round(rcase2(ae_fp_greater(promoteabove,(double)(0)), promoteabove, (double)(10), _state)*ae_maxreal(meand, (double)(1), _state), _state);
+        meand = meand/coalesce((double)(neligible), (double)(1), _state);
+        tau = ae_round(rcase2(ae_fp_greater(promoteabove,(double)(0)), ae_maxreal(promoteabove, (double)(1), _state), (double)(10), _state)*ae_maxreal(meand, (double)(1), _state), _state);
         tau = ae_maxint(tau, 1, _state);
         for(i=0; i<=n-1; i++)
         {
-            if( !eligible->ptr.p_bool[i]||amdordering_vtxgetapprox(&buf->vertexdegrees, i, _state)>tau )
+            if( amdordering_vtxgetapprox(&buf->vertexdegrees, i, _state)>tau )
             {
                 nisaddelement(&buf->setqsupercand, i, _state);
             }
@@ -387,6 +402,10 @@ ae_int_t generateamdpermutationx(const sparsematrix* a,
     while(k<n-niscount(&buf->setq, _state))
     {
         amdordering_amdselectpivotelement(buf, k, &p, &nodesize, _state);
+        if( p<0 )
+        {
+            break;
+        }
         amdordering_amdcomputelp(buf, p, _state);
         amdordering_amdmasselimination(buf, p, k, tau, _state);
         amdordering_amdmovetoquasidense(buf, &buf->setqsupercand, p, _state);
@@ -438,7 +457,6 @@ ae_int_t generateamdpermutationx(const sparsematrix* a,
         amdordering_vtxremovevertex(&buf->vertexdegrees, p, _state);
         k = k+nodesize;
     }
-    ae_assert(k+niscount(&buf->setq, _state)==n, "AMD: integrity check 6326 failed", _state);
     ae_assert(k>0||amdtype==1, "AMD: integrity check 9463 failed", _state);
     result = k;
     ivectorsetlengthatleast(perm, n, _state);
@@ -766,6 +784,7 @@ Initialize kn-set from lower triangle of symmetric A
 INPUT PARAMETERS
     A           -   lower triangular sparse matrix in CRS format
     N           -   problem size
+    IgnoreDiagonal- if True, diagonal elements are not included into kn-set
     
 OUTPUT PARAMETERS
     SA          -   N sets of N elements, reproducing both lower and upper
@@ -776,6 +795,7 @@ OUTPUT PARAMETERS
 *************************************************************************/
 static void amdordering_knsinitfroma(const sparsematrix* a,
      ae_int_t n,
+     ae_bool ignorediagonal,
      amdknset* sa,
      ae_state *_state)
 {
@@ -795,7 +815,11 @@ static void amdordering_knsinitfroma(const sparsematrix* a,
         ae_assert(a->didx.ptr.p_int[i]<a->uidx.ptr.p_int[i], "knsInitFromA: integrity check for diagonal of A failed", _state);
         j0 = a->ridx.ptr.p_int[i];
         j1 = a->didx.ptr.p_int[i]-1;
-        sa->vallocated.ptr.p_int[i] = 1+(j1-j0+1);
+        sa->vallocated.ptr.p_int[i] = j1-j0+1;
+        if( !ignorediagonal )
+        {
+            sa->vallocated.ptr.p_int[i] = sa->vallocated.ptr.p_int[i]+1;
+        }
         for(jj=j0; jj<=j1; jj++)
         {
             j = a->idx.ptr.p_int[jj];
@@ -818,8 +842,11 @@ static void amdordering_knsinitfroma(const sparsematrix* a,
     isetallocv(n, 0, &sa->vcnt, _state);
     for(i=0; i<=n-1; i++)
     {
-        sa->data.ptr.p_int[sa->vbegin.ptr.p_int[i]+sa->vcnt.ptr.p_int[i]] = i;
-        sa->vcnt.ptr.p_int[i] = sa->vcnt.ptr.p_int[i]+1;
+        if( !ignorediagonal )
+        {
+            sa->data.ptr.p_int[sa->vbegin.ptr.p_int[i]+sa->vcnt.ptr.p_int[i]] = i;
+            sa->vcnt.ptr.p_int[i] = sa->vcnt.ptr.p_int[i]+1;
+        }
         j0 = a->ridx.ptr.p_int[i];
         j1 = a->didx.ptr.p_int[i]-1;
         for(jj=j0; jj<=j1; jj++)
@@ -1659,6 +1686,9 @@ Initialize vertex storage using A to estimate initial degrees
 INPUT PARAMETERS
     A           -   NxN lower triangular sparse CRS matrix
     N           -   problem size
+    Eligible    -   array[N], only eligible vertices can be extracted
+                    with vtxGetApproxMinDegree()
+    HasEligible -   if False, Eligible is ignored
     CheckExactDegrees-
                     whether we want to maintain additional exact degress
                     (the search is still done using approximate ones)
@@ -1672,6 +1702,8 @@ OUTPUT PARAMETERS
 *************************************************************************/
 static void amdordering_vtxinit(const sparsematrix* a,
      ae_int_t n,
+     /* Boolean */ const ae_vector* eligible,
+     ae_bool haseligible,
      ae_bool checkexactdegrees,
      amdvertexset* s,
      ae_state *_state)
@@ -1688,6 +1720,14 @@ static void amdordering_vtxinit(const sparsematrix* a,
     s->checkexactdegrees = checkexactdegrees;
     s->smallestdegree = 0;
     bsetallocv(n, ae_true, &s->isvertex, _state);
+    if( haseligible )
+    {
+        bcopyallocv(n, eligible, &s->eligible, _state);
+    }
+    else
+    {
+        bsetallocv(n, ae_true, &s->eligible, _state);
+    }
     isetallocv(n, 0, &s->approxd, _state);
     for(i=0; i<=n-1; i++)
     {
@@ -1709,14 +1749,17 @@ static void amdordering_vtxinit(const sparsematrix* a,
     isetallocv(n, -1, &s->vnext, _state);
     for(i=0; i<=n-1; i++)
     {
-        j = s->approxd.ptr.p_int[i];
-        j0 = s->vbegin.ptr.p_int[j];
-        s->vbegin.ptr.p_int[j] = i;
-        s->vnext.ptr.p_int[i] = j0;
-        s->vprev.ptr.p_int[i] = -1;
-        if( j0>=0 )
+        if( s->eligible.ptr.p_bool[i] )
         {
-            s->vprev.ptr.p_int[j0] = i;
+            j = s->approxd.ptr.p_int[i];
+            j0 = s->vbegin.ptr.p_int[j];
+            s->vbegin.ptr.p_int[j] = i;
+            s->vnext.ptr.p_int[i] = j0;
+            s->vprev.ptr.p_int[i] = -1;
+            if( j0>=0 )
+            {
+                s->vprev.ptr.p_int[j0] = i;
+            }
         }
     }
 }
@@ -1745,21 +1788,26 @@ static void amdordering_vtxremovevertex(amdvertexset* s,
     ae_int_t idxnext;
 
 
-    d = s->approxd.ptr.p_int[p];
-    idxprev = s->vprev.ptr.p_int[p];
-    idxnext = s->vnext.ptr.p_int[p];
-    if( idxprev>=0 )
+    ae_assert(s->isvertex.ptr.p_bool[p], "AMD: trying to remove already removed vertex", _state);
+    if( s->eligible.ptr.p_bool[p] )
     {
-        s->vnext.ptr.p_int[idxprev] = idxnext;
+        d = s->approxd.ptr.p_int[p];
+        idxprev = s->vprev.ptr.p_int[p];
+        idxnext = s->vnext.ptr.p_int[p];
+        if( idxprev>=0 )
+        {
+            s->vnext.ptr.p_int[idxprev] = idxnext;
+        }
+        else
+        {
+            s->vbegin.ptr.p_int[d] = idxnext;
+        }
+        if( idxnext>=0 )
+        {
+            s->vprev.ptr.p_int[idxnext] = idxprev;
+        }
     }
-    else
-    {
-        s->vbegin.ptr.p_int[d] = idxnext;
-    }
-    if( idxnext>=0 )
-    {
-        s->vprev.ptr.p_int[idxnext] = idxprev;
-    }
+    s->eligible.ptr.p_bool[p] = ae_false;
     s->isvertex.ptr.p_bool[p] = ae_false;
     s->approxd.ptr.p_int[p] = -9999999;
     if( s->checkexactdegrees )
@@ -1770,7 +1818,9 @@ static void amdordering_vtxremovevertex(amdvertexset* s,
 
 
 /*************************************************************************
-Get approximate degree. Result is undefined for removed vertexes.
+Get approximate degree.
+
+Fails for removed or non-eligible vertexes.
 
 INPUT PARAMETERS
     S           -   vertex set
@@ -1790,6 +1840,7 @@ static ae_int_t amdordering_vtxgetapprox(const amdvertexset* s,
     ae_int_t result;
 
 
+    ae_assert(s->isvertex.ptr.p_bool[p], "AMD: trying to call vtxGetApprox() for removed vertex", _state);
     result = s->approxd.ptr.p_int[p];
     return result;
 }
@@ -1892,37 +1943,41 @@ static void amdordering_vtxupdateapproximatedegree(amdvertexset* s,
     ae_int_t oldbegin;
 
 
+    ae_assert(s->isvertex.ptr.p_bool[p], "AMD: trying to call vtxUpdateApproximateDegree() for removed vertex", _state);
     dold = s->approxd.ptr.p_int[p];
     if( dold==dnew )
     {
         return;
     }
-    idxprev = s->vprev.ptr.p_int[p];
-    idxnext = s->vnext.ptr.p_int[p];
-    if( idxprev>=0 )
-    {
-        s->vnext.ptr.p_int[idxprev] = idxnext;
-    }
-    else
-    {
-        s->vbegin.ptr.p_int[dold] = idxnext;
-    }
-    if( idxnext>=0 )
-    {
-        s->vprev.ptr.p_int[idxnext] = idxprev;
-    }
-    oldbegin = s->vbegin.ptr.p_int[dnew];
-    s->vbegin.ptr.p_int[dnew] = p;
-    s->vnext.ptr.p_int[p] = oldbegin;
-    s->vprev.ptr.p_int[p] = -1;
-    if( oldbegin>=0 )
-    {
-        s->vprev.ptr.p_int[oldbegin] = p;
-    }
     s->approxd.ptr.p_int[p] = dnew;
-    if( dnew<s->smallestdegree )
+    if( s->eligible.ptr.p_bool[p] )
     {
-        s->smallestdegree = dnew;
+        idxprev = s->vprev.ptr.p_int[p];
+        idxnext = s->vnext.ptr.p_int[p];
+        if( idxprev>=0 )
+        {
+            s->vnext.ptr.p_int[idxprev] = idxnext;
+        }
+        else
+        {
+            s->vbegin.ptr.p_int[dold] = idxnext;
+        }
+        if( idxnext>=0 )
+        {
+            s->vprev.ptr.p_int[idxnext] = idxprev;
+        }
+        oldbegin = s->vbegin.ptr.p_int[dnew];
+        s->vbegin.ptr.p_int[dnew] = p;
+        s->vnext.ptr.p_int[p] = oldbegin;
+        s->vprev.ptr.p_int[p] = -1;
+        if( oldbegin>=0 )
+        {
+            s->vprev.ptr.p_int[oldbegin] = p;
+        }
+        if( dnew<s->smallestdegree )
+        {
+            s->smallestdegree = dnew;
+        }
     }
 }
 
@@ -1977,6 +2032,8 @@ OUTPUT PARAMETERS
     Buf.ColumnSwaps-entries [K,K+NodeSize) are initialized by permutation
     P           -   pivot supervariable
     NodeSize    -   supernode size
+    
+If P<0, then we exhausted all eligible vertices, nothing is returned.
 
   -- ALGLIB PROJECT --
      Copyright 05.10.2020 by Bochkanov Sergey.
@@ -1994,7 +2051,10 @@ static void amdordering_amdselectpivotelement(amdbuffer* buf,
     *nodesize = 0;
 
     *p = amdordering_vtxgetapproxmindegree(&buf->vertexdegrees, _state);
-    ae_assert(*p>=0, "GenerateAMDPermutation: integrity check 3634 failed", _state);
+    if( *p<0 )
+    {
+        return;
+    }
     ae_assert(amdordering_vtxgetapprox(&buf->vertexdegrees, *p, _state)>=0, "integrity check RDFD2 failed", _state);
     *nodesize = 0;
     amdordering_knsstartenumeration(&buf->setsuper, *p, _state);
@@ -2291,6 +2351,14 @@ static void amdordering_amddetectsupernodes(amdbuffer* buf,
                     {
                         lpi = buf->sncandidates.ptr.p_int[i];
                         lpj = buf->sncandidates.ptr.p_int[j];
+                        if( buf->iseligible.ptr.p_bool[buf->sncandidates.ptr.p_int[i]]&&!buf->iseligible.ptr.p_bool[buf->sncandidates.ptr.p_int[j]] )
+                        {
+                            continue;
+                        }
+                        if( !buf->iseligible.ptr.p_bool[buf->sncandidates.ptr.p_int[i]]&&buf->iseligible.ptr.p_bool[buf->sncandidates.ptr.p_int[j]] )
+                        {
+                            continue;
+                        }
                         nisclear(&buf->adji, _state);
                         nisclear(&buf->adjj, _state);
                         amdordering_nsaddkth(&buf->adji, &buf->seta, lpi, _state);
@@ -2439,6 +2507,7 @@ void _amdvertexset_init(void* _p, ae_state *_state, ae_bool make_automatic)
     ae_vector_init(&p->approxd, 0, DT_INT, _state, make_automatic);
     ae_vector_init(&p->optionalexactd, 0, DT_INT, _state, make_automatic);
     ae_vector_init(&p->isvertex, 0, DT_BOOL, _state, make_automatic);
+    ae_vector_init(&p->eligible, 0, DT_BOOL, _state, make_automatic);
     ae_vector_init(&p->vbegin, 0, DT_INT, _state, make_automatic);
     ae_vector_init(&p->vprev, 0, DT_INT, _state, make_automatic);
     ae_vector_init(&p->vnext, 0, DT_INT, _state, make_automatic);
@@ -2455,6 +2524,7 @@ void _amdvertexset_init_copy(void* _dst, const void* _src, ae_state *_state, ae_
     ae_vector_init_copy(&dst->approxd, &src->approxd, _state, make_automatic);
     ae_vector_init_copy(&dst->optionalexactd, &src->optionalexactd, _state, make_automatic);
     ae_vector_init_copy(&dst->isvertex, &src->isvertex, _state, make_automatic);
+    ae_vector_init_copy(&dst->eligible, &src->eligible, _state, make_automatic);
     ae_vector_init_copy(&dst->vbegin, &src->vbegin, _state, make_automatic);
     ae_vector_init_copy(&dst->vprev, &src->vprev, _state, make_automatic);
     ae_vector_init_copy(&dst->vnext, &src->vnext, _state, make_automatic);
@@ -2468,6 +2538,7 @@ void _amdvertexset_clear(void* _p)
     ae_vector_clear(&p->approxd);
     ae_vector_clear(&p->optionalexactd);
     ae_vector_clear(&p->isvertex);
+    ae_vector_clear(&p->eligible);
     ae_vector_clear(&p->vbegin);
     ae_vector_clear(&p->vprev);
     ae_vector_clear(&p->vnext);
@@ -2481,6 +2552,7 @@ void _amdvertexset_destroy(void* _p)
     ae_vector_destroy(&p->approxd);
     ae_vector_destroy(&p->optionalexactd);
     ae_vector_destroy(&p->isvertex);
+    ae_vector_destroy(&p->eligible);
     ae_vector_destroy(&p->vbegin);
     ae_vector_destroy(&p->vprev);
     ae_vector_destroy(&p->vnext);
@@ -2535,6 +2607,7 @@ void _amdbuffer_init(void* _p, ae_state *_state, ae_bool make_automatic)
     ae_touch_ptr((void*)p);
     ae_vector_init(&p->iseliminated, 0, DT_BOOL, _state, make_automatic);
     ae_vector_init(&p->issupernode, 0, DT_BOOL, _state, make_automatic);
+    ae_vector_init(&p->iseligible, 0, DT_BOOL, _state, make_automatic);
     _amdknset_init(&p->setsuper, _state, make_automatic);
     _amdknset_init(&p->seta, _state, make_automatic);
     _amdknset_init(&p->sete, _state, make_automatic);
@@ -2571,6 +2644,7 @@ void _amdbuffer_init_copy(void* _dst, const void* _src, ae_state *_state, ae_boo
     dst->checkexactdegrees = src->checkexactdegrees;
     ae_vector_init_copy(&dst->iseliminated, &src->iseliminated, _state, make_automatic);
     ae_vector_init_copy(&dst->issupernode, &src->issupernode, _state, make_automatic);
+    ae_vector_init_copy(&dst->iseligible, &src->iseligible, _state, make_automatic);
     _amdknset_init_copy(&dst->setsuper, &src->setsuper, _state, make_automatic);
     _amdknset_init_copy(&dst->seta, &src->seta, _state, make_automatic);
     _amdknset_init_copy(&dst->sete, &src->sete, _state, make_automatic);
@@ -2605,6 +2679,7 @@ void _amdbuffer_clear(void* _p)
     ae_touch_ptr((void*)p);
     ae_vector_clear(&p->iseliminated);
     ae_vector_clear(&p->issupernode);
+    ae_vector_clear(&p->iseligible);
     _amdknset_clear(&p->setsuper);
     _amdknset_clear(&p->seta);
     _amdknset_clear(&p->sete);
@@ -2638,6 +2713,7 @@ void _amdbuffer_destroy(void* _p)
     ae_touch_ptr((void*)p);
     ae_vector_destroy(&p->iseliminated);
     ae_vector_destroy(&p->issupernode);
+    ae_vector_destroy(&p->iseligible);
     _amdknset_destroy(&p->setsuper);
     _amdknset_destroy(&p->seta);
     _amdknset_destroy(&p->sete);

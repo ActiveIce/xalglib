@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -738,8 +738,44 @@ Subroutine automatically sorts points, so caller may pass unsorted array.
   -- ALGLIB PROJECT --
      Copyright 24.06.2007 by Bochkanov Sergey
 *************************************************************************/
-void spline1dbuildakima(/* Real    */ const ae_vector* _x,
-     /* Real    */ const ae_vector* _y,
+void spline1dbuildakima(/* Real    */ const ae_vector* x,
+     /* Real    */ const ae_vector* y,
+     ae_int_t n,
+     spline1dinterpolant* c,
+     ae_state *_state);
+
+
+/*************************************************************************
+This subroutine builds modified Akima spline interpolant, with weights
+
+    W[i]=|Delta[I]-Delta[I-1]|
+
+replaced by
+
+    W[i]=|Delta[I]-Delta[I-1]|+0.5*|Delta[I]+Delta[I-1]|
+
+INPUT PARAMETERS:
+    X           -   spline nodes, array[0..N-1]
+    Y           -   function values, array[0..N-1]
+    N           -   points count (optional):
+                    * N>=2
+                    * if given, only first N points are used to build spline
+                    * if not given, automatically detected from X/Y sizes
+                      (len(X) must be equal to len(Y))
+
+OUTPUT PARAMETERS:
+    C           -   spline interpolant
+
+
+ORDER OF POINTS
+
+Subroutine automatically sorts points, so caller may pass unsorted array.
+
+  -- ALGLIB PROJECT --
+     Copyright 24.06.2007 by Bochkanov Sergey
+*************************************************************************/
+void spline1dbuildakimamod(/* Real    */ const ae_vector* x,
+     /* Real    */ const ae_vector* y,
      ae_int_t n,
      spline1dinterpolant* c,
      ae_state *_state);
@@ -979,6 +1015,35 @@ void spline1dfit(/* Real    */ const ae_vector* _x,
      double lambdans,
      spline1dinterpolant* s,
      spline1dfitreport* rep,
+     ae_state *_state);
+
+
+/*************************************************************************
+Internal version of Spline1DGridDiffCubic.
+
+Accepts pre-ordered X/Y, temporary arrays (which may be  preallocated,  if
+you want to save time, or not) and output array (which may be preallocated
+too).
+
+Y is passed as var-parameter because we may need to force last element  to
+be equal to the first one (if periodic boundary conditions are specified).
+
+  -- ALGLIB PROJECT --
+     Copyright 03.09.2010 by Bochkanov Sergey
+*************************************************************************/
+void spline1dgriddiffcubicinternal(/* Real    */ const ae_vector* x,
+     /* Real    */ ae_vector* y,
+     ae_int_t n,
+     ae_int_t boundltype,
+     double boundl,
+     ae_int_t boundrtype,
+     double boundr,
+     /* Real    */ ae_vector* d,
+     /* Real    */ ae_vector* a1,
+     /* Real    */ ae_vector* a2,
+     /* Real    */ ae_vector* a3,
+     /* Real    */ ae_vector* b,
+     /* Real    */ ae_vector* dt,
      ae_state *_state);
 
 

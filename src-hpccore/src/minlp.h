@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -63,6 +63,7 @@
 #include "cqmodels.h"
 #include "lpqpserv.h"
 #include "vipmsolver.h"
+#include "ipm2solver.h"
 
 
 /*$ Declarations $*/
@@ -102,6 +103,7 @@ typedef struct
     double ipmeps;
     dualsimplexstate dss;
     vipmstate ipm;
+    ipm2state ipm2;
     ae_vector adddtmpi;
     ae_vector adddtmpr;
     ae_vector tmpax;

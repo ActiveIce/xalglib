@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -69,6 +69,7 @@
 #include "minbleic.h"
 #include "qpbleicsolver.h"
 #include "vipmsolver.h"
+#include "ipm2solver.h"
 #include "minqp.h"
 
 
@@ -90,7 +91,6 @@ typedef struct
     double stpmax;
     ae_int_t modelage;
     ae_int_t maxmodelage;
-    ae_bool hasfi;
     double epsx;
     ae_vector x;
     double f;
@@ -128,6 +128,7 @@ to work with it.
 *************************************************************************/
 typedef struct
 {
+    ae_int_t protocolversion;
     ae_int_t n;
     ae_int_t m;
     double diffstep;
@@ -137,6 +138,7 @@ typedef struct
     double stpmax;
     ae_int_t maxmodelage;
     ae_bool makeadditers;
+    ae_bool userterminationneeded;
     ae_vector x;
     double f;
     ae_vector fi;
@@ -149,11 +151,24 @@ typedef struct
     ae_bool needfij;
     ae_bool needfi;
     ae_bool xupdated;
-    ae_bool userterminationneeded;
+    ae_int_t requesttype;
+    ae_vector reportx;
+    double reportf;
+    ae_int_t querysize;
+    ae_int_t queryfuncs;
+    ae_int_t queryvars;
+    ae_int_t querydim;
+    ae_int_t queryformulasize;
+    ae_vector querydata;
+    ae_vector replyfi;
+    ae_vector replydj;
+    sparsematrix replysj;
+    ae_vector tmpx1;
+    ae_vector tmpc1;
+    ae_vector tmpf1;
+    ae_vector tmpg1;
+    ae_matrix tmpj1;
     ae_int_t algomode;
-    ae_bool hasf;
-    ae_bool hasfi;
-    ae_bool hasg;
     ae_vector xbase;
     double fbase;
     ae_vector fibase;
@@ -179,6 +194,7 @@ typedef struct
     smoothnessmonitor smonitor;
     double teststep;
     ae_vector lastscaleused;
+    ae_int_t fstagnationcnt;
     ae_int_t repiterationscount;
     ae_int_t repterminationtype;
     ae_int_t repnfunc;
@@ -380,74 +396,6 @@ void minlmcreatev(ae_int_t n,
      ae_int_t m,
      /* Real    */ const ae_vector* x,
      double diffstep,
-     minlmstate* state,
-     ae_state *_state);
-
-
-/*************************************************************************
-    LEVENBERG-MARQUARDT-LIKE METHOD FOR NON-LINEAR OPTIMIZATION
-
-DESCRIPTION:
-This  function  is  used  to  find  minimum  of general form (not "sum-of-
--squares") function
-    F = F(x[0], ..., x[n-1])
-using  its  gradient  and  Hessian.  Levenberg-Marquardt modification with
-L-BFGS pre-optimization and internal pre-conditioned  L-BFGS  optimization
-after each Levenberg-Marquardt step is used.
-
-
-REQUIREMENTS:
-This algorithm will request following information during its operation:
-
-* function value F at given point X
-* F and gradient G (simultaneously) at given point X
-* F, G and Hessian H (simultaneously) at given point X
-
-There are several overloaded versions of  MinLMOptimize()  function  which
-correspond  to  different LM-like optimization algorithms provided by this
-unit. You should choose version which accepts func(),  grad()  and  hess()
-function pointers. First pointer is used to calculate F  at  given  point,
-second  one  calculates  F(x)  and  grad F(x),  third one calculates F(x),
-grad F(x), hess F(x).
-
-You can try to initialize MinLMState structure with FGH-function and  then
-use incorrect version of MinLMOptimize() (for example, version which  does
-not provide Hessian matrix), but it will lead to  exception  being  thrown
-after first attempt to calculate Hessian.
-
-
-USAGE:
-1. User initializes algorithm state with MinLMCreateFGH() call
-2. User tunes solver parameters with MinLMSetCond(),  MinLMSetStpMax() and
-   other functions
-3. User calls MinLMOptimize() function which  takes algorithm  state   and
-   pointers (delegates, etc.) to callback functions.
-4. User calls MinLMResults() to get solution
-5. Optionally, user may call MinLMRestartFrom() to solve  another  problem
-   with same N but another starting point and/or another function.
-   MinLMRestartFrom() allows to reuse already initialized structure.
-
-
-INPUT PARAMETERS:
-    N       -   dimension, N>1
-                * if given, only leading N elements of X are used
-                * if not given, automatically determined from size of X
-    X       -   initial solution, array[0..N-1]
-
-OUTPUT PARAMETERS:
-    State   -   structure which stores algorithm state
-
-NOTES:
-1. you may tune stopping conditions with MinLMSetCond() function
-2. if target function contains exp() or other fast growing functions,  and
-   optimization algorithm makes too large steps which leads  to  overflow,
-   use MinLMSetStpMax() function to bound algorithm's steps.
-
-  -- ALGLIB --
-     Copyright 30.03.2009 by Bochkanov Sergey
-*************************************************************************/
-void minlmcreatefgh(ae_int_t n,
-     /* Real    */ const ae_vector* x,
      minlmstate* state,
      ae_state *_state);
 
@@ -696,23 +644,32 @@ void minlmsetacctype(minlmstate* state,
 
 
 /*************************************************************************
-NOTES:
 
-1. Depending on function used to create state  structure,  this  algorithm
-   may accept Jacobian and/or Hessian and/or gradient.  According  to  the
-   said above, there ase several versions of this function,  which  accept
-   different sets of callbacks.
+CALLBACK PARALLELISM
 
-   This flexibility opens way to subtle errors - you may create state with
-   MinLMCreateFGH() (optimization using Hessian), but call function  which
-   does not accept Hessian. So when algorithm will request Hessian,  there
-   will be no callback to call. In this case exception will be thrown.
+The MINLM optimizer supports parallel parallel  numerical  differentiation
+('callback parallelism'). This feature, which  is  present  in  commercial
+ALGLIB  editions,  greatly   accelerates   optimization   with   numerical
+differentiation of an expensive target functions.
 
-   Be careful to avoid such errors because there is no way to find them at
-   compile time - you can see them at runtime only.
+Callback parallelism is usually  beneficial  when  computing  a  numerical
+gradient requires more than several  milliseconds.  In this case  the  job
+of computing individual gradient components can be split between  multiple
+threads. Even inexpensive targets can benefit  from  parallelism,  if  you
+have many variables.
+
+If you solve a curve fitting problem, i.e. the function vector is actually
+the same function computed at different points of a data points space,  it
+may  be  better  to  use  an LSFIT curve fitting solver, which offers more
+fine-grained parallelism due to knowledge of  the  problem  structure.  In
+particular, it can accelerate both numerical differentiation  and problems
+with user-supplied gradients.
+
+ALGLIB Reference Manual, 'Working with commercial  version' section, tells
+how to activate callback parallelism for your programming language.
 
   -- ALGLIB --
-     Copyright 10.03.2009 by Bochkanov Sergey
+     Copyright 03.12.2023 by Bochkanov Sergey
 *************************************************************************/
 ae_bool minlmiteration(minlmstate* state, ae_state *_state);
 
@@ -918,47 +875,24 @@ void minlmrequesttermination(minlmstate* state, ae_state *_state);
 
 
 /*************************************************************************
-This is obsolete function.
-
-Since ALGLIB 3.3 it is equivalent to MinLMCreateVJ().
-
-  -- ALGLIB --
-     Copyright 30.03.2009 by Bochkanov Sergey
+Set V1 reverse communication protocol
 *************************************************************************/
-void minlmcreatevgj(ae_int_t n,
-     ae_int_t m,
-     /* Real    */ const ae_vector* x,
-     minlmstate* state,
-     ae_state *_state);
+void minlmsetprotocolv1(minlmstate* state, ae_state *_state);
 
 
 /*************************************************************************
-This is obsolete function.
-
-Since ALGLIB 3.3 it is equivalent to MinLMCreateFJ().
-
-  -- ALGLIB --
-     Copyright 30.03.2009 by Bochkanov Sergey
+Set V2 reverse communication protocol
 *************************************************************************/
-void minlmcreatefgj(ae_int_t n,
-     ae_int_t m,
-     /* Real    */ const ae_vector* x,
-     minlmstate* state,
-     ae_state *_state);
+void minlmsetprotocolv2(minlmstate* state, ae_state *_state);
 
 
 /*************************************************************************
-This function is considered obsolete since ALGLIB 3.1.0 and is present for
-backward  compatibility  only.  We  recommend  to use MinLMCreateVJ, which
-provides similar, but more consistent and feature-rich interface.
-
-  -- ALGLIB --
-     Copyright 30.03.2009 by Bochkanov Sergey
+Unpacks dense Jacobian into array
 *************************************************************************/
-void minlmcreatefj(ae_int_t n,
-     ae_int_t m,
-     /* Real    */ const ae_vector* x,
-     minlmstate* state,
+void unpackdj(ae_int_t m,
+     ae_int_t n,
+     /* Real    */ const ae_vector* replydj,
+     /* Real    */ ae_matrix* jac,
      ae_state *_state);
 void _minlmstepfinder_init(void* _p, ae_state *_state, ae_bool make_automatic);
 void _minlmstepfinder_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);

@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -24,6 +24,8 @@
 #include "apserv.h"
 #include "ablasf.h"
 #include "tsort.h"
+#include "xdebug.h"
+#include "hqrnd.h"
 
 
 /*$ Declarations $*/
@@ -51,6 +53,7 @@ typedef struct
     ae_vector curboxmin;
     ae_vector curboxmax;
     double curdist;
+    ae_vector xqc;
 } kdtreerequestbuffer;
 
 
@@ -1190,6 +1193,58 @@ Serializer: unserialization
      Copyright 14.03.2011 by Bochkanov Sergey
 *************************************************************************/
 void kdtreeunserialize(ae_serializer* s, kdtree* tree, ae_state *_state);
+
+
+/*************************************************************************
+This function returns an approximate cost (measured in CPU  cycles)  of  a
+R-NN query with some fixed R.
+
+A VERY CRUDE APPROXIMATION IS RETURNED, ONLY AN ORDER OF MAGNITUDE CORRECT
+
+This approximation can be used in a multithreaded code which decides whether
+it makes sense to activate multithreading or not.
+
+Internally this function is implemented by performing some small (about 50)
+amount of random queries and computing an average number of R-neighbors of
+a node. This number is multiplied by log2(NPoints), and then  by  a  crude
+estimate of how many CPU cycles is required to perform a split during kd-tree
+search.
+
+This function is deterministic, i.e. it always uses a fixed seed to initialize
+its internal RNG.
+
+IMPORTANT: this function can not be used in multithreaded code because  it
+           uses internal temporary buffer of kd-tree object, which can not
+           be shared between multiple threads.
+           
+           See kdtreeapproxrnnquerycost() for a thread-safe alternative.
+
+INPUT PARAMETERS
+    KDT         -   KD-tree
+    R           -   radius of sphere (in corresponding norm), R>0
+
+RESULT
+    double precision number, approximate query cost
+
+  -- ALGLIB --
+     Copyright 24.11.2023 by Bochkanov Sergey
+*************************************************************************/
+double kdtreeapproxrnnquerycost(kdtree* kdt, double r, ae_state *_state);
+
+
+/*************************************************************************
+This function returns an approximate cost (measured in CPU  cycles)  of  a
+R-NN query with some fixed R.
+
+A thread-safe version of kdtreeapproxrnnquerycost() using a request buffer.
+
+  -- ALGLIB --
+     Copyright 24.11.2023 by Bochkanov Sergey
+*************************************************************************/
+double kdtreetsapproxrnnquerycost(const kdtree* kdt,
+     kdtreerequestbuffer* buf,
+     double r,
+     ae_state *_state);
 void _kdtreerequestbuffer_init(void* _p, ae_state *_state, ae_bool make_automatic);
 void _kdtreerequestbuffer_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
 void _kdtreerequestbuffer_clear(void* _p);

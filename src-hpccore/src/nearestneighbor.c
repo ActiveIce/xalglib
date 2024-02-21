@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -1797,6 +1797,101 @@ void kdtreeunserialize(ae_serializer* s, kdtree* tree, ae_state *_state)
 
 
 /*************************************************************************
+This function returns an approximate cost (measured in CPU  cycles)  of  a
+R-NN query with some fixed R.
+
+A VERY CRUDE APPROXIMATION IS RETURNED, ONLY AN ORDER OF MAGNITUDE CORRECT
+
+This approximation can be used in a multithreaded code which decides whether
+it makes sense to activate multithreading or not.
+
+Internally this function is implemented by performing some small (about 50)
+amount of random queries and computing an average number of R-neighbors of
+a node. This number is multiplied by log2(NPoints), and then  by  a  crude
+estimate of how many CPU cycles is required to perform a split during kd-tree
+search.
+
+This function is deterministic, i.e. it always uses a fixed seed to initialize
+its internal RNG.
+
+IMPORTANT: this function can not be used in multithreaded code because  it
+           uses internal temporary buffer of kd-tree object, which can not
+           be shared between multiple threads.
+           
+           See kdtreeapproxrnnquerycost() for a thread-safe alternative.
+
+INPUT PARAMETERS
+    KDT         -   KD-tree
+    R           -   radius of sphere (in corresponding norm), R>0
+
+RESULT
+    double precision number, approximate query cost
+
+  -- ALGLIB --
+     Copyright 24.11.2023 by Bochkanov Sergey
+*************************************************************************/
+double kdtreeapproxrnnquerycost(kdtree* kdt, double r, ae_state *_state)
+{
+    double result;
+
+
+    result = kdtreetsapproxrnnquerycost(kdt, &kdt->innerbuf, r, _state);
+    return result;
+}
+
+
+/*************************************************************************
+This function returns an approximate cost (measured in CPU  cycles)  of  a
+R-NN query with some fixed R.
+
+A thread-safe version of kdtreeapproxrnnquerycost() using a request buffer.
+
+  -- ALGLIB --
+     Copyright 24.11.2023 by Bochkanov Sergey
+*************************************************************************/
+double kdtreetsapproxrnnquerycost(const kdtree* kdt,
+     kdtreerequestbuffer* buf,
+     double r,
+     ae_state *_state)
+{
+    ae_frame _frame_block;
+    ae_int_t i;
+    ae_int_t j;
+    ae_int_t k;
+    ae_int_t cnt;
+    ae_int_t nx;
+    double log2n;
+    double avgrnn;
+    hqrndstate rs;
+    double result;
+
+    ae_frame_make(_state, &_frame_block);
+    memset(&rs, 0, sizeof(rs));
+    _hqrndstate_init(&rs, _state, ae_true);
+
+    ae_assert(ae_isfinite(r, _state)&&ae_fp_greater(r,(double)(0)), "KDTreeApproxRNNQueryCost: incorrect R!", _state);
+    hqrndseed(46532, 66356, &rs, _state);
+    nx = kdt->nx;
+    cnt = ae_minint(50, kdt->n, _state);
+    log2n = ae_log((double)(1+kdt->n), _state)/ae_log((double)(2), _state);
+    avgrnn = (double)(0);
+    rallocv(nx, &buf->xqc, _state);
+    for(i=0; i<=cnt-1; i++)
+    {
+        k = hqrnduniformi(&rs, kdt->n, _state);
+        for(j=0; j<=nx-1; j++)
+        {
+            buf->xqc.ptr.p_double[j] = kdt->xy.ptr.pp_double[k][nx+j];
+        }
+        avgrnn = avgrnn+(double)nearestneighbor_tsqueryrnn(kdt, buf, &buf->xqc, r, ae_true, ae_false, _state)/(double)cnt;
+    }
+    result = avgrnn*log2n*(double)15;
+    ae_frame_leave(_state);
+    return result;
+}
+
+
+/*************************************************************************
 R-NN query: all points within  R-sphere  centered  at  X,  using  external
 thread-local buffer, sorted by distance between point and X (by ascending)
 
@@ -2813,6 +2908,7 @@ void _kdtreerequestbuffer_init(void* _p, ae_state *_state, ae_bool make_automati
     ae_vector_init(&p->buf, 0, DT_REAL, _state, make_automatic);
     ae_vector_init(&p->curboxmin, 0, DT_REAL, _state, make_automatic);
     ae_vector_init(&p->curboxmax, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->xqc, 0, DT_REAL, _state, make_automatic);
 }
 
 
@@ -2834,6 +2930,7 @@ void _kdtreerequestbuffer_init_copy(void* _dst, const void* _src, ae_state *_sta
     ae_vector_init_copy(&dst->curboxmin, &src->curboxmin, _state, make_automatic);
     ae_vector_init_copy(&dst->curboxmax, &src->curboxmax, _state, make_automatic);
     dst->curdist = src->curdist;
+    ae_vector_init_copy(&dst->xqc, &src->xqc, _state, make_automatic);
 }
 
 
@@ -2849,6 +2946,7 @@ void _kdtreerequestbuffer_clear(void* _p)
     ae_vector_clear(&p->buf);
     ae_vector_clear(&p->curboxmin);
     ae_vector_clear(&p->curboxmax);
+    ae_vector_clear(&p->xqc);
 }
 
 
@@ -2864,6 +2962,7 @@ void _kdtreerequestbuffer_destroy(void* _p)
     ae_vector_destroy(&p->buf);
     ae_vector_destroy(&p->curboxmin);
     ae_vector_destroy(&p->curboxmax);
+    ae_vector_destroy(&p->xqc);
 }
 
 

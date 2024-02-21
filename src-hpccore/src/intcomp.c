@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -118,7 +118,7 @@ void nsfitspherex(/* Real    */ const ae_matrix* xy,
     *rlo = 0.0;
     *rhi = 0.0;
 
-    fitspherex(xy, npoints, nx, problemtype, epsx, aulits, penalty, cx, rlo, rhi, _state);
+    fitspherex(xy, npoints, nx, problemtype, epsx, aulits, cx, rlo, rhi, _state);
 }
 
 

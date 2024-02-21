@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -69,12 +69,15 @@
 #include "qpdenseaulsolver.h"
 #include "qpbleicsolver.h"
 #include "vipmsolver.h"
+#include "ipm2solver.h"
 #include "minqp.h"
 #include "minlm.h"
 #include "lpqppresolve.h"
 #include "reviseddualsimplex.h"
 #include "nlcslp.h"
 #include "nlcsqp.h"
+#include "nlcfsqp.h"
+#include "nlcaul.h"
 #include "minnlc.h"
 
 
@@ -242,9 +245,6 @@ This  is  expert  function  which  allows  to  tweak  many  parameters  of
 underlying nonlinear solver:
 * stopping criteria for inner iterations
 * number of outer iterations
-* penalty coefficient used to handle  nonlinear  constraints  (we  convert
-  unconstrained nonsmooth optimization problem ivolving max() and/or min()
-  operations to quadratically constrained smooth one).
 
 You may tweak all these parameters or only some  of  them,  leaving  other
 ones at their default state - just specify zero  value,  and  solver  will
@@ -279,13 +279,6 @@ INPUT PARAMETERS:
                   speed up solver; 10 often results in good combination of
                   precision and speed; sometimes you may get good results
                   with just 6 outer iterations.
-                Ignored for ProblemType=0.
-    Penalty -   penalty coefficient for NLC optimizer:
-                * must be non-negative
-                * use 0 to choose default value (1.0E6 in current version)
-                * it should be really large, 1.0E6...1.0E7 is a good value
-                  to start from;
-                * generally, default value is good enough
                 Ignored for ProblemType=0.
 
 OUTPUT PARAMETERS:
@@ -390,7 +383,6 @@ void fitspherex(/* Real    */ const ae_matrix* xy,
      ae_int_t problemtype,
      double epsx,
      ae_int_t aulits,
-     double penalty,
      /* Real    */ ae_vector* cx,
      double* rlo,
      double* rhi,
@@ -444,14 +436,6 @@ INPUT PARAMETERS:
                   speed up solver; 10 often results in good combination of
                   precision and speed
                 Ignored for ProblemType=0.
-    Penalty -   penalty coefficient for NLC optimizer (ignored  for  SLP):
-                * must be non-negative
-                * use 0 to choose default value (1.0E6 in current version)
-                * it should be really large, 1.0E6...1.0E7 is a good value
-                  to start from;
-                * generally, default value is good enough
-                * ignored by SLP optimizer
-                Ignored for ProblemType=0.
 
 OUTPUT PARAMETERS:
     CX      -   central point for a sphere
@@ -474,7 +458,6 @@ void fitsphereinternal(/* Real    */ const ae_matrix* xy,
      ae_int_t solvertype,
      double epsx,
      ae_int_t aulits,
-     double penalty,
      /* Real    */ ae_vector* cx,
      double* rlo,
      double* rhi,

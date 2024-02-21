@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -84,6 +84,7 @@ typedef struct
     ae_vector s;
     ae_int_t prectype;
     ae_vector diagh;
+    ae_int_t protocolversion;
     ae_vector x;
     double f;
     ae_vector g;
@@ -1093,6 +1094,12 @@ INPUT PARAMETERS:
      Copyright 28.11.2010 by Bochkanov Sergey
 *************************************************************************/
 void minbleicemergencytermination(minbleicstate* state, ae_state *_state);
+
+
+/*************************************************************************
+Set V1 reverse communication protocol
+*************************************************************************/
+void minbleicsetprotocolv1(minbleicstate* state, ae_state *_state);
 void _minbleicstate_init(void* _p, ae_state *_state, ae_bool make_automatic);
 void _minbleicstate_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
 void _minbleicstate_clear(void* _p);

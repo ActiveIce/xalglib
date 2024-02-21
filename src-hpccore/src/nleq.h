@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -293,6 +293,12 @@ INPUT PARAMETERS:
 void nleqrestartfrom(nleqstate* state,
      /* Real    */ const ae_vector* x,
      ae_state *_state);
+
+
+/*************************************************************************
+Sets V1 reverse communication protocol
+*************************************************************************/
+void nleqsetprotocolv1(nleqstate* state, ae_state *_state);
 void _nleqstate_init(void* _p, ae_state *_state, ae_bool make_automatic);
 void _nleqstate_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
 void _nleqstate_clear(void* _p);

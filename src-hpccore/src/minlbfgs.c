@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -55,7 +55,6 @@ USAGE:
    with same N/M but another starting point and/or another function.
    MinLBFGSRestartFrom() allows to reuse already initialized structure.
 
-
 INPUT PARAMETERS:
     N       -   problem dimension. N>0
     M       -   number of corrections in the BFGS scheme of Hessian
@@ -69,6 +68,18 @@ INPUT PARAMETERS:
 OUTPUT PARAMETERS:
     State   -   structure which stores algorithm state
     
+IMPORTANT: the   LBFGS  optimizer  supports  parallel  parallel  numerical
+           differentiation  ('callback    parallelism').   This   feature,
+           which  is  present  in  commercial   ALGLIB   editions  greatly
+           accelerates  optimization  with  numerical  differentiation  of
+           an expensive target functions.
+
+           Callback parallelism is usually  beneficial  when  computing  a
+           numerical gradient requires  more  than  several  milliseconds.
+
+           See ALGLIB Reference Manual, 'Working with commercial version'
+           section,  and  comments  on  minlbfgsoptimize() function for
+           more information.
 
 NOTES:
 1. you may tune stopping conditions with MinLBFGSSetCond() function
@@ -121,6 +132,20 @@ INPUT PARAMETERS:
 
 OUTPUT PARAMETERS:
     State   -   structure which stores algorithm state
+
+
+IMPORTANT: the   LBFGS  optimizer  supports  parallel  parallel  numerical
+           differentiation  ('callback    parallelism').   This   feature,
+           which  is  present  in  commercial   ALGLIB   editions  greatly
+           accelerates  optimization  with  numerical  differentiation  of
+           an expensive target functions.
+
+           Callback parallelism is usually  beneficial  when  computing  a
+           numerical gradient requires  more  than  several  milliseconds.
+
+           See ALGLIB Reference Manual, 'Working with commercial version'
+           section,  and  comments  on  minlbfgsoptimize() function for
+           more information.
 
 NOTES:
 1. algorithm uses 4-point central formula for differentiation.
@@ -363,6 +388,7 @@ void minlbfgscreatex(ae_int_t n,
     /*
      * Initialize
      */
+    state->protocolversion = 1;
     state->teststep = (double)(0);
     state->smoothnessguardlevel = 0;
     smoothnessmonitorinit(&state->smonitor, &state->s, 0, 0, ae_false, _state);
@@ -640,7 +666,24 @@ void minlbfgssetpreclowrankexact(minlbfgsstate* state,
 
 
 /*************************************************************************
-NOTES:
+
+CALLBACK PARALLELISM:
+
+The LBFGS optimizer supports parallel numerical differentiation ('callback
+parallelism').  This  feature,  which  is  present  in  commercial  ALGLIB
+editions,  greatly  accelerates  numerical  differentiation  of  expensive
+targets.
+
+Callback parallelism is usually beneficial computing a numerical  gradient
+requires more than several milliseconds. In this case the job of computing
+individual gradient components can be split between multiple threads. Even
+inexpensive  targets  can  benefit  from  parallelism, if  you  have  many
+variables.
+
+ALGLIB Reference Manual, 'Working with commercial  version' section, tells
+how to activate callback parallelism for your programming language.
+
+CALLBACKS ACCEPTED
 
 1. This function has two different implementations: one which  uses  exact
    (analytical) user-supplied gradient,  and one which uses function value
@@ -781,6 +824,34 @@ ae_bool minlbfgsiteration(minlbfgsstate* state, ae_state *_state)
     {
         goto lbl_14;
     }
+    if( state->rstate.stage==15 )
+    {
+        goto lbl_15;
+    }
+    if( state->rstate.stage==16 )
+    {
+        goto lbl_16;
+    }
+    if( state->rstate.stage==17 )
+    {
+        goto lbl_17;
+    }
+    if( state->rstate.stage==18 )
+    {
+        goto lbl_18;
+    }
+    if( state->rstate.stage==19 )
+    {
+        goto lbl_19;
+    }
+    if( state->rstate.stage==20 )
+    {
+        goto lbl_20;
+    }
+    if( state->rstate.stage==21 )
+    {
+        goto lbl_21;
+    }
     
     /*
      * Routine body
@@ -809,40 +880,160 @@ ae_bool minlbfgsiteration(minlbfgsstate* state, ae_state *_state)
     }
     
     /*
+     * Allocate temporaries, as mandated by the V2 protocol
+     */
+    if( state->protocolversion==2 )
+    {
+        rallocm(1, n, &state->tmpj1, _state);
+        rallocv(1, &state->tmpf1, _state);
+        rallocv(n, &state->tmpg1, _state);
+        rallocv(n, &state->tmpx1, _state);
+    }
+    
+    /*
      *  Check, that transferred derivative value is right
      */
     state->stp = (double)(0);
-    minlbfgs_clearrequestfields(state, _state);
     if( !(ae_fp_eq(state->diffstep,(double)(0))&&ae_fp_greater(state->teststep,(double)(0))) )
     {
-        goto lbl_15;
+        goto lbl_22;
     }
-lbl_17:
+lbl_24:
     if( !smoothnessmonitorcheckgradientatx0(&state->smonitor, &state->xbase, &state->s, &state->s, &state->s, ae_false, state->teststep, _state) )
     {
-        goto lbl_18;
+        goto lbl_25;
     }
-    for(i=0; i<=n-1; i++)
+    if( state->protocolversion!=2 )
     {
-        state->x.ptr.p_double[i] = state->smonitor.x.ptr.p_double[i];
+        goto lbl_26;
     }
-    state->needfg = ae_true;
+    
+    /*
+     * Use V2 reverse communication protocol
+     */
+    state->requesttype = 2;
+    state->querysize = 1;
+    state->queryfuncs = 1;
+    state->queryvars = n;
+    state->querydim = 0;
+    rcopyallocv(n, &state->smonitor.x, &state->querydata, _state);
+    rallocv(1, &state->replyfi, _state);
+    rallocv(n, &state->replydj, _state);
     state->rstate.stage = 0;
     goto lbl_rcomm;
 lbl_0:
+    state->smonitor.fi.ptr.p_double[0] = state->replyfi.ptr.p_double[0];
+    rcopyvr(n, &state->replydj, &state->smonitor.j, 0, _state);
+    goto lbl_27;
+lbl_26:
+    
+    /*
+     * Use legacy V1 protocol
+     */
+    ae_assert(state->protocolversion==1, "MINLBFGS: unexpected protocol, integrity check 0125 failed", _state);
+    minlbfgs_clearrequestfields(state, _state);
+    rcopyv(n, &state->smonitor.x, &state->x, _state);
+    state->needfg = ae_true;
+    state->rstate.stage = 1;
+    goto lbl_rcomm;
+lbl_1:
     state->needfg = ae_false;
     state->smonitor.fi.ptr.p_double[0] = state->f;
-    for(i=0; i<=n-1; i++)
-    {
-        state->smonitor.j.ptr.pp_double[0][i] = state->g.ptr.p_double[i];
-    }
-    goto lbl_17;
-lbl_18:
-lbl_15:
+    rcopyvr(n, &state->g, &state->smonitor.j, 0, _state);
+lbl_27:
+    goto lbl_24;
+lbl_25:
+lbl_22:
     
     /*
      * Calculate F/G at the initial point
      */
+    if( state->protocolversion!=2 )
+    {
+        goto lbl_28;
+    }
+    
+    /*
+     * Issue request using V2 protocol
+     */
+    rcopyv(n, &state->xbase, &state->x, _state);
+    state->stp = (double)(0);
+    if( ae_fp_neq(state->diffstep,(double)(0)) )
+    {
+        goto lbl_30;
+    }
+    
+    /*
+     * Request dense analytic Jacobian
+     */
+    state->requesttype = 2;
+    state->querysize = 1;
+    state->queryfuncs = 1;
+    state->queryvars = n;
+    state->querydim = 0;
+    rcopyallocv(n, &state->x, &state->querydata, _state);
+    rallocv(1, &state->replyfi, _state);
+    rallocv(n, &state->replydj, _state);
+    state->rstate.stage = 2;
+    goto lbl_rcomm;
+lbl_2:
+    state->f = state->replyfi.ptr.p_double[0];
+    rcopyallocv(n, &state->replydj, &state->g, _state);
+    goto lbl_31;
+lbl_30:
+    
+    /*
+     * Request dense numerical Jacobian, propose 5-point formula
+     */
+    state->requesttype = 3;
+    state->querysize = 1;
+    state->queryfuncs = 1;
+    state->queryvars = n;
+    state->querydim = 0;
+    state->queryformulasize = 5;
+    rallocv(n+n*2*state->queryformulasize, &state->querydata, _state);
+    rcopyallocv(n, &state->x, &state->querydata, _state);
+    for(i=0; i<=n-1; i++)
+    {
+        v = state->diffstep*state->s.ptr.p_double[i];
+        state->querydata.ptr.p_double[n+10*i+0*2+0] = (double)(0);
+        state->querydata.ptr.p_double[n+10*i+0*2+1] = (double)(0);
+        state->querydata.ptr.p_double[n+10*i+1*2+0] = state->querydata.ptr.p_double[i]-1.0*v;
+        state->querydata.ptr.p_double[n+10*i+1*2+1] = (double)1/((double)6*v);
+        state->querydata.ptr.p_double[n+10*i+2*2+0] = state->querydata.ptr.p_double[i]-0.5*v;
+        state->querydata.ptr.p_double[n+10*i+2*2+1] = -(double)8/((double)6*v);
+        state->querydata.ptr.p_double[n+10*i+3*2+0] = state->querydata.ptr.p_double[i]+0.5*v;
+        state->querydata.ptr.p_double[n+10*i+3*2+1] = (double)8/((double)6*v);
+        state->querydata.ptr.p_double[n+10*i+4*2+0] = state->querydata.ptr.p_double[i]+1.0*v;
+        state->querydata.ptr.p_double[n+10*i+4*2+1] = -(double)1/((double)6*v);
+    }
+    rallocv(1, &state->replyfi, _state);
+    rallocv(n, &state->replydj, _state);
+    state->rstate.stage = 3;
+    goto lbl_rcomm;
+lbl_3:
+    state->f = state->replyfi.ptr.p_double[0];
+    rcopyallocv(n, &state->replydj, &state->g, _state);
+lbl_31:
+    if( !state->xrep )
+    {
+        goto lbl_32;
+    }
+    state->requesttype = -1;
+    state->queryvars = n;
+    state->reportf = state->f;
+    rcopyallocv(n, &state->x, &state->reportx, _state);
+    state->rstate.stage = 4;
+    goto lbl_rcomm;
+lbl_4:
+lbl_32:
+    goto lbl_29;
+lbl_28:
+    
+    /*
+     * Use legacy V1 protocol
+     */
+    ae_assert(state->protocolversion==1, "MINLBFGS: unexpected protocol, integrity check 9600 failed", _state);
     for(i=0; i<=n-1; i++)
     {
         state->x.ptr.p_double[i] = state->xbase.ptr.p_double[i];
@@ -851,67 +1042,68 @@ lbl_15:
     minlbfgs_clearrequestfields(state, _state);
     if( ae_fp_neq(state->diffstep,(double)(0)) )
     {
-        goto lbl_19;
+        goto lbl_34;
     }
     state->needfg = ae_true;
-    state->rstate.stage = 1;
-    goto lbl_rcomm;
-lbl_1:
-    state->needfg = ae_false;
-    goto lbl_20;
-lbl_19:
-    state->needf = ae_true;
-    state->rstate.stage = 2;
-    goto lbl_rcomm;
-lbl_2:
-    state->fbase = state->f;
-    i = 0;
-lbl_21:
-    if( i>n-1 )
-    {
-        goto lbl_23;
-    }
-    v = state->x.ptr.p_double[i];
-    state->x.ptr.p_double[i] = v-state->diffstep*state->s.ptr.p_double[i];
-    state->rstate.stage = 3;
-    goto lbl_rcomm;
-lbl_3:
-    state->fm2 = state->f;
-    state->x.ptr.p_double[i] = v-0.5*state->diffstep*state->s.ptr.p_double[i];
-    state->rstate.stage = 4;
-    goto lbl_rcomm;
-lbl_4:
-    state->fm1 = state->f;
-    state->x.ptr.p_double[i] = v+0.5*state->diffstep*state->s.ptr.p_double[i];
     state->rstate.stage = 5;
     goto lbl_rcomm;
 lbl_5:
-    state->fp1 = state->f;
-    state->x.ptr.p_double[i] = v+state->diffstep*state->s.ptr.p_double[i];
+    state->needfg = ae_false;
+    goto lbl_35;
+lbl_34:
+    state->needf = ae_true;
     state->rstate.stage = 6;
     goto lbl_rcomm;
 lbl_6:
+    state->fbase = state->f;
+    i = 0;
+lbl_36:
+    if( i>n-1 )
+    {
+        goto lbl_38;
+    }
+    v = state->x.ptr.p_double[i];
+    state->x.ptr.p_double[i] = v-state->diffstep*state->s.ptr.p_double[i];
+    state->rstate.stage = 7;
+    goto lbl_rcomm;
+lbl_7:
+    state->fm2 = state->f;
+    state->x.ptr.p_double[i] = v-0.5*state->diffstep*state->s.ptr.p_double[i];
+    state->rstate.stage = 8;
+    goto lbl_rcomm;
+lbl_8:
+    state->fm1 = state->f;
+    state->x.ptr.p_double[i] = v+0.5*state->diffstep*state->s.ptr.p_double[i];
+    state->rstate.stage = 9;
+    goto lbl_rcomm;
+lbl_9:
+    state->fp1 = state->f;
+    state->x.ptr.p_double[i] = v+state->diffstep*state->s.ptr.p_double[i];
+    state->rstate.stage = 10;
+    goto lbl_rcomm;
+lbl_10:
     state->fp2 = state->f;
     state->x.ptr.p_double[i] = v;
     state->g.ptr.p_double[i] = ((double)8*(state->fp1-state->fm1)-(state->fp2-state->fm2))/((double)6*state->diffstep*state->s.ptr.p_double[i]);
     i = i+1;
-    goto lbl_21;
-lbl_23:
+    goto lbl_36;
+lbl_38:
     state->f = state->fbase;
     state->needf = ae_false;
-lbl_20:
-    trimprepare(state->f, &state->trimthreshold, _state);
+lbl_35:
     if( !state->xrep )
     {
-        goto lbl_24;
+        goto lbl_39;
     }
     minlbfgs_clearrequestfields(state, _state);
     state->xupdated = ae_true;
-    state->rstate.stage = 7;
+    state->rstate.stage = 11;
     goto lbl_rcomm;
-lbl_7:
+lbl_11:
     state->xupdated = ae_false;
-lbl_24:
+lbl_39:
+lbl_29:
+    trimprepare(state->f, &state->trimthreshold, _state);
     if( state->userterminationneeded )
     {
         
@@ -940,15 +1132,14 @@ lbl_24:
      * Choose initial step and direction.
      * Apply preconditioner, if we have something other than default.
      */
-    ae_v_moveneg(&state->d.ptr.p_double[0], 1, &state->g.ptr.p_double[0], 1, ae_v_len(0,n-1));
+    rcopymulv(n, -1.0, &state->g, &state->d, _state);
     if( state->prectype==0 )
     {
         
         /*
          * Default preconditioner is used, but we can't use it before iterations will start
          */
-        v = ae_v_dotproduct(&state->g.ptr.p_double[0], 1, &state->g.ptr.p_double[0], 1, ae_v_len(0,n-1));
-        v = ae_sqrt(v, _state);
+        v = ae_sqrt(rdotv2(n, &state->g, _state), _state);
         if( ae_fp_eq(state->stpmax,(double)(0)) )
         {
             state->stp = ae_minreal(1.0/v, (double)(1), _state);
@@ -973,10 +1164,7 @@ lbl_24:
         /*
          * diagonal approximation is used
          */
-        for(i=0; i<=n-1; i++)
-        {
-            state->d.ptr.p_double[i] = state->d.ptr.p_double[i]/state->diagh.ptr.p_double[i];
-        }
+        rmergedivv(n, &state->diagh, &state->d, _state);
         state->stp = (double)(1);
     }
     if( state->prectype==3 )
@@ -1016,10 +1204,10 @@ lbl_24:
      * Main cycle
      */
     state->k = 0;
-lbl_26:
+lbl_41:
     if( ae_false )
     {
-        goto lbl_27;
+        goto lbl_42;
     }
     
     /*
@@ -1052,68 +1240,141 @@ lbl_26:
     }
     smoothnessmonitorstartlinesearch1u(&state->smonitor, &state->s, &state->invs, &state->x, state->f, &state->g, state->k, -1, _state);
     mcsrch(n, &state->x, &state->f, &state->g, &state->d, &state->stp, state->stplimit, minlbfgs_gtol, &mcinfo, &state->nfev, &state->work, &state->lstate, &state->mcstage, _state);
-lbl_28:
+lbl_43:
     if( state->mcstage==0 )
     {
-        goto lbl_29;
+        goto lbl_44;
     }
-    minlbfgs_clearrequestfields(state, _state);
+    if( state->protocolversion!=2 )
+    {
+        goto lbl_45;
+    }
+    
+    /*
+     * Issue request using V2 protocol
+     */
     if( ae_fp_neq(state->diffstep,(double)(0)) )
     {
-        goto lbl_30;
+        goto lbl_47;
     }
-    state->needfg = ae_true;
-    state->rstate.stage = 8;
-    goto lbl_rcomm;
-lbl_8:
-    state->needfg = ae_false;
-    goto lbl_31;
-lbl_30:
-    state->needf = ae_true;
-    state->rstate.stage = 9;
-    goto lbl_rcomm;
-lbl_9:
-    state->fbase = state->f;
-    i = 0;
-lbl_32:
-    if( i>n-1 )
-    {
-        goto lbl_34;
-    }
-    v = state->x.ptr.p_double[i];
-    state->x.ptr.p_double[i] = v-state->diffstep*state->s.ptr.p_double[i];
-    state->rstate.stage = 10;
-    goto lbl_rcomm;
-lbl_10:
-    state->fm2 = state->f;
-    state->x.ptr.p_double[i] = v-0.5*state->diffstep*state->s.ptr.p_double[i];
-    state->rstate.stage = 11;
-    goto lbl_rcomm;
-lbl_11:
-    state->fm1 = state->f;
-    state->x.ptr.p_double[i] = v+0.5*state->diffstep*state->s.ptr.p_double[i];
+    
+    /*
+     * Request dense analytic Jacobian
+     */
+    state->requesttype = 2;
+    state->querysize = 1;
+    state->queryfuncs = 1;
+    state->queryvars = n;
+    state->querydim = 0;
+    rcopyallocv(n, &state->x, &state->querydata, _state);
+    rallocv(1, &state->replyfi, _state);
+    rallocv(n, &state->replydj, _state);
     state->rstate.stage = 12;
     goto lbl_rcomm;
 lbl_12:
-    state->fp1 = state->f;
-    state->x.ptr.p_double[i] = v+state->diffstep*state->s.ptr.p_double[i];
+    state->f = state->replyfi.ptr.p_double[0];
+    rcopyallocv(n, &state->replydj, &state->g, _state);
+    goto lbl_48;
+lbl_47:
+    
+    /*
+     * Request dense numerical Jacobian, propose 5-point formula
+     */
+    state->requesttype = 3;
+    state->querysize = 1;
+    state->queryfuncs = 1;
+    state->queryvars = n;
+    state->querydim = 0;
+    state->queryformulasize = 5;
+    rallocv(n+n*2*5, &state->querydata, _state);
+    rcopyallocv(n, &state->x, &state->querydata, _state);
+    for(i=0; i<=n-1; i++)
+    {
+        v = state->diffstep*state->s.ptr.p_double[i];
+        state->querydata.ptr.p_double[n+10*i+0*2+0] = (double)(0);
+        state->querydata.ptr.p_double[n+10*i+0*2+1] = (double)(0);
+        state->querydata.ptr.p_double[n+10*i+1*2+0] = state->querydata.ptr.p_double[i]-1.0*v;
+        state->querydata.ptr.p_double[n+10*i+1*2+1] = (double)1/((double)6*v);
+        state->querydata.ptr.p_double[n+10*i+2*2+0] = state->querydata.ptr.p_double[i]-0.5*v;
+        state->querydata.ptr.p_double[n+10*i+2*2+1] = -(double)8/((double)6*v);
+        state->querydata.ptr.p_double[n+10*i+3*2+0] = state->querydata.ptr.p_double[i]+0.5*v;
+        state->querydata.ptr.p_double[n+10*i+3*2+1] = (double)8/((double)6*v);
+        state->querydata.ptr.p_double[n+10*i+4*2+0] = state->querydata.ptr.p_double[i]+1.0*v;
+        state->querydata.ptr.p_double[n+10*i+4*2+1] = -(double)1/((double)6*v);
+    }
+    rallocv(1, &state->replyfi, _state);
+    rallocv(n, &state->replydj, _state);
     state->rstate.stage = 13;
     goto lbl_rcomm;
 lbl_13:
+    state->f = state->replyfi.ptr.p_double[0];
+    rcopyallocv(n, &state->replydj, &state->g, _state);
+lbl_48:
+    goto lbl_46;
+lbl_45:
+    
+    /*
+     * Use legacy V1 protocol
+     */
+    ae_assert(state->protocolversion==1, "MINLBFGS: unexpected protocol, integrity check 1506 failed", _state);
+    minlbfgs_clearrequestfields(state, _state);
+    if( ae_fp_neq(state->diffstep,(double)(0)) )
+    {
+        goto lbl_49;
+    }
+    state->needfg = ae_true;
+    state->rstate.stage = 14;
+    goto lbl_rcomm;
+lbl_14:
+    state->needfg = ae_false;
+    goto lbl_50;
+lbl_49:
+    state->needf = ae_true;
+    state->rstate.stage = 15;
+    goto lbl_rcomm;
+lbl_15:
+    state->fbase = state->f;
+    i = 0;
+lbl_51:
+    if( i>n-1 )
+    {
+        goto lbl_53;
+    }
+    v = state->x.ptr.p_double[i];
+    state->x.ptr.p_double[i] = v-state->diffstep*state->s.ptr.p_double[i];
+    state->rstate.stage = 16;
+    goto lbl_rcomm;
+lbl_16:
+    state->fm2 = state->f;
+    state->x.ptr.p_double[i] = v-0.5*state->diffstep*state->s.ptr.p_double[i];
+    state->rstate.stage = 17;
+    goto lbl_rcomm;
+lbl_17:
+    state->fm1 = state->f;
+    state->x.ptr.p_double[i] = v+0.5*state->diffstep*state->s.ptr.p_double[i];
+    state->rstate.stage = 18;
+    goto lbl_rcomm;
+lbl_18:
+    state->fp1 = state->f;
+    state->x.ptr.p_double[i] = v+state->diffstep*state->s.ptr.p_double[i];
+    state->rstate.stage = 19;
+    goto lbl_rcomm;
+lbl_19:
     state->fp2 = state->f;
     state->x.ptr.p_double[i] = v;
     state->g.ptr.p_double[i] = ((double)8*(state->fp1-state->fm1)-(state->fp2-state->fm2))/((double)6*state->diffstep*state->s.ptr.p_double[i]);
     i = i+1;
-    goto lbl_32;
-lbl_34:
+    goto lbl_51;
+lbl_53:
     state->f = state->fbase;
     state->needf = ae_false;
-lbl_31:
+lbl_50:
+lbl_46:
     smoothnessmonitorenqueuepoint1u(&state->smonitor, &state->s, &state->invs, &state->d, state->stp, &state->x, state->f, &state->g, _state);
     trimfunction(&state->f, &state->g, n, state->trimthreshold, _state);
     mcsrch(n, &state->x, &state->f, &state->g, &state->d, &state->stp, state->stplimit, minlbfgs_gtol, &mcinfo, &state->nfev, &state->work, &state->lstate, &state->mcstage, _state);
-    goto lbl_28;
-lbl_29:
+    goto lbl_43;
+lbl_44:
     smoothnessmonitorfinalizelinesearch(&state->smonitor, _state);
     if( state->userterminationneeded )
     {
@@ -1129,19 +1390,34 @@ lbl_29:
     }
     if( !state->xrep )
     {
-        goto lbl_35;
+        goto lbl_54;
     }
     
     /*
      * report
      */
+    if( state->protocolversion!=2 )
+    {
+        goto lbl_56;
+    }
+    state->requesttype = -1;
+    state->queryvars = n;
+    state->reportf = state->f;
+    rcopyallocv(n, &state->x, &state->reportx, _state);
+    state->rstate.stage = 20;
+    goto lbl_rcomm;
+lbl_20:
+    goto lbl_57;
+lbl_56:
+    ae_assert(state->protocolversion==1, "MINLBFGS: unexpected protocol, integrity check 8007 failed", _state);
     minlbfgs_clearrequestfields(state, _state);
     state->xupdated = ae_true;
-    state->rstate.stage = 14;
+    state->rstate.stage = 21;
     goto lbl_rcomm;
-lbl_14:
+lbl_21:
     state->xupdated = ae_false;
-lbl_35:
+lbl_57:
+lbl_54:
     state->repnfev = state->repnfev+state->nfev;
     state->repiterationscount = state->repiterationscount+1;
     ae_v_add(&state->sk.ptr.pp_double[state->p][0], 1, &state->x.ptr.p_double[0], 1, ae_v_len(0,n-1));
@@ -1346,8 +1622,8 @@ lbl_35:
         state->fold = state->f;
         state->k = state->k+1;
     }
-    goto lbl_26;
-lbl_27:
+    goto lbl_41;
+lbl_42:
     result = ae_false;
     return result;
     
@@ -1817,7 +2093,6 @@ void minlbfgsrestartfrom(minlbfgsstate* state,
     ae_vector_set_length(&state->rstate.ia, 5+1, _state);
     ae_vector_set_length(&state->rstate.ra, 1+1, _state);
     state->rstate.stage = -1;
-    minlbfgs_clearrequestfields(state, _state);
 }
 
 
@@ -1854,6 +2129,28 @@ void minlbfgsrequesttermination(minlbfgsstate* state, ae_state *_state)
 
 
 /*************************************************************************
+Set V1 reverse communication protocol
+*************************************************************************/
+void minlbfgssetprotocolv1(minlbfgsstate* state, ae_state *_state)
+{
+
+
+    state->protocolversion = 1;
+}
+
+
+/*************************************************************************
+Set V2 reverse communication protocol
+*************************************************************************/
+void minlbfgssetprotocolv2(minlbfgsstate* state, ae_state *_state)
+{
+
+
+    state->protocolversion = 2;
+}
+
+
+/*************************************************************************
 Clears request fileds (to be sure that we don't forgot to clear something)
 *************************************************************************/
 static void minlbfgs_clearrequestfields(minlbfgsstate* state,
@@ -1861,6 +2158,7 @@ static void minlbfgs_clearrequestfields(minlbfgsstate* state,
 {
 
 
+    ae_assert(state->protocolversion==1, "MINLBFGS: unexpected protocol", _state);
     state->needf = ae_false;
     state->needfg = ae_false;
     state->xupdated = ae_false;
@@ -1891,6 +2189,16 @@ void _minlbfgsstate_init(void* _p, ae_state *_state, ae_bool make_automatic)
     ae_vector_init(&p->invs, 0, DT_REAL, _state, make_automatic);
     ae_vector_init(&p->x, 0, DT_REAL, _state, make_automatic);
     ae_vector_init(&p->g, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->reportx, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->querydata, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->replyfi, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->replydj, 0, DT_REAL, _state, make_automatic);
+    _sparsematrix_init(&p->replysj, _state, make_automatic);
+    ae_vector_init(&p->tmpx1, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->tmpc1, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->tmpf1, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->tmpg1, 0, DT_REAL, _state, make_automatic);
+    ae_matrix_init(&p->tmpj1, 0, 0, DT_REAL, _state, make_automatic);
     _rcommstate_init(&p->rstate, _state, make_automatic);
     _linminstate_init(&p->lstate, _state, make_automatic);
     _smoothnessmonitor_init(&p->smonitor, _state, make_automatic);
@@ -1947,13 +2255,31 @@ void _minlbfgsstate_init_copy(void* _dst, const void* _src, ae_state *_state, ae
     dst->stplimit = src->stplimit;
     ae_vector_init_copy(&dst->autobuf, &src->autobuf, _state, make_automatic);
     ae_vector_init_copy(&dst->invs, &src->invs, _state, make_automatic);
+    dst->protocolversion = src->protocolversion;
+    dst->userterminationneeded = src->userterminationneeded;
     ae_vector_init_copy(&dst->x, &src->x, _state, make_automatic);
     dst->f = src->f;
     ae_vector_init_copy(&dst->g, &src->g, _state, make_automatic);
     dst->needf = src->needf;
     dst->needfg = src->needfg;
     dst->xupdated = src->xupdated;
-    dst->userterminationneeded = src->userterminationneeded;
+    dst->requesttype = src->requesttype;
+    ae_vector_init_copy(&dst->reportx, &src->reportx, _state, make_automatic);
+    dst->reportf = src->reportf;
+    dst->querysize = src->querysize;
+    dst->queryfuncs = src->queryfuncs;
+    dst->queryvars = src->queryvars;
+    dst->querydim = src->querydim;
+    dst->queryformulasize = src->queryformulasize;
+    ae_vector_init_copy(&dst->querydata, &src->querydata, _state, make_automatic);
+    ae_vector_init_copy(&dst->replyfi, &src->replyfi, _state, make_automatic);
+    ae_vector_init_copy(&dst->replydj, &src->replydj, _state, make_automatic);
+    _sparsematrix_init_copy(&dst->replysj, &src->replysj, _state, make_automatic);
+    ae_vector_init_copy(&dst->tmpx1, &src->tmpx1, _state, make_automatic);
+    ae_vector_init_copy(&dst->tmpc1, &src->tmpc1, _state, make_automatic);
+    ae_vector_init_copy(&dst->tmpf1, &src->tmpf1, _state, make_automatic);
+    ae_vector_init_copy(&dst->tmpg1, &src->tmpg1, _state, make_automatic);
+    ae_matrix_init_copy(&dst->tmpj1, &src->tmpj1, _state, make_automatic);
     dst->teststep = src->teststep;
     _rcommstate_init_copy(&dst->rstate, &src->rstate, _state, make_automatic);
     dst->repiterationscount = src->repiterationscount;
@@ -1990,6 +2316,16 @@ void _minlbfgsstate_clear(void* _p)
     ae_vector_clear(&p->invs);
     ae_vector_clear(&p->x);
     ae_vector_clear(&p->g);
+    ae_vector_clear(&p->reportx);
+    ae_vector_clear(&p->querydata);
+    ae_vector_clear(&p->replyfi);
+    ae_vector_clear(&p->replydj);
+    _sparsematrix_clear(&p->replysj);
+    ae_vector_clear(&p->tmpx1);
+    ae_vector_clear(&p->tmpc1);
+    ae_vector_clear(&p->tmpf1);
+    ae_vector_clear(&p->tmpg1);
+    ae_matrix_clear(&p->tmpj1);
     _rcommstate_clear(&p->rstate);
     _linminstate_clear(&p->lstate);
     _smoothnessmonitor_clear(&p->smonitor);
@@ -2021,6 +2357,16 @@ void _minlbfgsstate_destroy(void* _p)
     ae_vector_destroy(&p->invs);
     ae_vector_destroy(&p->x);
     ae_vector_destroy(&p->g);
+    ae_vector_destroy(&p->reportx);
+    ae_vector_destroy(&p->querydata);
+    ae_vector_destroy(&p->replyfi);
+    ae_vector_destroy(&p->replydj);
+    _sparsematrix_destroy(&p->replysj);
+    ae_vector_destroy(&p->tmpx1);
+    ae_vector_destroy(&p->tmpc1);
+    ae_vector_destroy(&p->tmpf1);
+    ae_vector_destroy(&p->tmpg1);
+    ae_matrix_destroy(&p->tmpj1);
     _rcommstate_destroy(&p->rstate);
     _linminstate_destroy(&p->lstate);
     _smoothnessmonitor_destroy(&p->smonitor);

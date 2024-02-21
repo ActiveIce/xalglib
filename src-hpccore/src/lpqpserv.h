@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -180,6 +180,40 @@ void scaleshiftmixedbrlcinplace(/* Real    */ const ae_vector* s,
 
 
 /*************************************************************************
+This function generates scaled (by S) and shifted (by XC) reformulation of
+two-sided "lower-bound/upper-bound" constraints stored in sparse format.
+
+INPUT PARAMETERS:
+    S               -   scale vector, array[N]:
+                        * I-th element contains scale of I-th variable,
+                        * SC[I]>0
+    XOrigin         -   origin term, array[N]. Can be zero.
+    N               -   number of variables.
+    SparseA         -   sparse M*N constraint matrix in CRS format;
+                        ignored if M=0.
+    M               -   sparse constraint count, M>=0
+    AL              -   lower bounds for constraints, array[M]
+    AU              -   upper bounds for constraints, array[M]
+
+OUTPUT PARAMETERS:
+    SparseA         -   replaced by scaled/shifted constraints
+    AL              -   replaced by scaled/shifted lower bounds
+    AU              -   replaced by scaled/shifted upper bounds
+
+  -- ALGLIB --
+     Copyright 01.11.2019 by Bochkanov Sergey
+*************************************************************************/
+void scaleshiftsparselcinplace(/* Real    */ const ae_vector* s,
+     /* Real    */ const ae_vector* xorigin,
+     ae_int_t n,
+     sparsematrix* sparsea,
+     ae_int_t m,
+     /* Real    */ ae_vector* al,
+     /* Real    */ ae_vector* au,
+     ae_state *_state);
+
+
+/*************************************************************************
 This function generates scaled (by S) reformulation of dense quadratic and
 linear terms in QP problem.
 
@@ -305,12 +339,12 @@ INPUT PARAMETERS:
                           are always normalized
                         * if True, we do not increase individual row norms
                           during normalization - only decrease. However,
-                          we may apply one amplification rount to entire
-                          constraint matrix, i.e. amplify all rows by same
+                          we may apply one amplification round to the entire
+                          constraint matrix, i.e. amplify all rows by the same
                           coefficient. As result, we do not overamplify
-                          any single row, but still make sure than entire
+                          any single row, but still make sure than the entire
                           problem is well scaled.
-                        If True, only large rows are normalized.
+                        * large rows are always normalized
     NeedNorms       -   whether we need row norms or not
 
 OUTPUT PARAMETERS:
@@ -331,6 +365,106 @@ void normalizemixedbrlcinplace(sparsematrix* sparsea,
      ae_int_t mdense,
      /* Real    */ ae_vector* ab,
      /* Real    */ ae_vector* ar,
+     ae_int_t n,
+     ae_bool limitedamplification,
+     /* Real    */ ae_vector* rownorms,
+     ae_bool neednorms,
+     ae_state *_state);
+
+
+/*************************************************************************
+This function normalizes two-sided  "lower-bound/upper-bound"  constraints
+stored in dense  format in such a way that L2 norms of  rows  (right  hand
+side NOT included) become equal to 1.0. 
+
+Exactly zero rows are handled correctly.
+
+INPUT PARAMETERS:
+    DenseA          -   dense M*N constraint matrix;
+                        ignored if M=0.
+    M               -   constraint count, M>=0
+    AL              -   lower bounds for constraints, array[M]
+    AU              -   upper bounds for constraints, array[M]
+    N               -   number of variables, N>=1.
+    LimitedAmplification-   whether row amplification is limited or not:
+                        * if False, rows with small norms (less than 1.0)
+                          are always normalized
+                        * if True, we do not increase individual row norms
+                          during normalization - only decrease. However,
+                          we may apply one amplification rount to entire
+                          constraint matrix, i.e. amplify all rows by same
+                          coefficient. As result, we do not overamplify
+                          any single row, but still make sure than entire
+                          problem is well scaled.
+                        * large rows are always normalized
+    NeedNorms       -   whether we need row norms or not
+
+OUTPUT PARAMETERS:
+    SparseA         -   replaced by normalized constraints
+    AL              -   replaced by normalized lower bounds
+    AU              -   replaced by normalized upper bounds
+    RowNorms        -   if NeedNorms is true, leading M elements (resized
+                        if length is less than M) are filled by row norms
+                        before normalization was performed.
+    
+
+  -- ALGLIB --
+     Copyright 01.11.2019 by Bochkanov Sergey
+*************************************************************************/
+void normalizedenselcinplace(/* Real    */ ae_matrix* densea,
+     ae_int_t m,
+     /* Real    */ ae_vector* al,
+     /* Real    */ ae_vector* au,
+     ae_int_t n,
+     ae_bool limitedamplification,
+     /* Real    */ ae_vector* rownorms,
+     ae_bool neednorms,
+     ae_state *_state);
+
+
+/*************************************************************************
+This function normalizes two-sided  "lower-bound/upper-bound"  constraints
+stored in sparse format in such a way that L2 norms of  rows  (right  hand
+side NOT included) become equal to 1.0. 
+
+Exactly zero rows are handled correctly.
+
+INPUT PARAMETERS:
+    SparseA         -   sparse M*N constraint matrix in CRS format;
+                        ignored if M=0.
+    M               -   constraint count, M>=0
+    AL              -   lower bounds for constraints, array[M]
+    AU              -   upper bounds for constraints, array[M]
+    N               -   number of variables, N>=1.
+    LimitedAmplification-   whether row amplification is limited or not:
+                        * if False, rows with small norms (less than 1.0)
+                          are always normalized
+                        * if True, we do not increase individual row norms
+                          during normalization - only decrease. However,
+                          we may apply one amplification rount to entire
+                          constraint matrix, i.e. amplify all rows by same
+                          coefficient. As result, we do not overamplify
+                          any single row, but still make sure than entire
+                          problem is well scaled.
+                        * large rows are always normalized
+    NeedNorms       -   whether we need row norms or not
+
+OUTPUT PARAMETERS:
+    SparseA         -   replaced by normalized constraints
+    AL              -   replaced by normalized lower bounds
+    AU              -   replaced by normalized upper bounds
+    RowNorms        -   if NeedNorms is true, leading M elements (resized
+                        if length is less than M) are filled by row norms
+                        before normalization was performed.
+    
+
+  -- ALGLIB --
+     Copyright 01.11.2019 by Bochkanov Sergey
+*************************************************************************/
+void normalizesparselcinplace(sparsematrix* sparsea,
+     ae_int_t m,
+     /* Real    */ ae_vector* al,
+     /* Real    */ ae_vector* au,
      ae_int_t n,
      ae_bool limitedamplification,
      /* Real    */ ae_vector* rownorms,

@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -61,6 +61,7 @@
 #include "cqmodels.h"
 #include "lpqpserv.h"
 #include "vipmsolver.h"
+#include "ipm2solver.h"
 
 
 /*$ Declarations $*/
@@ -71,8 +72,8 @@ This object stores temporaries of SQP subsolver.
 *************************************************************************/
 typedef struct
 {
-    ae_int_t algokind;
     vipmstate ipmsolver;
+    ipm2state ipm2;
     ae_vector curb;
     ae_vector curbndl;
     ae_vector curbndu;
@@ -85,84 +86,26 @@ typedef struct
     ae_vector dummy1;
     ae_matrix densedummy;
     sparsematrix sparsedummy;
+    ae_vector tmps;
+    ae_vector tmporigin;
     ae_vector tmp0;
     ae_vector tmp1;
     ae_vector tmp2;
     ae_vector retainnegativebclm;
     ae_vector retainpositivebclm;
     ae_vector rescalelag;
+    ae_matrix tmpcorrc;
+    ae_vector tmpdiag;
+    ae_vector hessdiag;
+    ae_matrix hesscorrc;
+    ae_vector hesscorrd;
+    ae_int_t hessrank;
+    sparsematrix hesssparsediag;
     ae_vector hasbndl;
     ae_vector hasbndu;
     ae_vector hasal;
     ae_vector hasau;
-    ae_matrix activea;
-    ae_vector activerhs;
-    ae_vector activeidx;
-    ae_int_t activesetsize;
 } minsqpsubsolver;
-
-
-/*************************************************************************
-This object stores temporaries for LagrangianFG() function
-*************************************************************************/
-typedef struct
-{
-    ae_vector sclagtmp0;
-    ae_vector sclagtmp1;
-} minsqptmplagrangian;
-
-
-/*************************************************************************
-This object stores temporaries for LagrangianFG() function
-*************************************************************************/
-typedef struct
-{
-    ae_vector mftmp0;
-} minsqptmpmerit;
-
-
-/*************************************************************************
-This object stores temporaries of Phase 1 (merit function optimization).
-*************************************************************************/
-typedef struct
-{
-    ae_int_t n;
-    ae_int_t nec;
-    ae_int_t nic;
-    ae_int_t nlec;
-    ae_int_t nlic;
-    ae_vector dtrial;
-    ae_vector deffective;
-    ae_vector d0;
-    ae_vector d1;
-    ae_vector dmu;
-    ae_vector stepkx;
-    ae_vector stepkxc;
-    ae_vector stepkxn;
-    ae_vector stepkfi;
-    ae_vector stepkfic;
-    ae_vector stepkfin;
-    ae_matrix stepkj;
-    ae_matrix stepkjc;
-    ae_matrix stepkjn;
-    ae_vector curlinx;
-    ae_vector curlinfi;
-    ae_matrix curlinj;
-    ae_vector lagbcmult;
-    ae_vector lagxcmult;
-    ae_vector dummylagbcmult;
-    ae_vector dummylagxcmult;
-    minsqptmpmerit tmpmerit;
-    minsqptmplagrangian tmplagrangianfg;
-    ae_vector stepklaggrad;
-    ae_vector stepknlaggrad;
-    ae_int_t status;
-    ae_bool increasebigc;
-    ae_bool increasemeritmu;
-    ae_bool meritfstagnated;
-    ae_vector tmphdiag;
-    rcommstate rmeritphasestate;
-} minsqpmeritphasestate;
 
 
 /*************************************************************************
@@ -175,6 +118,7 @@ typedef struct
     ae_int_t nic;
     ae_int_t nlec;
     ae_int_t nlic;
+    ae_bool usedensebfgs;
     ae_vector s;
     ae_matrix scaledcleic;
     ae_vector lcsrcidx;
@@ -182,8 +126,7 @@ typedef struct
     ae_vector hasbndu;
     ae_vector scaledbndl;
     ae_vector scaledbndu;
-    double epsx;
-    ae_int_t maxits;
+    nlpstoppingcriteria criteria;
     ae_int_t bfgsresetfreq;
     ae_vector x;
     ae_vector fi;
@@ -191,30 +134,40 @@ typedef struct
     double f;
     ae_bool needfij;
     ae_bool xupdated;
-    minsqpmeritphasestate meritstate;
-    double bigc;
     double meritmu;
     double trustrad;
     double trustradgrowth;
     ae_int_t trustradstagnationcnt;
     ae_int_t fstagnationcnt;
-    ae_vector step0x;
-    ae_vector stepkx;
-    ae_vector backupx;
-    ae_vector step0fi;
-    ae_vector stepkfi;
-    ae_vector backupfi;
-    ae_matrix step0j;
-    ae_matrix stepkj;
+    varsfuncjac stepk;
+    ae_vector x0;
+    ae_vector xprev;
     ae_vector fscales;
     ae_vector tracegamma;
     minsqpsubsolver subsolver;
     xbfgshessian hess;
-    minsqptmpmerit tmpmerit;
-    ae_int_t repsimplexiterations;
-    ae_int_t repsimplexiterations1;
-    ae_int_t repsimplexiterations2;
-    ae_int_t repsimplexiterations3;
+    ae_obj_array nonmonotonicmem;
+    ae_int_t nonmonotoniccnt;
+    ae_vector lagbcmult;
+    ae_vector lagxcmult;
+    varsfuncjac cand;
+    varsfuncjac corr;
+    varsfuncjac probe;
+    varsfuncjac currentlinearization;
+    ae_vector dtrial;
+    ae_vector d0;
+    ae_vector d1;
+    ae_vector dmu;
+    ae_vector tmppend;
+    ae_vector tmphd;
+    ae_vector dummylagbcmult;
+    ae_vector dummylagxcmult;
+    ae_vector tmplaggrad;
+    ae_vector tmpcandlaggrad;
+    ae_vector tmphdiag;
+    ae_vector sclagtmp0;
+    ae_vector sclagtmp1;
+    ae_vector mftmp0;
     ae_int_t repiterationscount;
     ae_int_t repterminationtype;
     double repbcerr;
@@ -223,6 +176,9 @@ typedef struct
     ae_int_t replcidx;
     double repnlcerr;
     ae_int_t repnlcidx;
+    stimer timertotal;
+    stimer timerqp;
+    stimer timercallback;
     rcommstate rstate;
 } minsqpstate;
 
@@ -241,8 +197,8 @@ void minsqpinitbuf(/* Real    */ const ae_vector* bndl,
      ae_int_t nic,
      ae_int_t nlec,
      ae_int_t nlic,
-     double epsx,
-     ae_int_t maxits,
+     const nlpstoppingcriteria* criteria,
+     ae_bool usedensebfgs,
      minsqpstate* state,
      ae_state *_state);
 
@@ -277,18 +233,6 @@ void _minsqpsubsolver_init(void* _p, ae_state *_state, ae_bool make_automatic);
 void _minsqpsubsolver_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
 void _minsqpsubsolver_clear(void* _p);
 void _minsqpsubsolver_destroy(void* _p);
-void _minsqptmplagrangian_init(void* _p, ae_state *_state, ae_bool make_automatic);
-void _minsqptmplagrangian_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
-void _minsqptmplagrangian_clear(void* _p);
-void _minsqptmplagrangian_destroy(void* _p);
-void _minsqptmpmerit_init(void* _p, ae_state *_state, ae_bool make_automatic);
-void _minsqptmpmerit_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
-void _minsqptmpmerit_clear(void* _p);
-void _minsqptmpmerit_destroy(void* _p);
-void _minsqpmeritphasestate_init(void* _p, ae_state *_state, ae_bool make_automatic);
-void _minsqpmeritphasestate_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
-void _minsqpmeritphasestate_clear(void* _p);
-void _minsqpmeritphasestate_destroy(void* _p);
 void _minsqpstate_init(void* _p, ae_state *_state, ae_bool make_automatic);
 void _minsqpstate_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
 void _minsqpstate_clear(void* _p);

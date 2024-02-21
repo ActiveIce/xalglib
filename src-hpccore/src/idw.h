@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -24,9 +24,9 @@
 #include "apserv.h"
 #include "ablasf.h"
 #include "tsort.h"
-#include "nearestneighbor.h"
 #include "xdebug.h"
 #include "hqrnd.h"
+#include "nearestneighbor.h"
 #include "ablasmkl.h"
 #include "ablas.h"
 
@@ -53,6 +53,20 @@ typedef struct
 
 
 /*************************************************************************
+Temporaries for MSTABBasecase
+*************************************************************************/
+typedef struct
+{
+    ae_vector dist;
+    ae_vector x;
+    ae_vector w;
+    ae_vector wy;
+    ae_vector tags;
+    kdtreerequestbuffer requestbuffer;
+} mstabbuffer;
+
+
+/*************************************************************************
 IDW (Inverse Distance Weighting) model object.
 *************************************************************************/
 typedef struct
@@ -68,6 +82,7 @@ typedef struct
     double lambdalast;
     double lambdadecay;
     double shepardp;
+    ae_bool debugprofile;
     kdtree tree;
     ae_int_t npoints;
     ae_vector shepardxy;
@@ -90,6 +105,9 @@ typedef struct
     double lambdalast;
     double lambdadecay;
     double shepardp;
+    ae_bool debugprofile;
+    ae_int_t mbatchsize;
+    double mprogress;
     ae_vector xy;
     ae_int_t npoints;
     ae_int_t nx;
@@ -98,9 +116,6 @@ typedef struct
     ae_matrix tmplayers;
     ae_vector tmptags;
     ae_vector tmpdist;
-    ae_vector tmpx;
-    ae_vector tmpwy;
-    ae_vector tmpw;
     kdtree tmptree;
     ae_vector tmpmean;
 } idwbuilder;
@@ -291,6 +306,16 @@ Thus, IDW-MSTAB is  a  good  "default"  option  if  you  want  to  perform
 scattered multidimensional interpolation. Although it has  its  drawbacks,
 it is easy to use and robust, which makes it a good first step.
 
+  ! COMMERCIAL EDITION OF ALGLIB:
+  ! 
+  ! Commercial Edition of ALGLIB includes following important improvements
+  ! of this function:
+  ! * high-performance native backend with same C# interface (C# version)
+  ! * multithreading support (C++ and C# versions)
+  ! 
+  ! We recommend you to read 'Working with commercial version' section  of
+  ! ALGLIB Reference Manual in order to find out how to  use  performance-
+  ! related features provided by commercial edition of ALGLIB.
 
 INPUT PARAMETERS:
     State   -   builder object
@@ -603,6 +628,17 @@ void idwtscalcbuf(const idwmodel* s,
 This function fits IDW model to the dataset using current IDW construction
 algorithm. A model being built and fitting report are returned.
 
+  ! COMMERCIAL EDITION OF ALGLIB:
+  ! 
+  ! Commercial Edition of ALGLIB includes following important improvements
+  ! of this function:
+  ! * high-performance native backend with same C# interface (C# version)
+  ! * multithreading support (C++ and C# versions)
+  ! 
+  ! We recommend you to read 'Working with commercial version' section  of
+  ! ALGLIB Reference Manual in order to find out how to  use  performance-
+  ! related features provided by commercial edition of ALGLIB.
+
 INPUT PARAMETERS:
     State   -   builder object
 
@@ -622,6 +658,198 @@ NOTE: although IDW-MSTAB algorithm is an  interpolation  method,  i.e.  it
 void idwfit(idwbuilder* state,
      idwmodel* model,
      idwreport* rep,
+     ae_state *_state);
+
+
+/*************************************************************************
+This function is used to peek into the IDW construction  process from some
+other thread and get the progress indicator. It returns value in [0,1].
+
+IMPORTANT: only MSTAB algorithm supports peeking into progress  indicator.
+           Legacy versions of the Shepard's method do  not support it. You
+           will always get zero as the result.
+
+INPUT PARAMETERS:
+    S           -   RBF model object
+
+RESULT:
+    progress value, in [0,1]
+
+  -- ALGLIB --
+     Copyright 27.11.2023 by Bochkanov Sergey
+*************************************************************************/
+double idwpeekprogress(const idwbuilder* s, ae_state *_state);
+
+
+/*************************************************************************
+This function calculates values  of  an  IDW  model  at  a  regular  grid,
+which  has  N0*N1 points, with Point[I,J] = (X0[I], X1[J]).  Vector-valued
+IDW models are supported.
+
+This function returns 0.0 when:
+* the model is not initialized
+* NX<>2
+
+  ! COMMERCIAL EDITION OF ALGLIB:
+  ! 
+  ! Commercial Edition of ALGLIB includes following important improvements
+  ! of this function:
+  ! * high-performance native backend with same C# interface (C# version)
+  ! * multithreading support (C++ and C# versions)
+  ! 
+  ! We recommend you to read 'Working with commercial version' section  of
+  ! ALGLIB Reference Manual in order to find out how to  use  performance-
+  ! related features provided by commercial edition of ALGLIB.
+
+NOTE: Parallel  processing  is  implemented only for modern (MSTAB) IDW's.
+
+INPUT PARAMETERS:
+    S       -   IDW model, used in read-only mode, can be  shared  between
+                multiple   invocations  of  this  function  from  multiple
+                threads.
+    
+    X0      -   array of grid nodes, first coordinates, array[N0].
+                Must be ordered by ascending. Exception is generated
+                if the array is not correctly ordered.
+    N0      -   grid size (number of nodes) in the first dimension, N0>=1
+    
+    X1      -   array of grid nodes, second coordinates, array[N1]
+                Must be ordered by ascending. Exception is generated
+                if the array is not correctly ordered.
+    N1      -   grid size (number of nodes) in the second dimension, N1>=1
+
+OUTPUT PARAMETERS:
+    Y       -   function values, array[NY*N0*N1], where NY is a  number of
+                "output" vector values (this  function   supports  vector-
+                valued IDW models). Y is out-variable and  is  reallocated
+                by this function.
+                Y[K+NY*(I0+I1*N0)]=F_k(X0[I0],X1[I1]), for:
+                *  K=0...NY-1
+                * I0=0...N0-1
+                * I1=0...N1-1
+
+NOTE: this function supports weakly ordered grid nodes, i.e. you may  have                
+      X[i]=X[i+1] for some i. It does  not  provide  you  any  performance
+      benefits  due  to   duplication  of  points,  just  convenience  and
+      flexibility.
+      
+NOTE: this  function  is  re-entrant,  i.e.  you  may  use  same  idwmodel
+      structure in multiple threads calling  this function  for  different
+      grids.
+      
+NOTE: if you need function values on some subset  of  regular  grid, which
+      may be described as "several compact and  dense  islands",  you  may
+      use idwgridcalc2vsubset().
+
+  -- ALGLIB --
+     Copyright 24.11.2023 by Bochkanov Sergey
+*************************************************************************/
+void idwgridcalc2v(const idwmodel* s,
+     /* Real    */ const ae_vector* x0,
+     ae_int_t n0,
+     /* Real    */ const ae_vector* x1,
+     ae_int_t n1,
+     /* Real    */ ae_vector* y,
+     ae_state *_state);
+
+
+/*************************************************************************
+This function calculates values of an  IDW  model  at  some  subset  of  a
+regular grid:
+* the grid has N0*N1 points, with Point[I,J] = (X0[I], X1[J])
+* only values at some subset of the grid are required
+Vector-valued IDW models are supported.
+
+This function returns 0.0 when:
+* the model is not initialized
+* NX<>2
+
+  ! COMMERCIAL EDITION OF ALGLIB:
+  ! 
+  ! Commercial Edition of ALGLIB includes following important improvements
+  ! of this function:
+  ! * high-performance native backend with same C# interface (C# version)
+  ! * multithreading support (C++ and C# versions)
+  ! 
+  ! We recommend you to read 'Working with commercial version' section  of
+  ! ALGLIB Reference Manual in order to find out how to  use  performance-
+  ! related features provided by commercial edition of ALGLIB.
+
+NOTE: Parallel processing is implemented only for modern (MSTAB) IDW's.
+
+INPUT PARAMETERS:
+    S       -   IDW model, used in read-only mode, can be  shared  between
+                multiple   invocations  of  this  function  from  multiple
+                threads.
+    
+    X0      -   array of grid nodes, first coordinates, array[N0].
+                Must be ordered by ascending. Exception is generated
+                if the array is not correctly ordered.
+    N0      -   grid size (number of nodes) in the first dimension, N0>=1
+    
+    X1      -   array of grid nodes, second coordinates, array[N1]
+                Must be ordered by ascending. Exception is generated
+                if the array is not correctly ordered.
+    N1      -   grid size (number of nodes) in the second dimension, N1>=1
+    
+    FlagY   -   array[N0*N1]:
+                * Y[I0+I1*N0] corresponds to node (X0[I0],X1[I1])
+                * it is a "bitmap" array which contains  False  for  nodes
+                  which are NOT calculated, and True for nodes  which  are
+                  required.
+
+OUTPUT PARAMETERS:
+    Y       -   function values, array[NY*N0*N1*N2], where NY is a  number
+                of "output" vector values (this function  supports vector-
+                valued IDW models):
+                * Y[K+NY*(I0+I1*N0)]=F_k(X0[I0],X1[I1]),
+                  for K=0...NY-1, I0=0...N0-1, I1=0...N1-1.
+                * elements of Y[] which correspond  to  FlagY[]=True   are
+                  loaded by model values (which may be  exactly  zero  for
+                  some nodes).
+                * elements of Y[] which correspond to FlagY[]=False MAY be
+                  initialized by zeros OR may  be  calculated.  Generally,
+                  they  are   not   calculated,  but  future  SIMD-capable
+                  versions may compute several elements in a batch.
+
+NOTE: this function supports weakly ordered grid nodes, i.e. you may  have                
+      X[i]=X[i+1] for some i. It does  not  provide  you  any  performance
+      benefits  due  to   duplication  of  points,  just  convenience  and
+      flexibility.
+      
+NOTE: this  function  is  re-entrant,  i.e.  you  may  use  same  idwmodel
+      structure in multiple threads calling  this function  for  different
+      grids.
+
+  -- ALGLIB --
+     Copyright 24.11.2023 by Bochkanov Sergey
+*************************************************************************/
+void idwgridcalc2vsubset(const idwmodel* s,
+     /* Real    */ const ae_vector* x0,
+     ae_int_t n0,
+     /* Real    */ const ae_vector* x1,
+     ae_int_t n1,
+     /* Boolean */ const ae_vector* flagy,
+     /* Real    */ ae_vector* y,
+     ae_state *_state);
+
+
+/*************************************************************************
+This function, depending on SparseY, acts as IDWGridCalc2V (SparseY=False)
+or IDWGridCalc2VSubset (SparseY=True) function.  See  comments  for  these
+functions for more information
+
+  -- ALGLIB --
+     Copyright 04.03.2016 by Bochkanov Sergey
+*************************************************************************/
+void idwgridcalc2vx(const idwmodel* s,
+     /* Real    */ const ae_vector* x0,
+     ae_int_t n0,
+     /* Real    */ const ae_vector* x1,
+     ae_int_t n1,
+     /* Boolean */ const ae_vector* flagy,
+     ae_bool sparsey,
+     /* Real    */ ae_vector* y,
      ae_state *_state);
 
 
@@ -656,6 +884,10 @@ void _idwcalcbuffer_init(void* _p, ae_state *_state, ae_bool make_automatic);
 void _idwcalcbuffer_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
 void _idwcalcbuffer_clear(void* _p);
 void _idwcalcbuffer_destroy(void* _p);
+void _mstabbuffer_init(void* _p, ae_state *_state, ae_bool make_automatic);
+void _mstabbuffer_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
+void _mstabbuffer_clear(void* _p);
+void _mstabbuffer_destroy(void* _p);
 void _idwmodel_init(void* _p, ae_state *_state, ae_bool make_automatic);
 void _idwmodel_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
 void _idwmodel_clear(void* _p);

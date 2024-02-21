@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -14,6 +14,7 @@
 
 
 #include <stdafx.h>
+#include <stdio.h>
 #include "minlm.h"
 
 
@@ -23,6 +24,8 @@ static double minlm_lambdadown = 0.33;
 static double minlm_suspiciousnu = 16;
 static ae_int_t minlm_smallmodelage = 3;
 static ae_int_t minlm_additers = 5;
+static double minlm_stagnationfeps = 1.0E-12;
+static ae_int_t minlm_stagnationfits = 20;
 static void minlm_lmprepare(ae_int_t n,
      ae_int_t m,
      ae_bool havegrad,
@@ -48,7 +51,6 @@ static ae_bool minlm_minlmstepfinderinit(minlmstepfinder* state,
      ae_int_t n,
      ae_int_t m,
      ae_int_t maxmodelage,
-     ae_bool hasfi,
      /* Real    */ ae_vector* xbase,
      /* Real    */ const ae_vector* bndl,
      /* Real    */ const ae_vector* bndu,
@@ -162,13 +164,11 @@ void minlmcreatevj(ae_int_t n,
     /*
      * initialize, check parameters
      */
+    state->protocolversion = 1;
     state->teststep = (double)(0);
     state->n = n;
     state->m = m;
     state->algomode = 1;
-    state->hasf = ae_false;
-    state->hasfi = ae_true;
-    state->hasg = ae_false;
     
     /*
      * second stage of initialization
@@ -263,13 +263,11 @@ void minlmcreatev(ae_int_t n,
     /*
      * Initialize
      */
+    state->protocolversion = 1;
     state->teststep = (double)(0);
     state->n = n;
     state->m = m;
     state->algomode = 0;
-    state->hasf = ae_false;
-    state->hasfi = ae_true;
-    state->hasg = ae_false;
     state->diffstep = diffstep;
     
     /*
@@ -277,103 +275,6 @@ void minlmcreatev(ae_int_t n,
      */
     minlm_lmprepare(n, m, ae_false, state, _state);
     minlmsetacctype(state, 1, _state);
-    minlmsetcond(state, (double)(0), 0, _state);
-    minlmsetxrep(state, ae_false, _state);
-    minlmsetstpmax(state, (double)(0), _state);
-    minlmrestartfrom(state, x, _state);
-}
-
-
-/*************************************************************************
-    LEVENBERG-MARQUARDT-LIKE METHOD FOR NON-LINEAR OPTIMIZATION
-
-DESCRIPTION:
-This  function  is  used  to  find  minimum  of general form (not "sum-of-
--squares") function
-    F = F(x[0], ..., x[n-1])
-using  its  gradient  and  Hessian.  Levenberg-Marquardt modification with
-L-BFGS pre-optimization and internal pre-conditioned  L-BFGS  optimization
-after each Levenberg-Marquardt step is used.
-
-
-REQUIREMENTS:
-This algorithm will request following information during its operation:
-
-* function value F at given point X
-* F and gradient G (simultaneously) at given point X
-* F, G and Hessian H (simultaneously) at given point X
-
-There are several overloaded versions of  MinLMOptimize()  function  which
-correspond  to  different LM-like optimization algorithms provided by this
-unit. You should choose version which accepts func(),  grad()  and  hess()
-function pointers. First pointer is used to calculate F  at  given  point,
-second  one  calculates  F(x)  and  grad F(x),  third one calculates F(x),
-grad F(x), hess F(x).
-
-You can try to initialize MinLMState structure with FGH-function and  then
-use incorrect version of MinLMOptimize() (for example, version which  does
-not provide Hessian matrix), but it will lead to  exception  being  thrown
-after first attempt to calculate Hessian.
-
-
-USAGE:
-1. User initializes algorithm state with MinLMCreateFGH() call
-2. User tunes solver parameters with MinLMSetCond(),  MinLMSetStpMax() and
-   other functions
-3. User calls MinLMOptimize() function which  takes algorithm  state   and
-   pointers (delegates, etc.) to callback functions.
-4. User calls MinLMResults() to get solution
-5. Optionally, user may call MinLMRestartFrom() to solve  another  problem
-   with same N but another starting point and/or another function.
-   MinLMRestartFrom() allows to reuse already initialized structure.
-
-
-INPUT PARAMETERS:
-    N       -   dimension, N>1
-                * if given, only leading N elements of X are used
-                * if not given, automatically determined from size of X
-    X       -   initial solution, array[0..N-1]
-
-OUTPUT PARAMETERS:
-    State   -   structure which stores algorithm state
-
-NOTES:
-1. you may tune stopping conditions with MinLMSetCond() function
-2. if target function contains exp() or other fast growing functions,  and
-   optimization algorithm makes too large steps which leads  to  overflow,
-   use MinLMSetStpMax() function to bound algorithm's steps.
-
-  -- ALGLIB --
-     Copyright 30.03.2009 by Bochkanov Sergey
-*************************************************************************/
-void minlmcreatefgh(ae_int_t n,
-     /* Real    */ const ae_vector* x,
-     minlmstate* state,
-     ae_state *_state)
-{
-
-    _minlmstate_clear(state);
-
-    ae_assert(n>=1, "MinLMCreateFGH: N<1!", _state);
-    ae_assert(x->cnt>=n, "MinLMCreateFGH: Length(X)<N!", _state);
-    ae_assert(isfinitevector(x, n, _state), "MinLMCreateFGH: X contains infinite or NaN values!", _state);
-    
-    /*
-     * initialize
-     */
-    state->teststep = (double)(0);
-    state->n = n;
-    state->m = 0;
-    state->algomode = 2;
-    state->hasf = ae_true;
-    state->hasfi = ae_false;
-    state->hasg = ae_true;
-    
-    /*
-     * init2
-     */
-    minlm_lmprepare(n, 0, ae_true, state, _state);
-    minlmsetacctype(state, 2, _state);
     minlmsetcond(state, (double)(0), 0, _state);
     minlmsetxrep(state, ae_false, _state);
     minlmsetstpmax(state, (double)(0), _state);
@@ -754,7 +655,6 @@ void minlmsetacctype(minlmstate* state,
     }
     if( acctype==1 )
     {
-        ae_assert(state->hasfi, "MinLMSetAccType: AccType=1 is incompatible with current protocol!", _state);
         if( state->algomode==0 )
         {
             state->maxmodelage = 2*state->n;
@@ -770,23 +670,32 @@ void minlmsetacctype(minlmstate* state,
 
 
 /*************************************************************************
-NOTES:
 
-1. Depending on function used to create state  structure,  this  algorithm
-   may accept Jacobian and/or Hessian and/or gradient.  According  to  the
-   said above, there ase several versions of this function,  which  accept
-   different sets of callbacks.
+CALLBACK PARALLELISM
 
-   This flexibility opens way to subtle errors - you may create state with
-   MinLMCreateFGH() (optimization using Hessian), but call function  which
-   does not accept Hessian. So when algorithm will request Hessian,  there
-   will be no callback to call. In this case exception will be thrown.
+The MINLM optimizer supports parallel parallel  numerical  differentiation
+('callback parallelism'). This feature, which  is  present  in  commercial
+ALGLIB  editions,  greatly   accelerates   optimization   with   numerical
+differentiation of an expensive target functions.
 
-   Be careful to avoid such errors because there is no way to find them at
-   compile time - you can see them at runtime only.
+Callback parallelism is usually  beneficial  when  computing  a  numerical
+gradient requires more than several  milliseconds.  In this case  the  job
+of computing individual gradient components can be split between  multiple
+threads. Even inexpensive targets can benefit  from  parallelism,  if  you
+have many variables.
+
+If you solve a curve fitting problem, i.e. the function vector is actually
+the same function computed at different points of a data points space,  it
+may  be  better  to  use  an LSFIT curve fitting solver, which offers more
+fine-grained parallelism due to knowledge of  the  problem  structure.  In
+particular, it can accelerate both numerical differentiation  and problems
+with user-supplied gradients.
+
+ALGLIB Reference Manual, 'Working with commercial  version' section, tells
+how to activate callback parallelism for your programming language.
 
   -- ALGLIB --
-     Copyright 10.03.2009 by Bochkanov Sergey
+     Copyright 03.12.2023 by Bochkanov Sergey
 *************************************************************************/
 ae_bool minlmiteration(minlmstate* state, ae_state *_state)
 {
@@ -795,11 +704,14 @@ ae_bool minlmiteration(minlmstate* state, ae_state *_state)
     ae_bool bflag;
     ae_int_t iflag;
     double v;
+    double xl;
+    double xr;
     double s;
     double t;
     double fnew;
     ae_int_t i;
     ae_int_t k;
+    ae_bool dotrace;
     ae_bool result;
 
 
@@ -822,10 +734,13 @@ ae_bool minlmiteration(minlmstate* state, ae_state *_state)
         i = state->rstate.ia.ptr.p_int[3];
         k = state->rstate.ia.ptr.p_int[4];
         bflag = state->rstate.ba.ptr.p_bool[0];
+        dotrace = state->rstate.ba.ptr.p_bool[1];
         v = state->rstate.ra.ptr.p_double[0];
-        s = state->rstate.ra.ptr.p_double[1];
-        t = state->rstate.ra.ptr.p_double[2];
-        fnew = state->rstate.ra.ptr.p_double[3];
+        xl = state->rstate.ra.ptr.p_double[1];
+        xr = state->rstate.ra.ptr.p_double[2];
+        s = state->rstate.ra.ptr.p_double[3];
+        t = state->rstate.ra.ptr.p_double[4];
+        fnew = state->rstate.ra.ptr.p_double[5];
     }
     else
     {
@@ -835,10 +750,13 @@ ae_bool minlmiteration(minlmstate* state, ae_state *_state)
         i = -909;
         k = 81;
         bflag = ae_true;
-        v = 74.0;
-        s = -788.0;
-        t = 809.0;
-        fnew = 205.0;
+        dotrace = ae_false;
+        v = -788.0;
+        xl = 809.0;
+        xr = 205.0;
+        s = -838.0;
+        t = 939.0;
+        fnew = -526.0;
     }
     if( state->rstate.stage==0 )
     {
@@ -944,14 +862,6 @@ ae_bool minlmiteration(minlmstate* state, ae_state *_state)
     {
         goto lbl_25;
     }
-    if( state->rstate.stage==26 )
-    {
-        goto lbl_26;
-    }
-    if( state->rstate.stage==27 )
-    {
-        goto lbl_27;
-    }
     
     /*
      * Routine body
@@ -960,6 +870,7 @@ ae_bool minlmiteration(minlmstate* state, ae_state *_state)
     /*
      * prepare
      */
+    dotrace = ae_is_trace_enabled("LM");
     n = state->n;
     m = state->m;
     state->repiterationscount = 0;
@@ -980,9 +891,35 @@ ae_bool minlmiteration(minlmstate* state, ae_state *_state)
     }
     
     /*
+     * Allocate temporaries, as mandated by the V2 protocol
+     */
+    if( state->protocolversion==2 )
+    {
+        rallocm(m, n, &state->tmpj1, _state);
+        rallocv(m, &state->tmpf1, _state);
+        rallocv(n, &state->tmpg1, _state);
+        rallocv(n, &state->tmpx1, _state);
+    }
+    
+    /*
+     * Trace output (if needed)
+     */
+    if( dotrace )
+    {
+        ae_trace("\n\n");
+        ae_trace("////////////////////////////////////////////////////////////////////////////////////////////////////\n");
+        ae_trace("//  LM SOLVER STARTED                                                                             //\n");
+        ae_trace("////////////////////////////////////////////////////////////////////////////////////////////////////\n");
+        ae_trace("N             = %6d\n",
+            (int)(n));
+        ae_trace("M             = %6d\n",
+            (int)(m));
+    }
+    
+    /*
      * Prepare LM step finder and enforce/check feasibility of constraints
      */
-    if( !minlm_minlmstepfinderinit(&state->finderstate, n, m, state->maxmodelage, state->hasfi, &state->xbase, &state->bndl, &state->bndu, &state->cleic, state->nec, state->nic, &state->s, state->stpmax, state->epsx, _state) )
+    if( !minlm_minlmstepfinderinit(&state->finderstate, n, m, state->maxmodelage, &state->xbase, &state->bndl, &state->bndu, &state->cleic, state->nec, state->nic, &state->s, state->stpmax, state->epsx, _state) )
     {
         state->repterminationtype = -3;
         result = ae_false;
@@ -997,25 +934,56 @@ ae_bool minlmiteration(minlmstate* state, ae_state *_state)
     /*
      *  Check correctness of the analytic Jacobian
      */
-    minlm_clearrequestfields(state, _state);
+    if( state->protocolversion==1 )
+    {
+        minlm_clearrequestfields(state, _state);
+    }
     if( !(state->algomode==1&&ae_fp_greater(state->teststep,(double)(0))) )
     {
-        goto lbl_28;
+        goto lbl_26;
     }
     ae_assert(m>0, "MinLM: integrity check failed", _state);
-lbl_30:
+lbl_28:
     if( !smoothnessmonitorcheckgradientatx0(&state->smonitor, &state->xbase, &state->s, &state->bndl, &state->bndu, ae_true, state->teststep, _state) )
     {
-        goto lbl_31;
+        goto lbl_29;
     }
+    if( state->protocolversion!=2 )
+    {
+        goto lbl_30;
+    }
+    
+    /*
+     * Use V2 reverse communication protocol
+     */
+    state->requesttype = 2;
+    state->querysize = 1;
+    state->queryfuncs = m;
+    state->queryvars = n;
+    state->querydim = 0;
+    rcopyallocv(n, &state->smonitor.x, &state->querydata, _state);
+    rallocv(m, &state->replyfi, _state);
+    rallocv(m*n, &state->replydj, _state);
+    state->rstate.stage = 0;
+    goto lbl_rcomm;
+lbl_0:
+    rcopyv(m, &state->replyfi, &state->smonitor.fi, _state);
+    unpackdj(m, n, &state->replydj, &state->smonitor.j, _state);
+    goto lbl_31;
+lbl_30:
+    
+    /*
+     * Use legacy V1 protocol
+     */
+    ae_assert(state->protocolversion==1, "MINLM: unexpected protocol, integrity check 0125 failed", _state);
     for(i=0; i<=n-1; i++)
     {
         state->x.ptr.p_double[i] = state->smonitor.x.ptr.p_double[i];
     }
     state->needfij = ae_true;
-    state->rstate.stage = 0;
+    state->rstate.stage = 1;
     goto lbl_rcomm;
-lbl_0:
+lbl_1:
     state->needfij = ae_false;
     for(i=0; i<=m-1; i++)
     {
@@ -1025,53 +993,71 @@ lbl_0:
             state->smonitor.j.ptr.pp_double[i][k] = state->j.ptr.pp_double[i][k];
         }
     }
-    goto lbl_30;
 lbl_31:
-lbl_28:
+    goto lbl_28;
+lbl_29:
+lbl_26:
     
     /*
-     * Initial report of current point
-     *
-     * Note 1: we rewrite State.X twice because
-     * user may accidentally change it after first call.
-     *
-     * Note 2: we set NeedF or NeedFI depending on what
-     * information about function we have.
+     * Initial evaluation of the target and report of the current point
      */
     if( !state->xrep )
     {
         goto lbl_32;
     }
-    ae_v_move(&state->x.ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,n-1));
-    minlm_clearrequestfields(state, _state);
-    if( !state->hasf )
+    if( state->protocolversion!=2 )
     {
         goto lbl_34;
     }
-    state->needf = ae_true;
-    state->rstate.stage = 1;
-    goto lbl_rcomm;
-lbl_1:
-    state->needf = ae_false;
-    goto lbl_35;
-lbl_34:
-    ae_assert(state->hasfi, "MinLM: internal error 2!", _state);
-    state->needfi = ae_true;
+    
+    /*
+     * Issue request and perform report using V2 protocol
+     */
+    rcopyv(n, &state->xbase, &state->x, _state);
+    state->requesttype = 4;
+    state->querysize = 1;
+    state->queryfuncs = m;
+    state->queryvars = n;
+    state->querydim = 0;
+    rcopyallocv(n, &state->x, &state->querydata, _state);
+    rallocv(m, &state->replyfi, _state);
     state->rstate.stage = 2;
     goto lbl_rcomm;
 lbl_2:
-    state->needfi = ae_false;
-    v = ae_v_dotproduct(&state->fi.ptr.p_double[0], 1, &state->fi.ptr.p_double[0], 1, ae_v_len(0,m-1));
-    state->f = v;
-lbl_35:
     state->repnfunc = state->repnfunc+1;
-    ae_v_move(&state->x.ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,n-1));
-    minlm_clearrequestfields(state, _state);
-    state->xupdated = ae_true;
+    rcopyv(m, &state->replyfi, &state->fi, _state);
+    state->f = rdotv2(m, &state->fi, _state);
+    state->requesttype = -1;
+    state->queryvars = n;
+    state->reportf = state->f;
+    rcopyallocv(n, &state->x, &state->reportx, _state);
     state->rstate.stage = 3;
     goto lbl_rcomm;
 lbl_3:
+    goto lbl_35;
+lbl_34:
+    
+    /*
+     * Use legacy V1 protocol
+     */
+    ae_assert(state->protocolversion==1, "MINLM: unexpected protocol, integrity check 9600 failed", _state);
+    rcopyv(n, &state->xbase, &state->x, _state);
+    minlm_clearrequestfields(state, _state);
+    state->needfi = ae_true;
+    state->rstate.stage = 4;
+    goto lbl_rcomm;
+lbl_4:
+    state->needfi = ae_false;
+    state->f = rdotv2(m, &state->fi, _state);
+    state->repnfunc = state->repnfunc+1;
+    rcopyv(n, &state->xbase, &state->x, _state);
+    minlm_clearrequestfields(state, _state);
+    state->xupdated = ae_true;
+    state->rstate.stage = 5;
+    goto lbl_rcomm;
+lbl_5:
     state->xupdated = ae_false;
+lbl_35:
 lbl_32:
     if( state->userterminationneeded )
     {
@@ -1079,7 +1065,7 @@ lbl_32:
         /*
          * User requested termination
          */
-        ae_v_move(&state->x.ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,n-1));
+        rcopyv(n, &state->xbase, &state->x, _state);
         state->repterminationtype = 8;
         result = ae_false;
         return result;
@@ -1088,18 +1074,15 @@ lbl_32:
     /*
      * Prepare control variables
      */
+    state->fstagnationcnt = 0;
     state->nu = (double)(1);
     state->lambdav = -ae_maxrealnumber;
     state->modelage = state->maxmodelage+1;
     state->deltaxready = ae_false;
     state->deltafready = ae_false;
-    if( state->algomode==2 )
-    {
-        goto lbl_36;
-    }
     
     /*
-     * Jacobian-based optimization mode
+     * fvector/Jacobian-based optimization mode
      *
      * Main cycle.
      *
@@ -1108,10 +1091,19 @@ lbl_32:
      * * we decide that stopping conditions are too stringent
      *   and break from cycle
      */
-lbl_38:
+lbl_36:
     if( ae_false )
     {
-        goto lbl_39;
+        goto lbl_37;
+    }
+    if( dotrace )
+    {
+        ae_trace("\n=== ITERATION %5d ==================================================================================\n",
+            (int)(state->repiterationscount));
+        ae_trace("ModelAge      = %9d    (model age)\n",
+            (int)(state->modelage));
+        ae_trace("LambdaV       = %9.3e    (damping coefficient)\n",
+            (double)(state->lambdav));
     }
     
     /*
@@ -1136,14 +1128,21 @@ lbl_38:
      * We also clear DeltaXReady/DeltaFReady flags
      * after initialization is done.
      */
-    ae_assert(state->algomode==0||state->algomode==1, "MinLM: integrity check failed", _state);
     if( !(state->modelage>state->maxmodelage||!(state->deltaxready&&state->deltafready)) )
+    {
+        goto lbl_38;
+    }
+    
+    /*
+     * Refresh model (using either finite differences or analytic Jacobian)
+     */
+    if( state->protocolversion!=2 )
     {
         goto lbl_40;
     }
     
     /*
-     * Refresh model (using either finite differences or analytic Jacobian)
+     * Issue request using V2 protocol
      */
     if( state->algomode!=0 )
     {
@@ -1151,15 +1150,108 @@ lbl_38:
     }
     
     /*
+     * Optimization using F values only. Use finite differences to estimate Jacobian.
+     *
+     * Request dense numerical Jacobian, propose 2-point finite difference formula
+     */
+    state->requesttype = 3;
+    state->querysize = 1;
+    state->queryfuncs = m;
+    state->queryvars = n;
+    state->querydim = 0;
+    state->queryformulasize = 2;
+    rallocv(n+n*2*state->queryformulasize, &state->querydata, _state);
+    rcopyv(n, &state->xbase, &state->querydata, _state);
+    for(k=0; k<=n-1; k++)
+    {
+        
+        /*
+         * We guard X[k] from leaving [BndL,BndU].
+         * In case BndL=BndU, we assume that derivative in this direction is zero.
+         */
+        v = state->diffstep*state->s.ptr.p_double[k];
+        xl = state->xbase.ptr.p_double[k]-v;
+        if( state->havebndl.ptr.p_bool[k]&&ae_fp_less(xl,state->bndl.ptr.p_double[k]) )
+        {
+            xl = state->bndl.ptr.p_double[k];
+        }
+        xr = state->xbase.ptr.p_double[k]+v;
+        if( state->havebndu.ptr.p_bool[k]&&ae_fp_greater(xr,state->bndu.ptr.p_double[k]) )
+        {
+            xr = state->bndu.ptr.p_double[k];
+        }
+        v = (double)(0);
+        if( xl<xr )
+        {
+            v = (double)1/(xr-xl);
+        }
+        state->querydata.ptr.p_double[n+2*state->queryformulasize*k+0*2+0] = xl;
+        state->querydata.ptr.p_double[n+2*state->queryformulasize*k+0*2+1] = -v;
+        state->querydata.ptr.p_double[n+2*state->queryformulasize*k+1*2+0] = xr;
+        state->querydata.ptr.p_double[n+2*state->queryformulasize*k+1*2+1] = v;
+    }
+    rallocv(m, &state->replyfi, _state);
+    rallocv(m*n, &state->replydj, _state);
+    state->rstate.stage = 6;
+    goto lbl_rcomm;
+lbl_6:
+    rcopyv(m, &state->replyfi, &state->fi, _state);
+    unpackdj(m, n, &state->replydj, &state->j, _state);
+    state->repnfunc = state->repnfunc+1+n*state->queryformulasize;
+    state->repnjac = state->repnjac+1;
+    
+    /*
+     * New model
+     */
+    state->modelage = 0;
+    goto lbl_43;
+lbl_42:
+    
+    /*
+     * Request dense analytic Jacobian
+     */
+    state->requesttype = 2;
+    state->querysize = 1;
+    state->queryfuncs = m;
+    state->queryvars = n;
+    state->querydim = 0;
+    rcopyallocv(n, &state->xbase, &state->querydata, _state);
+    rallocv(m, &state->replyfi, _state);
+    rallocv(m*n, &state->replydj, _state);
+    state->rstate.stage = 7;
+    goto lbl_rcomm;
+lbl_7:
+    rcopyv(m, &state->replyfi, &state->fi, _state);
+    unpackdj(m, n, &state->replydj, &state->j, _state);
+    state->repnfunc = state->repnfunc+1;
+    state->repnjac = state->repnjac+1;
+    
+    /*
+     * New model
+     */
+    state->modelage = 0;
+lbl_43:
+    goto lbl_41;
+lbl_40:
+    
+    /*
+     * Use legacy V1 protocol
+     */
+    ae_assert(state->protocolversion==1, "MINLM: unexpected protocol, integrity check 9600 failed", _state);
+    if( state->algomode!=0 )
+    {
+        goto lbl_44;
+    }
+    
+    /*
      * Optimization using F values only.
      * Use finite differences to estimate Jacobian.
      */
-    ae_assert(state->hasfi, "MinLMIteration: internal error when estimating Jacobian (no f[])", _state);
     k = 0;
-lbl_44:
+lbl_46:
     if( k>n-1 )
     {
-        goto lbl_46;
+        goto lbl_48;
     }
     
     /*
@@ -1179,9 +1271,9 @@ lbl_44:
     state->xm1 = state->x.ptr.p_double[k];
     minlm_clearrequestfields(state, _state);
     state->needfi = ae_true;
-    state->rstate.stage = 4;
+    state->rstate.stage = 8;
     goto lbl_rcomm;
-lbl_4:
+lbl_8:
     state->repnfunc = state->repnfunc+1;
     ae_v_move(&state->fm1.ptr.p_double[0], 1, &state->fi.ptr.p_double[0], 1, ae_v_len(0,m-1));
     ae_v_move(&state->x.ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,n-1));
@@ -1197,9 +1289,9 @@ lbl_4:
     state->xp1 = state->x.ptr.p_double[k];
     minlm_clearrequestfields(state, _state);
     state->needfi = ae_true;
-    state->rstate.stage = 5;
+    state->rstate.stage = 9;
     goto lbl_rcomm;
-lbl_5:
+lbl_9:
     state->repnfunc = state->repnfunc+1;
     ae_v_move(&state->fp1.ptr.p_double[0], 1, &state->fi.ptr.p_double[0], 1, ae_v_len(0,m-1));
     v = state->xp1-state->xm1;
@@ -1217,8 +1309,8 @@ lbl_5:
         }
     }
     k = k+1;
-    goto lbl_44;
-lbl_46:
+    goto lbl_46;
+lbl_48:
     
     /*
      * Calculate F(XBase)
@@ -1226,9 +1318,9 @@ lbl_46:
     ae_v_move(&state->x.ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,n-1));
     minlm_clearrequestfields(state, _state);
     state->needfi = ae_true;
-    state->rstate.stage = 6;
+    state->rstate.stage = 10;
     goto lbl_rcomm;
-lbl_6:
+lbl_10:
     state->needfi = ae_false;
     state->repnfunc = state->repnfunc+1;
     state->repnjac = state->repnjac+1;
@@ -1237,8 +1329,8 @@ lbl_6:
      * New model
      */
     state->modelage = 0;
-    goto lbl_43;
-lbl_42:
+    goto lbl_45;
+lbl_44:
     
     /*
      * Obtain f[] and Jacobian
@@ -1246,9 +1338,9 @@ lbl_42:
     ae_v_move(&state->x.ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,n-1));
     minlm_clearrequestfields(state, _state);
     state->needfij = ae_true;
-    state->rstate.stage = 7;
+    state->rstate.stage = 11;
     goto lbl_rcomm;
-lbl_7:
+lbl_11:
     state->needfij = ae_false;
     state->repnfunc = state->repnfunc+1;
     state->repnjac = state->repnjac+1;
@@ -1257,9 +1349,10 @@ lbl_7:
      * New model
      */
     state->modelage = 0;
-lbl_43:
-    goto lbl_41;
-lbl_40:
+lbl_45:
+lbl_41:
+    goto lbl_39;
+lbl_38:
     
     /*
      * State.J contains Jacobian or its current approximation;
@@ -1295,7 +1388,7 @@ lbl_40:
      * Increase model age
      */
     state->modelage = state->modelage+1;
-lbl_41:
+lbl_39:
     rmatrixgemm(n, n, m, 2.0, &state->j, 0, 0, 1, &state->j, 0, 0, 0, 0.0, &state->quadraticmodel, 0, 0, _state);
     rmatrixmv(n, m, &state->j, 0, 0, 1, &state->fi, 0, &state->gbase, 0, _state);
     ae_v_muld(&state->gbase.ptr.p_double[0], 1, ae_v_len(0,n-1), 2.0);
@@ -1360,45 +1453,50 @@ lbl_41:
      */
     iflag = -99;
     minlm_minlmstepfinderstart(&state->finderstate, &state->quadraticmodel, &state->gbase, state->fbase, &state->xbase, &state->fibase, state->modelage, _state);
-lbl_47:
+lbl_49:
     if( !minlm_minlmstepfinderiteration(&state->finderstate, &state->lambdav, &state->nu, &state->xnew, &state->deltax, &state->deltaxready, &state->deltaf, &state->deltafready, &iflag, &fnew, &state->repncholesky, _state) )
     {
-        goto lbl_48;
+        goto lbl_50;
     }
-    ae_assert(state->hasfi||state->hasf, "MinLM: internal error 2!", _state);
+    ae_assert(state->finderstate.needfi, "MinLM: internal error 2!", _state);
     state->repnfunc = state->repnfunc+1;
-    minlm_clearrequestfields(state, _state);
-    if( !state->finderstate.needfi )
-    {
-        goto lbl_49;
-    }
-    ae_assert(state->hasfi, "MinLM: internal error 2!", _state);
-    ae_v_move(&state->x.ptr.p_double[0], 1, &state->finderstate.x.ptr.p_double[0], 1, ae_v_len(0,n-1));
-    state->needfi = ae_true;
-    state->rstate.stage = 8;
-    goto lbl_rcomm;
-lbl_8:
-    state->needfi = ae_false;
-    ae_v_move(&state->finderstate.fi.ptr.p_double[0], 1, &state->fi.ptr.p_double[0], 1, ae_v_len(0,m-1));
-    goto lbl_47;
-lbl_49:
-    if( !state->finderstate.needf )
+    if( state->protocolversion!=2 )
     {
         goto lbl_51;
     }
-    ae_assert(state->hasf, "MinLM: internal error 2!", _state);
-    ae_v_move(&state->x.ptr.p_double[0], 1, &state->finderstate.x.ptr.p_double[0], 1, ae_v_len(0,n-1));
-    state->needf = ae_true;
-    state->rstate.stage = 9;
+    
+    /*
+     * Issue request and perform report using V2 protocol
+     */
+    state->requesttype = 4;
+    state->querysize = 1;
+    state->queryfuncs = m;
+    state->queryvars = n;
+    state->querydim = 0;
+    rcopyallocv(n, &state->finderstate.x, &state->querydata, _state);
+    rallocv(m, &state->replyfi, _state);
+    state->rstate.stage = 12;
     goto lbl_rcomm;
-lbl_9:
-    state->needf = ae_false;
-    state->finderstate.f = state->f;
-    goto lbl_47;
+lbl_12:
+    rcopyv(m, &state->replyfi, &state->finderstate.fi, _state);
+    goto lbl_52;
 lbl_51:
-    ae_assert(ae_false, "MinLM: internal error 2!", _state);
-    goto lbl_47;
-lbl_48:
+    
+    /*
+     * Use legacy V1 protocol
+     */
+    ae_assert(state->protocolversion==1, "MINLM: unexpected protocol, integrity check 5138 failed", _state);
+    minlm_clearrequestfields(state, _state);
+    ae_v_move(&state->x.ptr.p_double[0], 1, &state->finderstate.x.ptr.p_double[0], 1, ae_v_len(0,n-1));
+    state->needfi = ae_true;
+    state->rstate.stage = 13;
+    goto lbl_rcomm;
+lbl_13:
+    state->needfi = ae_false;
+    ae_v_move(&state->finderstate.fi.ptr.p_double[0], 1, &state->fi.ptr.p_double[0], 1, ae_v_len(0,m-1));
+lbl_52:
+    goto lbl_49;
+lbl_50:
     if( state->userterminationneeded )
     {
         
@@ -1421,7 +1519,7 @@ lbl_48:
     if( iflag==-2 )
     {
         state->modelage = state->maxmodelage+1;
-        goto lbl_38;
+        goto lbl_36;
     }
     if( iflag!=-1 )
     {
@@ -1436,21 +1534,44 @@ lbl_48:
     {
         goto lbl_55;
     }
+    if( state->protocolversion!=2 )
+    {
+        goto lbl_57;
+    }
+    
+    /*
+     * Issue request using V2 protocol
+     */
+    state->requesttype = -1;
+    state->queryvars = n;
+    state->reportf = state->fbase;
+    rcopyallocv(n, &state->xbase, &state->reportx, _state);
+    state->rstate.stage = 14;
+    goto lbl_rcomm;
+lbl_14:
+    goto lbl_58;
+lbl_57:
+    
+    /*
+     * Use legacy V1 protocol
+     */
+    ae_assert(state->protocolversion==1, "MINLM: unexpected protocol, integrity check 9600 failed", _state);
     ae_v_move(&state->x.ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,n-1));
     state->f = state->fbase;
     minlm_clearrequestfields(state, _state);
     state->xupdated = ae_true;
-    state->rstate.stage = 10;
+    state->rstate.stage = 15;
     goto lbl_rcomm;
-lbl_10:
+lbl_15:
     state->xupdated = ae_false;
+lbl_58:
 lbl_55:
     result = ae_false;
     return result;
 lbl_53:
     if( !(iflag==-8||iflag>0) )
     {
-        goto lbl_57;
+        goto lbl_59;
     }
     
     /*
@@ -1461,20 +1582,43 @@ lbl_53:
     state->repterminationtype = iflag;
     if( !state->xrep )
     {
-        goto lbl_59;
+        goto lbl_61;
     }
+    if( state->protocolversion!=2 )
+    {
+        goto lbl_63;
+    }
+    
+    /*
+     * Issue request using V2 protocol
+     */
+    state->requesttype = -1;
+    state->queryvars = n;
+    state->reportf = state->fbase;
+    rcopyallocv(n, &state->xbase, &state->reportx, _state);
+    state->rstate.stage = 16;
+    goto lbl_rcomm;
+lbl_16:
+    goto lbl_64;
+lbl_63:
+    
+    /*
+     * Use legacy V1 protocol
+     */
+    ae_assert(state->protocolversion==1, "MINLM: unexpected protocol, integrity check 4042 failed", _state);
     ae_v_move(&state->x.ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,n-1));
     state->f = state->fbase;
     minlm_clearrequestfields(state, _state);
     state->xupdated = ae_true;
-    state->rstate.stage = 11;
+    state->rstate.stage = 17;
     goto lbl_rcomm;
-lbl_11:
+lbl_17:
     state->xupdated = ae_false;
-lbl_59:
+lbl_64:
+lbl_61:
     result = ae_false;
     return result;
-lbl_57:
+lbl_59:
     state->f = fnew;
     
     /*
@@ -1488,25 +1632,48 @@ lbl_57:
     iflag = minlm_checkdecrease(&state->quadraticmodel, &state->gbase, state->fbase, n, &state->deltax, state->f, &state->lambdav, &state->nu, _state);
     if( iflag==0 )
     {
-        goto lbl_61;
+        goto lbl_65;
     }
     state->repterminationtype = iflag;
     if( !state->xrep )
     {
-        goto lbl_63;
+        goto lbl_67;
     }
+    if( state->protocolversion!=2 )
+    {
+        goto lbl_69;
+    }
+    
+    /*
+     * Issue request using V2 protocol
+     */
+    state->requesttype = -1;
+    state->queryvars = n;
+    state->reportf = state->fbase;
+    rcopyallocv(n, &state->xbase, &state->reportx, _state);
+    state->rstate.stage = 18;
+    goto lbl_rcomm;
+lbl_18:
+    goto lbl_70;
+lbl_69:
+    
+    /*
+     * Use legacy V1 protocol
+     */
+    ae_assert(state->protocolversion==1, "MINLM: unexpected protocol, integrity check 8643 failed", _state);
     ae_v_move(&state->x.ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,n-1));
     state->f = state->fbase;
     minlm_clearrequestfields(state, _state);
     state->xupdated = ae_true;
-    state->rstate.stage = 12;
+    state->rstate.stage = 19;
     goto lbl_rcomm;
-lbl_12:
+lbl_19:
     state->xupdated = ae_false;
-lbl_63:
+lbl_70:
+lbl_67:
     result = ae_false;
     return result;
-lbl_61:
+lbl_65:
     
     /*
      * Accept step, report it and
@@ -1522,672 +1689,98 @@ lbl_61:
     ae_v_move(&state->xbase.ptr.p_double[0], 1, &state->xnew.ptr.p_double[0], 1, ae_v_len(0,n-1));
     if( !state->xrep )
     {
-        goto lbl_65;
-    }
-    ae_v_move(&state->x.ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,n-1));
-    minlm_clearrequestfields(state, _state);
-    state->xupdated = ae_true;
-    state->rstate.stage = 13;
-    goto lbl_rcomm;
-lbl_13:
-    state->xupdated = ae_false;
-lbl_65:
-    state->repiterationscount = state->repiterationscount+1;
-    if( state->repiterationscount>=state->maxits&&state->maxits>0 )
-    {
-        state->repterminationtype = 5;
-    }
-    if( state->repterminationtype<=0 )
-    {
-        goto lbl_67;
-    }
-    if( !state->xrep )
-    {
-        goto lbl_69;
-    }
-    
-    /*
-     * Report: XBase contains new point, F contains function value at new point
-     */
-    ae_v_move(&state->x.ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,n-1));
-    minlm_clearrequestfields(state, _state);
-    state->xupdated = ae_true;
-    state->rstate.stage = 14;
-    goto lbl_rcomm;
-lbl_14:
-    state->xupdated = ae_false;
-lbl_69:
-    result = ae_false;
-    return result;
-lbl_67:
-    state->modelage = state->modelage+1;
-    goto lbl_38;
-lbl_39:
-    
-    /*
-     * Lambda is too large, we have to break iterations.
-     */
-    state->repterminationtype = 7;
-    if( !state->xrep )
-    {
         goto lbl_71;
     }
-    ae_v_move(&state->x.ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,n-1));
-    state->f = state->fbase;
-    minlm_clearrequestfields(state, _state);
-    state->xupdated = ae_true;
-    state->rstate.stage = 15;
-    goto lbl_rcomm;
-lbl_15:
-    state->xupdated = ae_false;
-lbl_71:
-    goto lbl_37;
-lbl_36:
-    
-    /*
-     * Legacy Hessian-based mode
-     *
-     * Main cycle.
-     *
-     * We move through it until either:
-     * * one of the stopping conditions is met
-     * * we decide that stopping conditions are too stringent
-     *   and break from cycle
-     *
-     */
-    if( state->nec+state->nic>0 )
+    if( state->protocolversion!=2 )
     {
-        
-        /*
-         * FGH solver does not support general linear constraints
-         */
-        state->repterminationtype = -5;
-        result = ae_false;
-        return result;
-    }
-lbl_73:
-    if( ae_false )
-    {
-        goto lbl_74;
+        goto lbl_73;
     }
     
     /*
-     * First, we have to prepare quadratic model for our function.
-     * We use BFlag to ensure that model is prepared;
-     * if it is false at the end of this block, something went wrong.
-     *
-     * We may either calculate brand new model or update old one.
-     *
-     * Before this block we have:
-     * * State.XBase            - current position.
-     * * State.DeltaX           - if DeltaXReady is True
-     * * State.DeltaF           - if DeltaFReady is True
-     *
-     * After this block is over, we will have:
-     * * State.XBase            - base point (unchanged)
-     * * State.FBase            - F(XBase)
-     * * State.GBase            - linear term
-     * * State.QuadraticModel   - quadratic term
-     * * State.LambdaV          - current estimate for lambda
-     *
-     * We also clear DeltaXReady/DeltaFReady flags
-     * after initialization is done.
+     * Issue request using V2 protocol
      */
-    bflag = ae_false;
-    if( !(state->algomode==0||state->algomode==1) )
-    {
-        goto lbl_75;
-    }
-    
-    /*
-     * Calculate f[] and Jacobian
-     */
-    if( !(state->modelage>state->maxmodelage||!(state->deltaxready&&state->deltafready)) )
-    {
-        goto lbl_77;
-    }
-    
-    /*
-     * Refresh model (using either finite differences or analytic Jacobian)
-     */
-    if( state->algomode!=0 )
-    {
-        goto lbl_79;
-    }
-    
-    /*
-     * Optimization using F values only.
-     * Use finite differences to estimate Jacobian.
-     */
-    ae_assert(state->hasfi, "MinLMIteration: internal error when estimating Jacobian (no f[])", _state);
-    k = 0;
-lbl_81:
-    if( k>n-1 )
-    {
-        goto lbl_83;
-    }
-    
-    /*
-     * We guard X[k] from leaving [BndL,BndU].
-     * In case BndL=BndU, we assume that derivative in this direction is zero.
-     */
-    ae_v_move(&state->x.ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,n-1));
-    state->x.ptr.p_double[k] = state->x.ptr.p_double[k]-state->s.ptr.p_double[k]*state->diffstep;
-    if( state->havebndl.ptr.p_bool[k] )
-    {
-        state->x.ptr.p_double[k] = ae_maxreal(state->x.ptr.p_double[k], state->bndl.ptr.p_double[k], _state);
-    }
-    if( state->havebndu.ptr.p_bool[k] )
-    {
-        state->x.ptr.p_double[k] = ae_minreal(state->x.ptr.p_double[k], state->bndu.ptr.p_double[k], _state);
-    }
-    state->xm1 = state->x.ptr.p_double[k];
-    minlm_clearrequestfields(state, _state);
-    state->needfi = ae_true;
-    state->rstate.stage = 16;
-    goto lbl_rcomm;
-lbl_16:
-    state->repnfunc = state->repnfunc+1;
-    ae_v_move(&state->fm1.ptr.p_double[0], 1, &state->fi.ptr.p_double[0], 1, ae_v_len(0,m-1));
-    ae_v_move(&state->x.ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,n-1));
-    state->x.ptr.p_double[k] = state->x.ptr.p_double[k]+state->s.ptr.p_double[k]*state->diffstep;
-    if( state->havebndl.ptr.p_bool[k] )
-    {
-        state->x.ptr.p_double[k] = ae_maxreal(state->x.ptr.p_double[k], state->bndl.ptr.p_double[k], _state);
-    }
-    if( state->havebndu.ptr.p_bool[k] )
-    {
-        state->x.ptr.p_double[k] = ae_minreal(state->x.ptr.p_double[k], state->bndu.ptr.p_double[k], _state);
-    }
-    state->xp1 = state->x.ptr.p_double[k];
-    minlm_clearrequestfields(state, _state);
-    state->needfi = ae_true;
-    state->rstate.stage = 17;
-    goto lbl_rcomm;
-lbl_17:
-    state->repnfunc = state->repnfunc+1;
-    ae_v_move(&state->fp1.ptr.p_double[0], 1, &state->fi.ptr.p_double[0], 1, ae_v_len(0,m-1));
-    v = state->xp1-state->xm1;
-    if( ae_fp_neq(v,(double)(0)) )
-    {
-        v = (double)1/v;
-        ae_v_moved(&state->j.ptr.pp_double[0][k], state->j.stride, &state->fp1.ptr.p_double[0], 1, ae_v_len(0,m-1), v);
-        ae_v_subd(&state->j.ptr.pp_double[0][k], state->j.stride, &state->fm1.ptr.p_double[0], 1, ae_v_len(0,m-1), v);
-    }
-    else
-    {
-        for(i=0; i<=m-1; i++)
-        {
-            state->j.ptr.pp_double[i][k] = (double)(0);
-        }
-    }
-    k = k+1;
-    goto lbl_81;
-lbl_83:
-    
-    /*
-     * Calculate F(XBase)
-     */
-    ae_v_move(&state->x.ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,n-1));
-    minlm_clearrequestfields(state, _state);
-    state->needfi = ae_true;
-    state->rstate.stage = 18;
-    goto lbl_rcomm;
-lbl_18:
-    state->needfi = ae_false;
-    state->repnfunc = state->repnfunc+1;
-    state->repnjac = state->repnjac+1;
-    
-    /*
-     * New model
-     */
-    state->modelage = 0;
-    goto lbl_80;
-lbl_79:
-    
-    /*
-     * Obtain f[] and Jacobian
-     */
-    ae_v_move(&state->x.ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,n-1));
-    minlm_clearrequestfields(state, _state);
-    state->needfij = ae_true;
-    state->rstate.stage = 19;
-    goto lbl_rcomm;
-lbl_19:
-    state->needfij = ae_false;
-    state->repnfunc = state->repnfunc+1;
-    state->repnjac = state->repnjac+1;
-    
-    /*
-     * New model
-     */
-    state->modelage = 0;
-lbl_80:
-    goto lbl_78;
-lbl_77:
-    
-    /*
-     * State.J contains Jacobian or its current approximation;
-     * refresh it using secant updates:
-     *
-     * f(x0+dx) = f(x0) + J*dx,
-     * J_new = J_old + u*h'
-     * h = x_new-x_old
-     * u = (f_new - f_old - J_old*h)/(h'h)
-     *
-     * We can explicitly generate h and u, but it is
-     * preferential to do in-place calculations. Only
-     * I-th row of J_old is needed to calculate u[I],
-     * so we can update J row by row in one pass.
-     *
-     * NOTE: we expect that State.XBase contains new point,
-     * State.FBase contains old point, State.DeltaX and
-     * State.DeltaY contain updates from last step.
-     */
-    ae_assert(state->deltaxready&&state->deltafready, "MinLMIteration: uninitialized DeltaX/DeltaF", _state);
-    t = ae_v_dotproduct(&state->deltax.ptr.p_double[0], 1, &state->deltax.ptr.p_double[0], 1, ae_v_len(0,n-1));
-    ae_assert(ae_fp_neq(t,(double)(0)), "MinLM: internal error (T=0)", _state);
-    for(i=0; i<=m-1; i++)
-    {
-        v = ae_v_dotproduct(&state->j.ptr.pp_double[i][0], 1, &state->deltax.ptr.p_double[0], 1, ae_v_len(0,n-1));
-        v = (state->deltaf.ptr.p_double[i]-v)/t;
-        ae_v_addd(&state->j.ptr.pp_double[i][0], 1, &state->deltax.ptr.p_double[0], 1, ae_v_len(0,n-1), v);
-    }
-    ae_v_move(&state->fi.ptr.p_double[0], 1, &state->fibase.ptr.p_double[0], 1, ae_v_len(0,m-1));
-    ae_v_add(&state->fi.ptr.p_double[0], 1, &state->deltaf.ptr.p_double[0], 1, ae_v_len(0,m-1));
-    
-    /*
-     * Increase model age
-     */
-    state->modelage = state->modelage+1;
-lbl_78:
-    
-    /*
-     * Generate quadratic model:
-     *     f(xbase+dx) =
-     *       = (f0 + J*dx)'(f0 + J*dx)
-     *       = f0^2 + dx'J'f0 + f0*J*dx + dx'J'J*dx
-     *       = f0^2 + 2*f0*J*dx + dx'J'J*dx
-     *
-     * Note that we calculate 2*(J'J) instead of J'J because
-     * our quadratic model is based on Tailor decomposition,
-     * i.e. it has 0.5 before quadratic term.
-     */
-    rmatrixgemm(n, n, m, 2.0, &state->j, 0, 0, 1, &state->j, 0, 0, 0, 0.0, &state->quadraticmodel, 0, 0, _state);
-    rmatrixmv(n, m, &state->j, 0, 0, 1, &state->fi, 0, &state->gbase, 0, _state);
-    ae_v_muld(&state->gbase.ptr.p_double[0], 1, ae_v_len(0,n-1), 2.0);
-    v = ae_v_dotproduct(&state->fi.ptr.p_double[0], 1, &state->fi.ptr.p_double[0], 1, ae_v_len(0,m-1));
-    state->fbase = v;
-    ae_v_move(&state->fibase.ptr.p_double[0], 1, &state->fi.ptr.p_double[0], 1, ae_v_len(0,m-1));
-    
-    /*
-     * set control variables
-     */
-    bflag = ae_true;
-lbl_75:
-    if( state->algomode!=2 )
-    {
-        goto lbl_84;
-    }
-    ae_assert(!state->hasfi, "MinLMIteration: internal error (HasFI is True in Hessian-based mode)", _state);
-    
-    /*
-     * Obtain F, G, H
-     */
-    ae_v_move(&state->x.ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,n-1));
-    minlm_clearrequestfields(state, _state);
-    state->needfgh = ae_true;
+    state->requesttype = -1;
+    state->queryvars = n;
+    state->reportf = state->f;
+    rcopyallocv(n, &state->xbase, &state->reportx, _state);
     state->rstate.stage = 20;
     goto lbl_rcomm;
 lbl_20:
-    state->needfgh = ae_false;
-    state->repnfunc = state->repnfunc+1;
-    state->repngrad = state->repngrad+1;
-    state->repnhess = state->repnhess+1;
-    rmatrixcopy(n, n, &state->h, 0, 0, &state->quadraticmodel, 0, 0, _state);
-    ae_v_move(&state->gbase.ptr.p_double[0], 1, &state->g.ptr.p_double[0], 1, ae_v_len(0,n-1));
-    state->fbase = state->f;
+    goto lbl_74;
+lbl_73:
     
     /*
-     * set control variables
+     * Use legacy V1 protocol
      */
-    bflag = ae_true;
-    state->modelage = 0;
-lbl_84:
-    ae_assert(bflag, "MinLM: internal integrity check failed!", _state);
-    state->deltaxready = ae_false;
-    state->deltafready = ae_false;
-    
-    /*
-     * Perform integrity check (presense of NAN/INF)
-     */
-    v = state->fbase;
-    for(i=0; i<=n-1; i++)
-    {
-        v = 0.1*v+state->gbase.ptr.p_double[i];
-    }
-    if( !ae_isfinite(v, _state) )
-    {
-        
-        /*
-         * Break!
-         */
-        state->repterminationtype = -8;
-        result = ae_false;
-        return result;
-    }
-    
-    /*
-     * If Lambda is not initialized, initialize it using quadratic model
-     */
-    if( ae_fp_less(state->lambdav,(double)(0)) )
-    {
-        state->lambdav = (double)(0);
-        for(i=0; i<=n-1; i++)
-        {
-            state->lambdav = ae_maxreal(state->lambdav, ae_fabs(state->quadraticmodel.ptr.pp_double[i][i], _state)*ae_sqr(state->s.ptr.p_double[i], _state), _state);
-        }
-        state->lambdav = 0.001*state->lambdav;
-        if( ae_fp_eq(state->lambdav,(double)(0)) )
-        {
-            state->lambdav = (double)(1);
-        }
-    }
-    
-    /*
-     * Find value of Levenberg-Marquardt damping parameter which:
-     * * leads to positive definite damped model
-     * * within bounds specified by StpMax
-     * * generates step which decreases function value
-     *
-     * After this block IFlag is set to:
-     * * -3, if constraints are infeasible
-     * * -2, if model update is needed (either Lambda growth is too large
-     *       or step is too short, but we can't rely on model and stop iterations)
-     * * -1, if model is fresh, Lambda have grown too large, termination is needed
-     * *  0, if everything is OK, continue iterations
-     *
-     * State.Nu can have any value on enter, but after exit it is set to 1.0
-     */
-    iflag = -99;
-lbl_86:
-    if( ae_false )
-    {
-        goto lbl_87;
-    }
-    
-    /*
-     * Do we need model update?
-     */
-    if( state->modelage>0&&ae_fp_greater_eq(state->nu,minlm_suspiciousnu) )
-    {
-        iflag = -2;
-        goto lbl_87;
-    }
-    
-    /*
-     * Setup quadratic solver and solve quadratic programming problem.
-     * After problem is solved we'll try to bound step by StpMax
-     * (Lambda will be increased if step size is too large).
-     *
-     * We use BFlag variable to indicate that we have to increase Lambda.
-     * If it is False, we will try to increase Lambda and move to new iteration.
-     */
-    bflag = ae_true;
-    minqpsetstartingpointfast(&state->qpstate, &state->xbase, _state);
-    minqpsetoriginfast(&state->qpstate, &state->xbase, _state);
-    minqpsetlineartermfast(&state->qpstate, &state->gbase, _state);
-    minqpsetquadratictermfast(&state->qpstate, &state->quadraticmodel, ae_true, 0.0, _state);
-    for(i=0; i<=n-1; i++)
-    {
-        state->tmp0.ptr.p_double[i] = state->quadraticmodel.ptr.pp_double[i][i]+state->lambdav/ae_sqr(state->s.ptr.p_double[i], _state);
-    }
-    minqprewritediagonal(&state->qpstate, &state->tmp0, _state);
-    minqpoptimize(&state->qpstate, _state);
-    minqpresultsbuf(&state->qpstate, &state->xdir, &state->qprep, _state);
-    if( state->qprep.terminationtype>0 )
-    {
-        
-        /*
-         * successful solution of QP problem
-         */
-        ae_v_sub(&state->xdir.ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,n-1));
-        v = ae_v_dotproduct(&state->xdir.ptr.p_double[0], 1, &state->xdir.ptr.p_double[0], 1, ae_v_len(0,n-1));
-        if( ae_isfinite(v, _state) )
-        {
-            v = ae_sqrt(v, _state);
-            if( ae_fp_greater(state->stpmax,(double)(0))&&ae_fp_greater(v,state->stpmax) )
-            {
-                bflag = ae_false;
-            }
-        }
-        else
-        {
-            bflag = ae_false;
-        }
-    }
-    else
-    {
-        
-        /*
-         * Either problem is non-convex (increase LambdaV) or constraints are inconsistent
-         */
-        ae_assert((state->qprep.terminationtype==-3||state->qprep.terminationtype==-4)||state->qprep.terminationtype==-5, "MinLM: unexpected completion code from QP solver", _state);
-        if( state->qprep.terminationtype==-3 )
-        {
-            iflag = -3;
-            goto lbl_87;
-        }
-        bflag = ae_false;
-    }
-    if( !bflag )
-    {
-        
-        /*
-         * Solution failed:
-         * try to increase lambda to make matrix positive definite and continue.
-         */
-        if( !minlm_increaselambda(&state->lambdav, &state->nu, _state) )
-        {
-            iflag = -1;
-            goto lbl_87;
-        }
-        goto lbl_86;
-    }
-    
-    /*
-     * Step in State.XDir and it is bounded by StpMax.
-     *
-     * We should check stopping conditions on step size here.
-     * DeltaX, which is used for secant updates, is initialized here.
-     *
-     * This code is a bit tricky because sometimes XDir<>0, but
-     * it is so small that XDir+XBase==XBase (in finite precision
-     * arithmetics). So we set DeltaX to XBase, then
-     * add XDir, and then subtract XBase to get exact value of
-     * DeltaX.
-     *
-     * Step length is estimated using DeltaX.
-     *
-     * NOTE: stopping conditions are tested
-     * for fresh models only (ModelAge=0)
-     */
-    ae_v_move(&state->deltax.ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,n-1));
-    ae_v_add(&state->deltax.ptr.p_double[0], 1, &state->xdir.ptr.p_double[0], 1, ae_v_len(0,n-1));
-    ae_v_sub(&state->deltax.ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,n-1));
-    state->deltaxready = ae_true;
-    v = 0.0;
-    for(i=0; i<=n-1; i++)
-    {
-        v = v+ae_sqr(state->deltax.ptr.p_double[i]/state->s.ptr.p_double[i], _state);
-    }
-    v = ae_sqrt(v, _state);
-    if( ae_fp_greater(v,state->epsx) )
-    {
-        goto lbl_88;
-    }
-    if( state->modelage!=0 )
-    {
-        goto lbl_90;
-    }
-    
-    /*
-     * Step is too short, model is fresh and we can rely on it.
-     * Terminating.
-     */
-    state->repterminationtype = 2;
-    if( !state->xrep )
-    {
-        goto lbl_92;
-    }
+    ae_assert(state->protocolversion==1, "MINLM: unexpected protocol, integrity check 9600 failed", _state);
     ae_v_move(&state->x.ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,n-1));
-    state->f = state->fbase;
     minlm_clearrequestfields(state, _state);
     state->xupdated = ae_true;
     state->rstate.stage = 21;
     goto lbl_rcomm;
 lbl_21:
     state->xupdated = ae_false;
-lbl_92:
-    result = ae_false;
-    return result;
-    goto lbl_91;
-lbl_90:
-    
-    /*
-     * Step is suspiciously short, but model is not fresh
-     * and we can't rely on it.
-     */
-    iflag = -2;
-    goto lbl_87;
-lbl_91:
-lbl_88:
-    
-    /*
-     * Let's evaluate new step:
-     * a) if we have Fi vector, we evaluate it using rcomm, and
-     *    then we manually calculate State.F as sum of squares of Fi[]
-     * b) if we have F value, we just evaluate it through rcomm interface
-     *
-     * We prefer (a) because we may need Fi vector for additional
-     * iterations
-     */
-    ae_assert(state->hasfi||state->hasf, "MinLM: internal error 2!", _state);
-    ae_v_move(&state->x.ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,n-1));
-    ae_v_add(&state->x.ptr.p_double[0], 1, &state->xdir.ptr.p_double[0], 1, ae_v_len(0,n-1));
-    minlm_clearrequestfields(state, _state);
-    if( !state->hasfi )
+lbl_74:
+lbl_71:
+    state->fstagnationcnt = icase2(ae_fp_less(ae_fabs(state->fbase-state->f, _state),minlm_stagnationfeps*rmaxabs3(state->fbase, state->f, (double)(1), _state)), state->fstagnationcnt+1, 0, _state);
+    state->repiterationscount = state->repiterationscount+1;
+    if( state->repiterationscount>=state->maxits&&state->maxits>0 )
     {
-        goto lbl_94;
+        state->repterminationtype = 5;
     }
-    state->needfi = ae_true;
+    if( state->fstagnationcnt>=minlm_stagnationfits )
+    {
+        state->repterminationtype = 7;
+    }
+    if( state->repterminationtype<=0 )
+    {
+        goto lbl_75;
+    }
+    if( !state->xrep )
+    {
+        goto lbl_77;
+    }
+    
+    /*
+     * Report: XBase contains new point, F contains function value at new point
+     */
+    if( state->protocolversion!=2 )
+    {
+        goto lbl_79;
+    }
+    
+    /*
+     * Issue request using V2 protocol
+     */
+    state->requesttype = -1;
+    state->queryvars = n;
+    state->reportf = state->f;
+    rcopyallocv(n, &state->xbase, &state->reportx, _state);
     state->rstate.stage = 22;
     goto lbl_rcomm;
 lbl_22:
-    state->needfi = ae_false;
-    v = ae_v_dotproduct(&state->fi.ptr.p_double[0], 1, &state->fi.ptr.p_double[0], 1, ae_v_len(0,m-1));
-    state->f = v;
-    ae_v_move(&state->deltaf.ptr.p_double[0], 1, &state->fi.ptr.p_double[0], 1, ae_v_len(0,m-1));
-    ae_v_sub(&state->deltaf.ptr.p_double[0], 1, &state->fibase.ptr.p_double[0], 1, ae_v_len(0,m-1));
-    state->deltafready = ae_true;
-    goto lbl_95;
-lbl_94:
-    state->needf = ae_true;
+    goto lbl_80;
+lbl_79:
+    
+    /*
+     * Use legacy V1 protocol
+     */
+    ae_assert(state->protocolversion==1, "MINLM: unexpected protocol, integrity check 9600 failed", _state);
+    ae_v_move(&state->x.ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,n-1));
+    minlm_clearrequestfields(state, _state);
+    state->xupdated = ae_true;
     state->rstate.stage = 23;
     goto lbl_rcomm;
 lbl_23:
-    state->needf = ae_false;
-lbl_95:
-    state->repnfunc = state->repnfunc+1;
-    if( !ae_isfinite(state->f, _state) )
-    {
-        
-        /*
-         * Integrity check failed, break!
-         */
-        state->repterminationtype = -8;
-        result = ae_false;
-        return result;
-    }
-    if( ae_fp_greater_eq(state->f,state->fbase) )
-    {
-        
-        /*
-         * Increase lambda and continue
-         */
-        if( !minlm_increaselambda(&state->lambdav, &state->nu, _state) )
-        {
-            iflag = -1;
-            goto lbl_87;
-        }
-        goto lbl_86;
-    }
-    
-    /*
-     * We've found our step!
-     */
-    iflag = 0;
-    goto lbl_87;
-    goto lbl_86;
-lbl_87:
-    if( state->userterminationneeded )
-    {
-        
-        /*
-         * User requested termination
-         */
-        ae_v_move(&state->x.ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,n-1));
-        state->repterminationtype = 8;
-        result = ae_false;
-        return result;
-    }
-    state->nu = (double)(1);
-    ae_assert(iflag>=-3&&iflag<=0, "MinLM: internal integrity check failed!", _state);
-    if( iflag==-3 )
-    {
-        state->repterminationtype = -3;
-        result = ae_false;
-        return result;
-    }
-    if( iflag==-2 )
-    {
-        state->modelage = state->maxmodelage+1;
-        goto lbl_73;
-    }
-    if( iflag==-1 )
-    {
-        goto lbl_74;
-    }
-    
-    /*
-     * Levenberg-Marquardt step is ready.
-     * Compare predicted vs. actual decrease and decide what to do with lambda.
-     *
-     * NOTE: we expect that State.DeltaX contains direction of step,
-     * State.F contains function value at new point.
-     */
-    ae_assert(state->deltaxready, "MinLM: deltaX is not ready", _state);
-    t = (double)(0);
-    for(i=0; i<=n-1; i++)
-    {
-        v = ae_v_dotproduct(&state->quadraticmodel.ptr.pp_double[i][0], 1, &state->deltax.ptr.p_double[0], 1, ae_v_len(0,n-1));
-        t = t+state->deltax.ptr.p_double[i]*state->gbase.ptr.p_double[i]+0.5*state->deltax.ptr.p_double[i]*v;
-    }
-    state->predicteddecrease = -t;
-    state->actualdecrease = -(state->f-state->fbase);
-    if( ae_fp_less_eq(state->predicteddecrease,(double)(0)) )
-    {
-        goto lbl_74;
-    }
-    v = state->actualdecrease/state->predicteddecrease;
-    if( ae_fp_greater_eq(v,0.1) )
-    {
-        goto lbl_96;
-    }
-    if( minlm_increaselambda(&state->lambdav, &state->nu, _state) )
-    {
-        goto lbl_98;
-    }
+    state->xupdated = ae_false;
+lbl_80:
+lbl_77:
+    result = ae_false;
+    return result;
+lbl_75:
+    state->modelage = state->modelage+1;
+    goto lbl_36;
+lbl_37:
     
     /*
      * Lambda is too large, we have to break iterations.
@@ -2195,42 +1788,30 @@ lbl_87:
     state->repterminationtype = 7;
     if( !state->xrep )
     {
-        goto lbl_100;
+        goto lbl_81;
     }
-    ae_v_move(&state->x.ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,n-1));
-    state->f = state->fbase;
-    minlm_clearrequestfields(state, _state);
-    state->xupdated = ae_true;
-    state->rstate.stage = 24;
-    goto lbl_rcomm;
-lbl_24:
-    state->xupdated = ae_false;
-lbl_100:
-    result = ae_false;
-    return result;
-lbl_98:
-lbl_96:
-    if( ae_fp_greater(v,0.5) )
+    if( state->protocolversion!=2 )
     {
-        minlm_decreaselambda(&state->lambdav, &state->nu, _state);
+        goto lbl_83;
     }
     
     /*
-     * Accept step, report it and
-     * test stopping conditions on iterations count and function decrease.
-     *
-     * NOTE: we expect that State.DeltaX contains direction of step,
-     * State.F contains function value at new point.
-     *
-     * NOTE2: we should update XBase ONLY. In the beginning of the next
-     * iteration we expect that State.FIBase is NOT updated and
-     * contains old value of a function vector.
+     * Issue request using V2 protocol
      */
-    ae_v_add(&state->xbase.ptr.p_double[0], 1, &state->deltax.ptr.p_double[0], 1, ae_v_len(0,n-1));
-    if( !state->xrep )
-    {
-        goto lbl_102;
-    }
+    state->requesttype = -1;
+    state->queryvars = n;
+    state->reportf = state->f;
+    rcopyallocv(n, &state->xbase, &state->reportx, _state);
+    state->rstate.stage = 24;
+    goto lbl_rcomm;
+lbl_24:
+    goto lbl_84;
+lbl_83:
+    
+    /*
+     * Use legacy V1 protocol
+     */
+    ae_assert(state->protocolversion==1, "MINLM: unexpected protocol, integrity check 9600 failed", _state);
     ae_v_move(&state->x.ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,n-1));
     minlm_clearrequestfields(state, _state);
     state->xupdated = ae_true;
@@ -2238,57 +1819,8 @@ lbl_96:
     goto lbl_rcomm;
 lbl_25:
     state->xupdated = ae_false;
-lbl_102:
-    state->repiterationscount = state->repiterationscount+1;
-    if( state->repiterationscount>=state->maxits&&state->maxits>0 )
-    {
-        state->repterminationtype = 5;
-    }
-    if( state->repterminationtype<=0 )
-    {
-        goto lbl_104;
-    }
-    if( !state->xrep )
-    {
-        goto lbl_106;
-    }
-    
-    /*
-     * Report: XBase contains new point, F contains function value at new point
-     */
-    ae_v_move(&state->x.ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,n-1));
-    minlm_clearrequestfields(state, _state);
-    state->xupdated = ae_true;
-    state->rstate.stage = 26;
-    goto lbl_rcomm;
-lbl_26:
-    state->xupdated = ae_false;
-lbl_106:
-    result = ae_false;
-    return result;
-lbl_104:
-    state->modelage = state->modelage+1;
-    goto lbl_73;
-lbl_74:
-    
-    /*
-     * Lambda is too large, we have to break iterations.
-     */
-    state->repterminationtype = 7;
-    if( !state->xrep )
-    {
-        goto lbl_108;
-    }
-    ae_v_move(&state->x.ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,n-1));
-    state->f = state->fbase;
-    minlm_clearrequestfields(state, _state);
-    state->xupdated = ae_true;
-    state->rstate.stage = 27;
-    goto lbl_rcomm;
-lbl_27:
-    state->xupdated = ae_false;
-lbl_108:
-lbl_37:
+lbl_84:
+lbl_81:
     result = ae_false;
     return result;
     
@@ -2303,10 +1835,13 @@ lbl_rcomm:
     state->rstate.ia.ptr.p_int[3] = i;
     state->rstate.ia.ptr.p_int[4] = k;
     state->rstate.ba.ptr.p_bool[0] = bflag;
+    state->rstate.ba.ptr.p_bool[1] = dotrace;
     state->rstate.ra.ptr.p_double[0] = v;
-    state->rstate.ra.ptr.p_double[1] = s;
-    state->rstate.ra.ptr.p_double[2] = t;
-    state->rstate.ra.ptr.p_double[3] = fnew;
+    state->rstate.ra.ptr.p_double[1] = xl;
+    state->rstate.ra.ptr.p_double[2] = xr;
+    state->rstate.ra.ptr.p_double[3] = s;
+    state->rstate.ra.ptr.p_double[4] = t;
+    state->rstate.ra.ptr.p_double[5] = fnew;
     return result;
 }
 
@@ -2489,7 +2024,7 @@ void minlmresultsbuf(const minlmstate* state,
     {
         ae_vector_set_length(x, state->n, _state);
     }
-    ae_v_move(&x->ptr.p_double[0], 1, &state->x.ptr.p_double[0], 1, ae_v_len(0,state->n-1));
+    ae_v_move(&x->ptr.p_double[0], 1, &state->xbase.ptr.p_double[0], 1, ae_v_len(0,state->n-1));
     rep->iterationscount = state->repiterationscount;
     rep->terminationtype = state->repterminationtype;
     rep->nfunc = state->repnfunc;
@@ -2525,10 +2060,9 @@ void minlmrestartfrom(minlmstate* state,
     ae_assert(isfinitevector(x, state->n, _state), "MinLMRestartFrom: X contains infinite or NaN values!", _state);
     ae_v_move(&state->xbase.ptr.p_double[0], 1, &x->ptr.p_double[0], 1, ae_v_len(0,state->n-1));
     ae_vector_set_length(&state->rstate.ia, 4+1, _state);
-    ae_vector_set_length(&state->rstate.ba, 0+1, _state);
-    ae_vector_set_length(&state->rstate.ra, 3+1, _state);
+    ae_vector_set_length(&state->rstate.ba, 1+1, _state);
+    ae_vector_set_length(&state->rstate.ra, 5+1, _state);
     state->rstate.stage = -1;
-    minlm_clearrequestfields(state, _state);
 }
 
 
@@ -2565,89 +2099,58 @@ void minlmrequesttermination(minlmstate* state, ae_state *_state)
 
 
 /*************************************************************************
-This is obsolete function.
-
-Since ALGLIB 3.3 it is equivalent to MinLMCreateVJ().
-
-  -- ALGLIB --
-     Copyright 30.03.2009 by Bochkanov Sergey
+Set V1 reverse communication protocol
 *************************************************************************/
-void minlmcreatevgj(ae_int_t n,
-     ae_int_t m,
-     /* Real    */ const ae_vector* x,
-     minlmstate* state,
-     ae_state *_state)
+void minlmsetprotocolv1(minlmstate* state, ae_state *_state)
 {
 
-    _minlmstate_clear(state);
 
-    minlmcreatevj(n, m, x, state, _state);
+    state->protocolversion = 1;
 }
 
 
 /*************************************************************************
-This is obsolete function.
-
-Since ALGLIB 3.3 it is equivalent to MinLMCreateFJ().
-
-  -- ALGLIB --
-     Copyright 30.03.2009 by Bochkanov Sergey
+Set V2 reverse communication protocol
 *************************************************************************/
-void minlmcreatefgj(ae_int_t n,
-     ae_int_t m,
-     /* Real    */ const ae_vector* x,
-     minlmstate* state,
-     ae_state *_state)
+void minlmsetprotocolv2(minlmstate* state, ae_state *_state)
 {
 
-    _minlmstate_clear(state);
 
-    minlmcreatefj(n, m, x, state, _state);
+    state->protocolversion = 2;
 }
 
 
 /*************************************************************************
-This function is considered obsolete since ALGLIB 3.1.0 and is present for
-backward  compatibility  only.  We  recommend  to use MinLMCreateVJ, which
-provides similar, but more consistent and feature-rich interface.
-
-  -- ALGLIB --
-     Copyright 30.03.2009 by Bochkanov Sergey
+Unpacks dense Jacobian into array
 *************************************************************************/
-void minlmcreatefj(ae_int_t n,
-     ae_int_t m,
-     /* Real    */ const ae_vector* x,
-     minlmstate* state,
+void unpackdj(ae_int_t m,
+     ae_int_t n,
+     /* Real    */ const ae_vector* replydj,
+     /* Real    */ ae_matrix* jac,
      ae_state *_state)
 {
+    ae_int_t i;
+    ae_int_t j;
+    ae_int_t offs;
 
-    _minlmstate_clear(state);
 
-    ae_assert(n>=1, "MinLMCreateFJ: N<1!", _state);
-    ae_assert(m>=1, "MinLMCreateFJ: M<1!", _state);
-    ae_assert(x->cnt>=n, "MinLMCreateFJ: Length(X)<N!", _state);
-    ae_assert(isfinitevector(x, n, _state), "MinLMCreateFJ: X contains infinite or NaN values!", _state);
-    
-    /*
-     * initialize
-     */
-    state->teststep = (double)(0);
-    state->n = n;
-    state->m = m;
-    state->algomode = 1;
-    state->hasf = ae_true;
-    state->hasfi = ae_false;
-    state->hasg = ae_false;
-    
-    /*
-     * init 2
-     */
-    minlm_lmprepare(n, m, ae_true, state, _state);
-    minlmsetacctype(state, 0, _state);
-    minlmsetcond(state, (double)(0), 0, _state);
-    minlmsetxrep(state, ae_false, _state);
-    minlmsetstpmax(state, (double)(0), _state);
-    minlmrestartfrom(state, x, _state);
+    if( replydj->cnt<m*n )
+    {
+        ae_assert(ae_false, "UnpackDJ: reply size is too small", _state);
+    }
+    if( jac->rows<m||jac->cols<n )
+    {
+        ae_assert(ae_false, "UnpackDJ: output size is too small", _state);
+    }
+    offs = 0;
+    for(i=0; i<=m-1; i++)
+    {
+        for(j=0; j<=n-1; j++)
+        {
+            jac->ptr.pp_double[i][j] = replydj->ptr.p_double[offs];
+            offs = offs+1;
+        }
+    }
 }
 
 
@@ -2756,6 +2259,7 @@ static void minlm_clearrequestfields(minlmstate* state, ae_state *_state)
 {
 
 
+    ae_assert(state->protocolversion==1, "MINLM: unexpected protocol", _state);
     state->needf = ae_false;
     state->needfg = ae_false;
     state->needfgh = ae_false;
@@ -2916,7 +2420,6 @@ static ae_bool minlm_minlmstepfinderinit(minlmstepfinder* state,
      ae_int_t n,
      ae_int_t m,
      ae_int_t maxmodelage,
-     ae_bool hasfi,
      /* Real    */ ae_vector* xbase,
      /* Real    */ const ae_vector* bndl,
      /* Real    */ const ae_vector* bndu,
@@ -2935,7 +2438,6 @@ static ae_bool minlm_minlmstepfinderinit(minlmstepfinder* state,
     state->n = n;
     state->m = m;
     state->maxmodelage = maxmodelage;
-    state->hasfi = hasfi;
     state->stpmax = stpmax;
     state->epsx = epsx;
     
@@ -2953,11 +2455,8 @@ static ae_bool minlm_minlmstepfinderinit(minlmstepfinder* state,
     rvectorsetlengthatleast(&state->modeldiag, n, _state);
     ivectorsetlengthatleast(&state->tmpct, nec+nic, _state);
     rvectorsetlengthatleast(&state->xdir, n, _state);
-    if( hasfi )
-    {
-        rvectorsetlengthatleast(&state->fi, m, _state);
-        rvectorsetlengthatleast(&state->fibase, m, _state);
-    }
+    rvectorsetlengthatleast(&state->fi, m, _state);
+    rvectorsetlengthatleast(&state->fibase, m, _state);
     for(i=0; i<=n-1; i++)
     {
         ae_assert(ae_isfinite(bndl->ptr.p_double[i], _state)||ae_isneginf(bndl->ptr.p_double[i], _state), "MinLM: integrity check failed", _state);
@@ -3060,12 +2559,9 @@ static void minlm_minlmstepfinderstart(minlmstepfinder* state,
     state->rstate.stage = -1;
     state->modelage = modelage;
     state->fbase = fbase;
-    if( state->hasfi )
+    for(i=0; i<=state->m-1; i++)
     {
-        for(i=0; i<=state->m-1; i++)
-        {
-            state->fibase.ptr.p_double[i] = fibase->ptr.p_double[i];
-        }
+        state->fibase.ptr.p_double[i] = fibase->ptr.p_double[i];
     }
     for(i=0; i<=n-1; i++)
     {
@@ -3141,19 +2637,15 @@ static ae_bool minlm_minlmstepfinderiteration(minlmstepfinder* state,
     }
     else
     {
-        i = -838;
-        n = 939;
-        m = -526;
-        bflag = ae_true;
-        v = -541.0;
+        i = 763;
+        n = -541;
+        m = -698;
+        bflag = ae_false;
+        v = -318.0;
     }
     if( state->rstate.stage==0 )
     {
         goto lbl_0;
-    }
-    if( state->rstate.stage==1 )
-    {
-        goto lbl_1;
     }
     
     /*
@@ -3162,10 +2654,10 @@ static ae_bool minlm_minlmstepfinderiteration(minlmstepfinder* state,
     *iflag = -99;
     n = state->n;
     m = state->m;
-lbl_2:
+lbl_1:
     if( ae_false )
     {
-        goto lbl_3;
+        goto lbl_2;
     }
     *deltaxready = ae_false;
     *deltafready = ae_false;
@@ -3176,7 +2668,7 @@ lbl_2:
     if( state->modelage>0&&ae_fp_greater_eq(*nu,minlm_suspiciousnu) )
     {
         *iflag = -2;
-        goto lbl_3;
+        goto lbl_2;
     }
     
     /*
@@ -3203,7 +2695,7 @@ lbl_2:
          * Infeasible constraints
          */
         *iflag = -3;
-        goto lbl_3;
+        goto lbl_2;
     }
     if( state->qprep.terminationtype==-4||state->qprep.terminationtype==-5 )
     {
@@ -3214,9 +2706,9 @@ lbl_2:
         if( !minlm_increaselambda(lambdav, nu, _state) )
         {
             *iflag = -1;
-            goto lbl_3;
+            goto lbl_2;
         }
-        goto lbl_2;
+        goto lbl_1;
     }
     ae_assert(state->qprep.terminationtype>0, "MinLM: unexpected completion code from QP solver", _state);
     ae_v_move(&state->xdir.ptr.p_double[0], 1, &xnew->ptr.p_double[0], 1, ae_v_len(0,n-1));
@@ -3248,9 +2740,9 @@ lbl_2:
         if( !minlm_increaselambda(lambdav, nu, _state) )
         {
             *iflag = -1;
-            goto lbl_3;
+            goto lbl_2;
         }
-        goto lbl_2;
+        goto lbl_1;
     }
     
     /*
@@ -3289,7 +2781,7 @@ lbl_2:
              * Terminating.
              */
             *iflag = 2;
-            goto lbl_3;
+            goto lbl_2;
         }
         else
         {
@@ -3299,7 +2791,7 @@ lbl_2:
              * and we can't rely on it.
              */
             *iflag = -2;
-            goto lbl_3;
+            goto lbl_2;
         }
     }
     
@@ -3315,10 +2807,6 @@ lbl_2:
     ae_v_move(&state->x.ptr.p_double[0], 1, &xnew->ptr.p_double[0], 1, ae_v_len(0,n-1));
     state->needf = ae_false;
     state->needfi = ae_false;
-    if( !state->hasfi )
-    {
-        goto lbl_4;
-    }
     state->needfi = ae_true;
     state->rstate.stage = 0;
     goto lbl_rcomm;
@@ -3329,15 +2817,6 @@ lbl_0:
     ae_v_move(&deltaf->ptr.p_double[0], 1, &state->fi.ptr.p_double[0], 1, ae_v_len(0,m-1));
     ae_v_sub(&deltaf->ptr.p_double[0], 1, &state->fibase.ptr.p_double[0], 1, ae_v_len(0,m-1));
     *deltafready = ae_true;
-    goto lbl_5;
-lbl_4:
-    state->needf = ae_true;
-    state->rstate.stage = 1;
-    goto lbl_rcomm;
-lbl_1:
-    state->needf = ae_false;
-    *fnew = state->f;
-lbl_5:
     if( !ae_isfinite(*fnew, _state) )
     {
         
@@ -3345,7 +2824,7 @@ lbl_5:
          * Integrity check failed, break!
          */
         *iflag = -8;
-        goto lbl_3;
+        goto lbl_2;
     }
     if( ae_fp_greater_eq(*fnew,state->fbase) )
     {
@@ -3356,18 +2835,18 @@ lbl_5:
         if( !minlm_increaselambda(lambdav, nu, _state) )
         {
             *iflag = -1;
-            goto lbl_3;
+            goto lbl_2;
         }
-        goto lbl_2;
+        goto lbl_1;
     }
     
     /*
      * We've found our step!
      */
     *iflag = 0;
-    goto lbl_3;
     goto lbl_2;
-lbl_3:
+    goto lbl_1;
+lbl_2:
     *nu = (double)(1);
     ae_assert(((*iflag>=-3&&*iflag<=0)||*iflag==-8)||*iflag>0, "MinLM: internal integrity check failed!", _state);
     result = ae_false;
@@ -3421,7 +2900,6 @@ void _minlmstepfinder_init_copy(void* _dst, const void* _src, ae_state *_state, 
     dst->stpmax = src->stpmax;
     dst->modelage = src->modelage;
     dst->maxmodelage = src->maxmodelage;
-    dst->hasfi = src->hasfi;
     dst->epsx = src->epsx;
     ae_vector_init_copy(&dst->x, &src->x, _state, make_automatic);
     dst->f = src->f;
@@ -3509,6 +2987,16 @@ void _minlmstate_init(void* _p, ae_state *_state, ae_bool make_automatic)
     ae_matrix_init(&p->j, 0, 0, DT_REAL, _state, make_automatic);
     ae_matrix_init(&p->h, 0, 0, DT_REAL, _state, make_automatic);
     ae_vector_init(&p->g, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->reportx, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->querydata, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->replyfi, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->replydj, 0, DT_REAL, _state, make_automatic);
+    _sparsematrix_init(&p->replysj, _state, make_automatic);
+    ae_vector_init(&p->tmpx1, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->tmpc1, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->tmpf1, 0, DT_REAL, _state, make_automatic);
+    ae_vector_init(&p->tmpg1, 0, DT_REAL, _state, make_automatic);
+    ae_matrix_init(&p->tmpj1, 0, 0, DT_REAL, _state, make_automatic);
     ae_vector_init(&p->xbase, 0, DT_REAL, _state, make_automatic);
     ae_vector_init(&p->fibase, 0, DT_REAL, _state, make_automatic);
     ae_vector_init(&p->gbase, 0, DT_REAL, _state, make_automatic);
@@ -3546,6 +3034,7 @@ void _minlmstate_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bo
 {
     minlmstate       *dst = (minlmstate*)_dst;
     const minlmstate *src = (const minlmstate*)_src;
+    dst->protocolversion = src->protocolversion;
     dst->n = src->n;
     dst->m = src->m;
     dst->diffstep = src->diffstep;
@@ -3555,6 +3044,7 @@ void _minlmstate_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bo
     dst->stpmax = src->stpmax;
     dst->maxmodelage = src->maxmodelage;
     dst->makeadditers = src->makeadditers;
+    dst->userterminationneeded = src->userterminationneeded;
     ae_vector_init_copy(&dst->x, &src->x, _state, make_automatic);
     dst->f = src->f;
     ae_vector_init_copy(&dst->fi, &src->fi, _state, make_automatic);
@@ -3567,11 +3057,24 @@ void _minlmstate_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bo
     dst->needfij = src->needfij;
     dst->needfi = src->needfi;
     dst->xupdated = src->xupdated;
-    dst->userterminationneeded = src->userterminationneeded;
+    dst->requesttype = src->requesttype;
+    ae_vector_init_copy(&dst->reportx, &src->reportx, _state, make_automatic);
+    dst->reportf = src->reportf;
+    dst->querysize = src->querysize;
+    dst->queryfuncs = src->queryfuncs;
+    dst->queryvars = src->queryvars;
+    dst->querydim = src->querydim;
+    dst->queryformulasize = src->queryformulasize;
+    ae_vector_init_copy(&dst->querydata, &src->querydata, _state, make_automatic);
+    ae_vector_init_copy(&dst->replyfi, &src->replyfi, _state, make_automatic);
+    ae_vector_init_copy(&dst->replydj, &src->replydj, _state, make_automatic);
+    _sparsematrix_init_copy(&dst->replysj, &src->replysj, _state, make_automatic);
+    ae_vector_init_copy(&dst->tmpx1, &src->tmpx1, _state, make_automatic);
+    ae_vector_init_copy(&dst->tmpc1, &src->tmpc1, _state, make_automatic);
+    ae_vector_init_copy(&dst->tmpf1, &src->tmpf1, _state, make_automatic);
+    ae_vector_init_copy(&dst->tmpg1, &src->tmpg1, _state, make_automatic);
+    ae_matrix_init_copy(&dst->tmpj1, &src->tmpj1, _state, make_automatic);
     dst->algomode = src->algomode;
-    dst->hasf = src->hasf;
-    dst->hasfi = src->hasfi;
-    dst->hasg = src->hasg;
     ae_vector_init_copy(&dst->xbase, &src->xbase, _state, make_automatic);
     dst->fbase = src->fbase;
     ae_vector_init_copy(&dst->fibase, &src->fibase, _state, make_automatic);
@@ -3597,6 +3100,7 @@ void _minlmstate_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bo
     _smoothnessmonitor_init_copy(&dst->smonitor, &src->smonitor, _state, make_automatic);
     dst->teststep = src->teststep;
     ae_vector_init_copy(&dst->lastscaleused, &src->lastscaleused, _state, make_automatic);
+    dst->fstagnationcnt = src->fstagnationcnt;
     dst->repiterationscount = src->repiterationscount;
     dst->repterminationtype = src->repterminationtype;
     dst->repnfunc = src->repnfunc;
@@ -3634,6 +3138,16 @@ void _minlmstate_clear(void* _p)
     ae_matrix_clear(&p->j);
     ae_matrix_clear(&p->h);
     ae_vector_clear(&p->g);
+    ae_vector_clear(&p->reportx);
+    ae_vector_clear(&p->querydata);
+    ae_vector_clear(&p->replyfi);
+    ae_vector_clear(&p->replydj);
+    _sparsematrix_clear(&p->replysj);
+    ae_vector_clear(&p->tmpx1);
+    ae_vector_clear(&p->tmpc1);
+    ae_vector_clear(&p->tmpf1);
+    ae_vector_clear(&p->tmpg1);
+    ae_matrix_clear(&p->tmpj1);
     ae_vector_clear(&p->xbase);
     ae_vector_clear(&p->fibase);
     ae_vector_clear(&p->gbase);
@@ -3676,6 +3190,16 @@ void _minlmstate_destroy(void* _p)
     ae_matrix_destroy(&p->j);
     ae_matrix_destroy(&p->h);
     ae_vector_destroy(&p->g);
+    ae_vector_destroy(&p->reportx);
+    ae_vector_destroy(&p->querydata);
+    ae_vector_destroy(&p->replyfi);
+    ae_vector_destroy(&p->replydj);
+    _sparsematrix_destroy(&p->replysj);
+    ae_vector_destroy(&p->tmpx1);
+    ae_vector_destroy(&p->tmpc1);
+    ae_vector_destroy(&p->tmpf1);
+    ae_vector_destroy(&p->tmpg1);
+    ae_matrix_destroy(&p->tmpj1);
     ae_vector_destroy(&p->xbase);
     ae_vector_destroy(&p->fibase);
     ae_vector_destroy(&p->gbase);

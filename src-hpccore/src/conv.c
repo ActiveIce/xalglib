@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -30,24 +30,27 @@ For given A/B returns conv(A,B) (non-circular). Subroutine can automatically
 choose between three implementations: straightforward O(M*N)  formula  for
 very small N (or M), overlap-add algorithm for  cases  where  max(M,N)  is
 significantly larger than min(M,N), but O(M*N) algorithm is too slow,  and
-general FFT-based formula for cases where two previois algorithms are  too
+general FFT-based formula for cases where two previous algorithms are  too
 slow.
 
 Algorithm has max(M,N)*log(max(M,N)) complexity for any M/N.
 
 INPUT PARAMETERS
-    A   -   array[0..M-1] - complex function to be transformed
+    A   -   array[M] - complex function to be transformed
     M   -   problem size
-    B   -   array[0..N-1] - complex function to be transformed
+    B   -   array[N] - complex function to be transformed
     N   -   problem size
 
 OUTPUT PARAMETERS
-    R   -   convolution: A*B. array[0..N+M-2].
+    R   -   convolution: A*B. array[N+M-1]
 
 NOTE:
     It is assumed that A is zero at T<0, B is zero too.  If  one  or  both
-functions have non-zero values at negative T's, you  can  still  use  this
-subroutine - just shift its result correspondingly.
+    functions have non-zero values at negative T's, you can still use this
+    subroutine - just shift its result correspondingly.
+    
+NOTE: there is a buffered version of this  function,  ConvC1DBuf(),  which
+      can reuse space previously allocated in its output parameter R.
 
   -- ALGLIB --
      Copyright 21.07.2009 by Bochkanov Sergey
@@ -63,6 +66,28 @@ void convc1d(/* Complex */ const ae_vector* a,
     ae_vector_clear(r);
 
     ae_assert(n>0&&m>0, "ConvC1D: incorrect N or M!", _state);
+    convc1dbuf(a, m, b, n, r, _state);
+}
+
+
+/*************************************************************************
+1-dimensional complex convolution, buffered version of ConvC1DBuf(), which
+does not reallocate R[] if its length is enough to store the result  (i.e.
+it reuses previously allocated memory as much as possible).
+
+  -- ALGLIB --
+     Copyright 30.11.2023 by Bochkanov Sergey
+*************************************************************************/
+void convc1dbuf(/* Complex */ const ae_vector* a,
+     ae_int_t m,
+     /* Complex */ const ae_vector* b,
+     ae_int_t n,
+     /* Complex */ ae_vector* r,
+     ae_state *_state)
+{
+
+
+    ae_assert(n>0&&m>0, "ConvC1DBuf: incorrect N or M!", _state);
     
     /*
      * normalize task: make M>=N,
@@ -70,7 +95,7 @@ void convc1d(/* Complex */ const ae_vector* a,
      */
     if( m<n )
     {
-        convc1d(b, n, a, m, r, _state);
+        convc1dbuf(b, n, a, m, r, _state);
         return;
     }
     convc1dx(a, m, b, n, ae_false, -1, 0, r, _state);
@@ -99,11 +124,39 @@ NOTE:
     It is assumed that A is zero at T<0, B is zero too.  If  one  or  both
 functions have non-zero values at negative T's, you  can  still  use  this
 subroutine - just shift its result correspondingly.
+    
+NOTE: there is a buffered version of this  function,  ConvC1DInvBuf(),
+      which can reuse space previously allocated in its output parameter R
 
   -- ALGLIB --
      Copyright 21.07.2009 by Bochkanov Sergey
 *************************************************************************/
 void convc1dinv(/* Complex */ const ae_vector* a,
+     ae_int_t m,
+     /* Complex */ const ae_vector* b,
+     ae_int_t n,
+     /* Complex */ ae_vector* r,
+     ae_state *_state)
+{
+
+    ae_vector_clear(r);
+
+    ae_assert((n>0&&m>0)&&n<=m, "ConvC1DInv: incorrect N or M!", _state);
+    convc1dinvbuf(a, m, b, n, r, _state);
+}
+
+
+/*************************************************************************
+1-dimensional complex non-circular deconvolution (inverse of ConvC1D()).
+
+A buffered version, which does not reallocate R[] if its length is  enough
+to store the result (i.e. it reuses previously allocated memory as much as
+possible).
+
+  -- ALGLIB --
+     Copyright 30.11.2023 by Bochkanov Sergey
+*************************************************************************/
+void convc1dinvbuf(/* Complex */ const ae_vector* a,
      ae_int_t m,
      /* Complex */ const ae_vector* b,
      ae_int_t n,
@@ -125,12 +178,11 @@ void convc1dinv(/* Complex */ const ae_vector* a,
     memset(&buf, 0, sizeof(buf));
     memset(&buf2, 0, sizeof(buf2));
     memset(&plan, 0, sizeof(plan));
-    ae_vector_clear(r);
     ae_vector_init(&buf, 0, DT_REAL, _state, ae_true);
     ae_vector_init(&buf2, 0, DT_REAL, _state, ae_true);
     _fasttransformplan_init(&plan, _state, ae_true);
 
-    ae_assert((n>0&&m>0)&&n<=m, "ConvC1DInv: incorrect N or M!", _state);
+    ae_assert((n>0&&m>0)&&n<=m, "ConvC1DInvBuf: incorrect N or M!", _state);
     p = ftbasefindsmooth(m, _state);
     ftcomplexfftplan(p, 1, &plan, _state);
     ae_vector_set_length(&buf, 2*p, _state);
@@ -169,7 +221,7 @@ void convc1dinv(/* Complex */ const ae_vector* a,
     }
     ftapplyplan(&plan, &buf, 0, 1, _state);
     t = (double)1/(double)p;
-    ae_vector_set_length(r, m-n+1, _state);
+    callocv(m-n+1, r, _state);
     for(i=0; i<=m-n; i++)
     {
         r->ptr.p_complex[i].x = t*buf.ptr.p_double[2*i+0];
@@ -191,23 +243,51 @@ signal,  periodic function, and another - R - is a response,  non-periodic
 function with limited length.
 
 INPUT PARAMETERS
-    S   -   array[0..M-1] - complex periodic signal
+    S   -   array[M] - complex periodic signal
     M   -   problem size
-    B   -   array[0..N-1] - complex non-periodic response
+    B   -   array[N] - complex non-periodic response
     N   -   problem size
 
 OUTPUT PARAMETERS
-    R   -   convolution: A*B. array[0..M-1].
+    R   -   convolution: A*B. array[M].
 
 NOTE:
     It is assumed that B is zero at T<0. If  it  has  non-zero  values  at
 negative T's, you can still use this subroutine - just  shift  its  result
 correspondingly.
+    
+NOTE: there is a buffered version of this  function,  ConvC1DCircularBuf(),
+      which can reuse space previously allocated in its output parameter R.
 
   -- ALGLIB --
      Copyright 21.07.2009 by Bochkanov Sergey
 *************************************************************************/
 void convc1dcircular(/* Complex */ const ae_vector* s,
+     ae_int_t m,
+     /* Complex */ const ae_vector* r,
+     ae_int_t n,
+     /* Complex */ ae_vector* c,
+     ae_state *_state)
+{
+
+    ae_vector_clear(c);
+
+    ae_assert(n>0&&m>0, "ConvC1DCircular: incorrect N or M!", _state);
+    convc1dcircularbuf(s, m, r, n, c, _state);
+}
+
+
+/*************************************************************************
+1-dimensional circular complex convolution.
+
+Buffered version of ConvC1DCircular(), which does not  reallocate  C[]  if
+its length is enough to  store  the  result  (i.e.  it  reuses  previously
+allocated memory as much as possible).
+
+  -- ALGLIB --
+     Copyright 30.11.2023 by Bochkanov Sergey
+*************************************************************************/
+void convc1dcircularbuf(/* Complex */ const ae_vector* s,
      ae_int_t m,
      /* Complex */ const ae_vector* r,
      ae_int_t n,
@@ -222,7 +302,6 @@ void convc1dcircular(/* Complex */ const ae_vector* s,
 
     ae_frame_make(_state, &_frame_block);
     memset(&buf, 0, sizeof(buf));
-    ae_vector_clear(c);
     ae_vector_init(&buf, 0, DT_COMPLEX, _state, ae_true);
 
     ae_assert(n>0&&m>0, "ConvC1DCircular: incorrect N or M!", _state);
@@ -246,7 +325,7 @@ void convc1dcircular(/* Complex */ const ae_vector* s,
             ae_v_cadd(&buf.ptr.p_complex[0], 1, &r->ptr.p_complex[i1], 1, "N", ae_v_len(0,j2));
             i1 = i1+m;
         }
-        convc1dcircular(s, m, &buf, m, c, _state);
+        convc1dcircularbuf(s, m, &buf, m, c, _state);
         ae_frame_leave(_state);
         return;
     }
@@ -277,11 +356,39 @@ NOTE:
     It is assumed that B is zero at T<0. If  it  has  non-zero  values  at
 negative T's, you can still use this subroutine - just  shift  its  result
 correspondingly.
+    
+NOTE: there is a buffered version of this  function,  ConvC1DCircularInvBuf(),
+      which can reuse space previously allocated in its output parameter R.
 
   -- ALGLIB --
      Copyright 21.07.2009 by Bochkanov Sergey
 *************************************************************************/
 void convc1dcircularinv(/* Complex */ const ae_vector* a,
+     ae_int_t m,
+     /* Complex */ const ae_vector* b,
+     ae_int_t n,
+     /* Complex */ ae_vector* r,
+     ae_state *_state)
+{
+
+    ae_vector_clear(r);
+
+    ae_assert(n>0&&m>0, "ConvC1DCircularInv: incorrect N or M!", _state);
+    convc1dcircularinvbuf(a, m, b, n, r, _state);
+}
+
+
+/*************************************************************************
+1-dimensional circular complex deconvolution (inverse of ConvC1DCircular()).
+
+Buffered version of ConvC1DCircularInv(), which does not reallocate R[] if
+its length is enough to  store  the  result  (i.e.  it  reuses  previously
+allocated memory as much as possible).
+
+  -- ALGLIB --
+     Copyright 30.11.2023 by Bochkanov Sergey
+*************************************************************************/
+void convc1dcircularinvbuf(/* Complex */ const ae_vector* a,
      ae_int_t m,
      /* Complex */ const ae_vector* b,
      ae_int_t n,
@@ -307,7 +414,6 @@ void convc1dcircularinv(/* Complex */ const ae_vector* a,
     memset(&buf2, 0, sizeof(buf2));
     memset(&cbuf, 0, sizeof(cbuf));
     memset(&plan, 0, sizeof(plan));
-    ae_vector_clear(r);
     ae_vector_init(&buf, 0, DT_REAL, _state, ae_true);
     ae_vector_init(&buf2, 0, DT_REAL, _state, ae_true);
     ae_vector_init(&cbuf, 0, DT_COMPLEX, _state, ae_true);
@@ -334,7 +440,7 @@ void convc1dcircularinv(/* Complex */ const ae_vector* a,
             ae_v_cadd(&cbuf.ptr.p_complex[0], 1, &b->ptr.p_complex[i1], 1, "N", ae_v_len(0,j2));
             i1 = i1+m;
         }
-        convc1dcircularinv(a, m, &cbuf, m, r, _state);
+        convc1dcircularinvbuf(a, m, &cbuf, m, r, _state);
         ae_frame_leave(_state);
         return;
     }
@@ -374,7 +480,7 @@ void convc1dcircularinv(/* Complex */ const ae_vector* a,
     }
     ftapplyplan(&plan, &buf, 0, 1, _state);
     t = (double)1/(double)m;
-    ae_vector_set_length(r, m, _state);
+    callocv(m, r, _state);
     for(i=0; i<=m-1; i++)
     {
         r->ptr.p_complex[i].x = t*buf.ptr.p_double[2*i+0];
@@ -402,6 +508,10 @@ NOTE:
     It is assumed that A is zero at T<0, B is zero too.  If  one  or  both
 functions have non-zero values at negative T's, you  can  still  use  this
 subroutine - just shift its result correspondingly.
+    
+NOTE: there is a buffered version of this  function,  ConvR1DBuf(),
+      which can reuse space previously allocated in its output parameter R.
+
 
   -- ALGLIB --
      Copyright 21.07.2009 by Bochkanov Sergey
@@ -417,6 +527,30 @@ void convr1d(/* Real    */ const ae_vector* a,
     ae_vector_clear(r);
 
     ae_assert(n>0&&m>0, "ConvR1D: incorrect N or M!", _state);
+    convr1dbuf(a, m, b, n, r, _state);
+}
+
+
+/*************************************************************************
+1-dimensional real convolution.
+
+Buffered version of ConvR1D(), which does not reallocate R[] if its length
+is enough to store the result (i.e. it reuses previously allocated  memory
+as much as possible).
+
+  -- ALGLIB --
+     Copyright 30.11.2023 by Bochkanov Sergey
+*************************************************************************/
+void convr1dbuf(/* Real    */ const ae_vector* a,
+     ae_int_t m,
+     /* Real    */ const ae_vector* b,
+     ae_int_t n,
+     /* Real    */ ae_vector* r,
+     ae_state *_state)
+{
+
+
+    ae_assert(n>0&&m>0, "ConvR1DBuf: incorrect N or M!", _state);
     
     /*
      * normalize task: make M>=N,
@@ -424,7 +558,7 @@ void convr1d(/* Real    */ const ae_vector* a,
      */
     if( m<n )
     {
-        convr1d(b, n, a, m, r, _state);
+        convr1dbuf(b, n, a, m, r, _state);
         return;
     }
     convr1dx(a, m, b, n, ae_false, -1, 0, r, _state);
@@ -453,11 +587,38 @@ NOTE:
     It is assumed that A is zero at T<0, B is zero too.  If  one  or  both
 functions have non-zero values at negative T's, you  can  still  use  this
 subroutine - just shift its result correspondingly.
+    
+NOTE: there is a buffered version of this  function,  ConvR1DInvBuf(),
+      which can reuse space previously allocated in its output parameter R.
 
   -- ALGLIB --
      Copyright 21.07.2009 by Bochkanov Sergey
 *************************************************************************/
 void convr1dinv(/* Real    */ const ae_vector* a,
+     ae_int_t m,
+     /* Real    */ const ae_vector* b,
+     ae_int_t n,
+     /* Real    */ ae_vector* r,
+     ae_state *_state)
+{
+
+    ae_vector_clear(r);
+
+    ae_assert((n>0&&m>0)&&n<=m, "ConvR1DInv: incorrect N or M!", _state);
+    convr1dinvbuf(a, m, b, n, r, _state);
+}
+
+
+/*************************************************************************
+1-dimensional real deconvolution (inverse of ConvR1D()), buffered version,
+which does not reallocate R[] if its length is enough to store the  result
+(i.e. it reuses previously allocated memory as much as possible).
+
+
+  -- ALGLIB --
+     Copyright 30.11.2023 by Bochkanov Sergey
+*************************************************************************/
+void convr1dinvbuf(/* Real    */ const ae_vector* a,
      ae_int_t m,
      /* Real    */ const ae_vector* b,
      ae_int_t n,
@@ -480,13 +641,12 @@ void convr1dinv(/* Real    */ const ae_vector* a,
     memset(&buf2, 0, sizeof(buf2));
     memset(&buf3, 0, sizeof(buf3));
     memset(&plan, 0, sizeof(plan));
-    ae_vector_clear(r);
     ae_vector_init(&buf, 0, DT_REAL, _state, ae_true);
     ae_vector_init(&buf2, 0, DT_REAL, _state, ae_true);
     ae_vector_init(&buf3, 0, DT_REAL, _state, ae_true);
     _fasttransformplan_init(&plan, _state, ae_true);
 
-    ae_assert((n>0&&m>0)&&n<=m, "ConvR1DInv: incorrect N or M!", _state);
+    ae_assert((n>0&&m>0)&&n<=m, "ConvR1DInvBuf: incorrect N or M!", _state);
     p = ftbasefindsmootheven(m, _state);
     ae_vector_set_length(&buf, p, _state);
     ae_v_move(&buf.ptr.p_double[0], 1, &a->ptr.p_double[0], 1, ae_v_len(0,m-1));
@@ -517,7 +677,7 @@ void convr1dinv(/* Real    */ const ae_vector* a,
         buf.ptr.p_double[2*i+1] = c3.y;
     }
     fftr1dinvinternaleven(&buf, p, &buf3, &plan, _state);
-    ae_vector_set_length(r, m-n+1, _state);
+    rallocv(m-n+1, r, _state);
     ae_v_move(&r->ptr.p_double[0], 1, &buf.ptr.p_double[0], 1, ae_v_len(0,m-n));
     ae_frame_leave(_state);
 }
@@ -541,11 +701,37 @@ NOTE:
     It is assumed that B is zero at T<0. If  it  has  non-zero  values  at
 negative T's, you can still use this subroutine - just  shift  its  result
 correspondingly.
+    
+NOTE: there is a buffered version of this  function,  ConvR1DCurcularBuf(),
+      which can reuse space previously allocated in its output parameter R.
 
   -- ALGLIB --
      Copyright 21.07.2009 by Bochkanov Sergey
 *************************************************************************/
 void convr1dcircular(/* Real    */ const ae_vector* s,
+     ae_int_t m,
+     /* Real    */ const ae_vector* r,
+     ae_int_t n,
+     /* Real    */ ae_vector* c,
+     ae_state *_state)
+{
+
+    ae_vector_clear(c);
+
+    ae_assert(n>0&&m>0, "ConvC1DCircular: incorrect N or M!", _state);
+    convr1dcircularbuf(s, m, r, n, c, _state);
+}
+
+
+/*************************************************************************
+1-dimensional circular real convolution, buffered version, which  does not
+reallocate C[] if its length is enough to store the result (i.e. it reuses
+previously allocated memory as much as possible).
+
+  -- ALGLIB --
+     Copyright 30.11.2023 by Bochkanov Sergey
+*************************************************************************/
+void convr1dcircularbuf(/* Real    */ const ae_vector* s,
      ae_int_t m,
      /* Real    */ const ae_vector* r,
      ae_int_t n,
@@ -560,10 +746,9 @@ void convr1dcircular(/* Real    */ const ae_vector* s,
 
     ae_frame_make(_state, &_frame_block);
     memset(&buf, 0, sizeof(buf));
-    ae_vector_clear(c);
     ae_vector_init(&buf, 0, DT_REAL, _state, ae_true);
 
-    ae_assert(n>0&&m>0, "ConvC1DCircular: incorrect N or M!", _state);
+    ae_assert(n>0&&m>0, "ConvC1DCircularBuf: incorrect N or M!", _state);
     
     /*
      * normalize task: make M>=N,
@@ -584,7 +769,7 @@ void convr1dcircular(/* Real    */ const ae_vector* s,
             ae_v_add(&buf.ptr.p_double[0], 1, &r->ptr.p_double[i1], 1, ae_v_len(0,j2));
             i1 = i1+m;
         }
-        convr1dcircular(s, m, &buf, m, c, _state);
+        convr1dcircularbuf(s, m, &buf, m, c, _state);
         ae_frame_leave(_state);
         return;
     }
@@ -630,6 +815,31 @@ void convr1dcircularinv(/* Real    */ const ae_vector* a,
      /* Real    */ ae_vector* r,
      ae_state *_state)
 {
+
+    ae_vector_clear(r);
+
+    ae_assert(n>0&&m>0, "ConvR1DCircularInv: incorrect N or M!", _state);
+    convr1dcircularinvbuf(a, m, b, n, r, _state);
+}
+
+
+/*************************************************************************
+1-dimensional complex deconvolution, inverse of ConvR1DCircular().
+
+Buffered version, which does not reallocate R[] if its length is enough to
+store the result (i.e. it reuses previously allocated memory  as  much  as
+possible).
+
+  -- ALGLIB --
+     Copyright 21.07.2009 by Bochkanov Sergey
+*************************************************************************/
+void convr1dcircularinvbuf(/* Real    */ const ae_vector* a,
+     ae_int_t m,
+     /* Real    */ const ae_vector* b,
+     ae_int_t n,
+     /* Real    */ ae_vector* r,
+     ae_state *_state)
+{
     ae_frame _frame_block;
     ae_int_t i;
     ae_int_t i1;
@@ -652,7 +862,6 @@ void convr1dcircularinv(/* Real    */ const ae_vector* a,
     memset(&cbuf, 0, sizeof(cbuf));
     memset(&cbuf2, 0, sizeof(cbuf2));
     memset(&plan, 0, sizeof(plan));
-    ae_vector_clear(r);
     ae_vector_init(&buf, 0, DT_REAL, _state, ae_true);
     ae_vector_init(&buf2, 0, DT_REAL, _state, ae_true);
     ae_vector_init(&buf3, 0, DT_REAL, _state, ae_true);
@@ -681,7 +890,7 @@ void convr1dcircularinv(/* Real    */ const ae_vector* a,
             ae_v_add(&buf.ptr.p_double[0], 1, &b->ptr.p_double[i1], 1, ae_v_len(0,j2));
             i1 = i1+m;
         }
-        convr1dcircularinv(a, m, &buf, m, r, _state);
+        convr1dcircularinvbuf(a, m, &buf, m, r, _state);
         ae_frame_leave(_state);
         return;
     }
@@ -720,7 +929,7 @@ void convr1dcircularinv(/* Real    */ const ae_vector* a,
             buf.ptr.p_double[2*i+1] = c3.y;
         }
         fftr1dinvinternaleven(&buf, m, &buf3, &plan, _state);
-        ae_vector_set_length(r, m, _state);
+        rallocv(m, r, _state);
         ae_v_move(&r->ptr.p_double[0], 1, &buf.ptr.p_double[0], 1, ae_v_len(0,m-1));
     }
     else
@@ -741,7 +950,7 @@ void convr1dcircularinv(/* Real    */ const ae_vector* a,
         {
             cbuf.ptr.p_complex[i] = ae_c_div(cbuf.ptr.p_complex[i],cbuf2.ptr.p_complex[i]);
         }
-        fftr1dinv(&cbuf, m, r, _state);
+        fftr1dinvbuf(&cbuf, m, r, _state);
     }
     ae_frame_leave(_state);
 }
@@ -812,7 +1021,6 @@ void convc1dx(/* Complex */ const ae_vector* a,
     memset(&plan, 0, sizeof(plan));
     memset(&buf, 0, sizeof(buf));
     memset(&buf2, 0, sizeof(buf2));
-    ae_vector_clear(r);
     ae_vector_init(&bbuf, 0, DT_COMPLEX, _state, ae_true);
     _fasttransformplan_init(&plan, _state, ae_true);
     ae_vector_init(&buf, 0, DT_REAL, _state, ae_true);
@@ -919,7 +1127,7 @@ void convc1dx(/* Complex */ const ae_vector* a,
          */
         if( n==1 )
         {
-            ae_vector_set_length(r, m, _state);
+            callocv(m, r, _state);
             v = b->ptr.p_complex[0];
             ae_v_cmovec(&r->ptr.p_complex[0], 1, &a->ptr.p_complex[0], 1, "N", ae_v_len(0,m-1), v);
             ae_frame_leave(_state);
@@ -935,7 +1143,7 @@ void convc1dx(/* Complex */ const ae_vector* a,
             /*
              * circular convolution
              */
-            ae_vector_set_length(r, m, _state);
+            callocv(m, r, _state);
             v = b->ptr.p_complex[0];
             ae_v_cmovec(&r->ptr.p_complex[0], 1, &a->ptr.p_complex[0], 1, "N", ae_v_len(0,m-1), v);
             for(i=1; i<=n-1; i++)
@@ -959,7 +1167,7 @@ void convc1dx(/* Complex */ const ae_vector* a,
             /*
              * non-circular convolution
              */
-            ae_vector_set_length(r, m+n-1, _state);
+            callocv(m+n-1, r, _state);
             for(i=0; i<=m+n-2; i++)
             {
                 r->ptr.p_complex[i] = ae_complex_from_i(0);
@@ -1025,7 +1233,7 @@ void convc1dx(/* Complex */ const ae_vector* a,
             }
             ftapplyplan(&plan, &buf, 0, 1, _state);
             t = (double)1/(double)m;
-            ae_vector_set_length(r, m, _state);
+            callocv(m, r, _state);
             for(i=0; i<=m-1; i++)
             {
                 r->ptr.p_complex[i].x = t*buf.ptr.p_double[2*i+0];
@@ -1088,7 +1296,7 @@ void convc1dx(/* Complex */ const ae_vector* a,
                 /*
                  * circular, add tail to head
                  */
-                ae_vector_set_length(r, m, _state);
+                callocv(m, r, _state);
                 for(i=0; i<=m-1; i++)
                 {
                     r->ptr.p_complex[i].x = t*buf.ptr.p_double[2*i+0];
@@ -1106,7 +1314,7 @@ void convc1dx(/* Complex */ const ae_vector* a,
                 /*
                  * non-circular, just copy
                  */
-                ae_vector_set_length(r, m+n-1, _state);
+                callocv(m+n-1, r, _state);
                 for(i=0; i<=m+n-2; i++)
                 {
                     r->ptr.p_complex[i].x = t*buf.ptr.p_double[2*i+0];
@@ -1137,7 +1345,7 @@ void convc1dx(/* Complex */ const ae_vector* a,
          */
         if( circular )
         {
-            ae_vector_set_length(r, m, _state);
+            callocv(m, r, _state);
             for(i=0; i<=m-1; i++)
             {
                 r->ptr.p_complex[i] = ae_complex_from_i(0);
@@ -1145,7 +1353,7 @@ void convc1dx(/* Complex */ const ae_vector* a,
         }
         else
         {
-            ae_vector_set_length(r, m+n-1, _state);
+            callocv(m+n-1, r, _state);
             for(i=0; i<=m+n-2; i++)
             {
                 r->ptr.p_complex[i] = ae_complex_from_i(0);
@@ -1292,14 +1500,13 @@ void convr1dx(/* Real    */ const ae_vector* a,
     memset(&buf, 0, sizeof(buf));
     memset(&buf2, 0, sizeof(buf2));
     memset(&buf3, 0, sizeof(buf3));
-    ae_vector_clear(r);
     _fasttransformplan_init(&plan, _state, ae_true);
     ae_vector_init(&buf, 0, DT_REAL, _state, ae_true);
     ae_vector_init(&buf2, 0, DT_REAL, _state, ae_true);
     ae_vector_init(&buf3, 0, DT_REAL, _state, ae_true);
 
-    ae_assert(n>0&&m>0, "ConvC1DX: incorrect N or M!", _state);
-    ae_assert(n<=m, "ConvC1DX: N<M assumption is false!", _state);
+    ae_assert(n>0&&m>0, "ConvR1DX: incorrect N or M!", _state);
+    ae_assert(n<=m, "ConvR1DX: N<M assumption is false!", _state);
     
     /*
      * handle special cases
@@ -1407,7 +1614,7 @@ void convr1dx(/* Real    */ const ae_vector* a,
          */
         if( n==1 )
         {
-            ae_vector_set_length(r, m, _state);
+            rallocv(m, r, _state);
             v = b->ptr.p_double[0];
             ae_v_moved(&r->ptr.p_double[0], 1, &a->ptr.p_double[0], 1, ae_v_len(0,m-1), v);
             ae_frame_leave(_state);
@@ -1423,7 +1630,7 @@ void convr1dx(/* Real    */ const ae_vector* a,
             /*
              * circular convolution
              */
-            ae_vector_set_length(r, m, _state);
+            rallocv(m, r, _state);
             v = b->ptr.p_double[0];
             ae_v_moved(&r->ptr.p_double[0], 1, &a->ptr.p_double[0], 1, ae_v_len(0,m-1), v);
             for(i=1; i<=n-1; i++)
@@ -1447,7 +1654,7 @@ void convr1dx(/* Real    */ const ae_vector* a,
             /*
              * non-circular convolution
              */
-            ae_vector_set_length(r, m+n-1, _state);
+            rallocv(m+n-1, r, _state);
             for(i=0; i<=m+n-2; i++)
             {
                 r->ptr.p_double[i] = (double)(0);
@@ -1509,7 +1716,7 @@ void convr1dx(/* Real    */ const ae_vector* a,
                 buf.ptr.p_double[2*i+1] = ty;
             }
             fftr1dinvinternaleven(&buf, m, &buf3, &plan, _state);
-            ae_vector_set_length(r, m, _state);
+            rallocv(m, r, _state);
             ae_v_move(&r->ptr.p_double[0], 1, &buf.ptr.p_double[0], 1, ae_v_len(0,m-1));
         }
         else
@@ -1560,7 +1767,7 @@ void convr1dx(/* Real    */ const ae_vector* a,
                 /*
                  * circular, add tail to head
                  */
-                ae_vector_set_length(r, m, _state);
+                rallocv(m, r, _state);
                 ae_v_move(&r->ptr.p_double[0], 1, &buf.ptr.p_double[0], 1, ae_v_len(0,m-1));
                 if( n>=2 )
                 {
@@ -1573,7 +1780,7 @@ void convr1dx(/* Real    */ const ae_vector* a,
                 /*
                  * non-circular, just copy
                  */
-                ae_vector_set_length(r, m+n-1, _state);
+                rallocv(m+n-1, r, _state);
                 ae_v_move(&r->ptr.p_double[0], 1, &buf.ptr.p_double[0], 1, ae_v_len(0,m+n-2));
             }
         }
@@ -1597,7 +1804,7 @@ void convr1dx(/* Real    */ const ae_vector* a,
          */
         if( circular )
         {
-            ae_vector_set_length(r, m, _state);
+            rallocv(m, r, _state);
             for(i=0; i<=m-1; i++)
             {
                 r->ptr.p_double[i] = (double)(0);
@@ -1605,7 +1812,7 @@ void convr1dx(/* Real    */ const ae_vector* a,
         }
         else
         {
-            ae_vector_set_length(r, m+n-1, _state);
+            rallocv(m+n-1, r, _state);
             for(i=0; i<=m+n-2; i++)
             {
                 r->ptr.p_double[i] = (double)(0);

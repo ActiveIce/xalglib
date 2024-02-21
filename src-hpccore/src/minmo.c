@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -869,16 +869,16 @@ void minmoaddlc2sparsefromdense(minmostate* state,
 /*************************************************************************
 This function sets two-sided nonlinear constraints for MinMO optimizer.
 
-In fact, this function sets only  NUMBER  of  the  nonlinear  constraints.
+In fact, this function sets  only  constraints  COUNT  and  their  BOUNDS.
 Constraints  themselves  (constraint  functions)   are   passed   to   the
-MinMOOptimize() method.
+MinMOOptimize() method as callbacks.
 
-This method accepts user-defined vector function F[] and its Jacobian J[],
-where:
-* first M components of F[] and first M rows  of  J[]  correspond  to  the
+MinMOOptimize() method accepts a user-defined vector function F[]  and its
+Jacobian J[], where:
+* first M components of F[]  and  first  M rows  of  J[]   correspond   to
   multiple objectives
-* subsequent NNLC components of F[] (and rows of J[])  correspond  to  the
-  two-sided nonlinear constraints NL<=C(x)<=NU, where
+* subsequent NNLC components of F[] (and rows of J[]) correspond  to  two-
+  sided nonlinear constraints NL<=C(x)<=NU, where
   * NL[i]=NU[i] => I-th row is an equality constraint Ci(x)=NL
   * NL[i]<NU[i] => I-th tow is a  two-sided constraint NL[i]<=Ci(x)<=NU[i]
   * NL[i]=-INF  => I-th row is an one-sided constraint Ci(x)<=NU[i]
@@ -897,8 +897,8 @@ INPUT PARAMETERS:
     NNLC    -   constraints count, NNLC>=0
 
 NOTE 1: nonlinear constraints are satisfied only  approximately!   It   is
-        possible   that  algorithm  will  evaluate  function  outside   of
-        feasible area!
+        possible that the algorithm will evaluate the function  outside of
+        the feasible area!
         
 NOTE 2: algorithm scales variables  according  to the scale  specified by
         MinMOSetScale()  function,  so  it can handle problems with badly
@@ -1671,6 +1671,17 @@ void minmorestartfrom(minmostate* state,
 
 
 /*************************************************************************
+Set V1 reverse communication protocol
+*************************************************************************/
+void minmosetprotocolv1(minmostate* state, ae_state *_state)
+{
+
+
+    state->protocolversion = 1;
+}
+
+
+/*************************************************************************
 Clears request fileds (to be sure that we don't forget to clear something)
 *************************************************************************/
 static void minmo_clearrequestfields(minmostate* state, ae_state *_state)
@@ -1700,6 +1711,7 @@ static void minmo_minmoinitinternal(ae_int_t n,
     /*
      * Initialize
      */
+    state->protocolversion = 1;
     state->n = n;
     state->m = m;
     state->diffstep = diffstep;
@@ -1825,6 +1837,7 @@ void _minmostate_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bo
     dst->nnlc = src->nnlc;
     ae_vector_init_copy(&dst->nl, &src->nl, _state, make_automatic);
     ae_vector_init_copy(&dst->nu, &src->nu, _state, make_automatic);
+    dst->protocolversion = src->protocolversion;
     ae_vector_init_copy(&dst->x, &src->x, _state, make_automatic);
     dst->f = src->f;
     ae_vector_init_copy(&dst->fi, &src->fi, _state, make_automatic);

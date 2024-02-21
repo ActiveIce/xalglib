@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -2562,18 +2562,23 @@ void minqpoptimize(minqpstate* state, ae_state *_state)
         if( state->algokind==5 )
         {
             vipminitdense(&state->vsolver, &state->effectives, &state->xorigin, n, _state);
+            vipmsetquadraticlinear(&state->vsolver, &state->tmpr2, &state->sparsea, state->akind, state->sparseaupper, &state->b, _state);
+            vipmsetconstraints(&state->vsolver, &state->wrkbndl, &state->wrkbndu, &state->wrksparsec, state->msparse, &state->wrkdensec, state->mdense, &state->wrkcl, &state->wrkcu, _state);
+            vipmsetcond(&state->vsolver, state->veps, state->veps, state->veps, _state);
+            vipmoptimize(&state->vsolver, ae_true, &state->xs, &state->replagbc, &state->replaglc, &state->repterminationtype, _state);
+            state->repinneriterationscount = state->vsolver.repiterationscount;
+            state->repouteriterationscount = state->repinneriterationscount;
+            state->repncholesky = state->vsolver.repncholesky;
         }
-        if( state->algokind==6 )
+        else
         {
-            vipminitsparse(&state->vsolver, &state->effectives, &state->xorigin, n, _state);
+            ipm2init(&state->ipm2, &state->effectives, &state->xorigin, n, &state->tmpr2, &state->sparsea, state->akind, state->sparseaupper, &state->dummyr2, &state->dummyr, 0, &state->b, &state->wrkbndl, &state->wrkbndu, &state->wrksparsec, state->msparse, &state->wrkdensec, state->mdense, &state->wrkcl, &state->wrkcu, _state);
+            ipm2setcond(&state->ipm2, state->veps, state->veps, state->veps, _state);
+            ipm2optimize(&state->ipm2, ae_true, &state->xs, &state->replagbc, &state->replaglc, &state->repterminationtype, _state);
+            state->repinneriterationscount = state->ipm2.repiterationscount;
+            state->repouteriterationscount = state->ipm2.repiterationscount;
+            state->repncholesky = state->ipm2.repiterationscount;
         }
-        vipmsetquadraticlinear(&state->vsolver, &state->tmpr2, &state->sparsea, state->akind, state->sparseaupper, &state->b, _state);
-        vipmsetconstraints(&state->vsolver, &state->wrkbndl, &state->wrkbndu, &state->wrksparsec, state->msparse, &state->wrkdensec, state->mdense, &state->wrkcl, &state->wrkcu, _state);
-        vipmsetcond(&state->vsolver, state->veps, state->veps, state->veps, _state);
-        vipmoptimize(&state->vsolver, ae_true, &state->xs, &state->replagbc, &state->replaglc, &state->repterminationtype, _state);
-        state->repinneriterationscount = state->vsolver.repiterationscount;
-        state->repouteriterationscount = state->repinneriterationscount;
-        state->repncholesky = state->vsolver.repncholesky;
         return;
     }
     
@@ -2865,6 +2870,7 @@ void _minqpstate_init(void* _p, ae_state *_state, ae_bool make_automatic)
     _qqpbuffers_init(&p->qqpbuf, _state, make_automatic);
     _qpdenseaulbuffers_init(&p->qpdenseaulbuf, _state, make_automatic);
     _vipmstate_init(&p->vsolver, _state, make_automatic);
+    _ipm2state_init(&p->ipm2, _state, make_automatic);
 }
 
 
@@ -2931,6 +2937,7 @@ void _minqpstate_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bo
     _qqpbuffers_init_copy(&dst->qqpbuf, &src->qqpbuf, _state, make_automatic);
     _qpdenseaulbuffers_init_copy(&dst->qpdenseaulbuf, &src->qpdenseaulbuf, _state, make_automatic);
     _vipmstate_init_copy(&dst->vsolver, &src->vsolver, _state, make_automatic);
+    _ipm2state_init_copy(&dst->ipm2, &src->ipm2, _state, make_automatic);
 }
 
 
@@ -2978,6 +2985,7 @@ void _minqpstate_clear(void* _p)
     _qqpbuffers_clear(&p->qqpbuf);
     _qpdenseaulbuffers_clear(&p->qpdenseaulbuf);
     _vipmstate_clear(&p->vsolver);
+    _ipm2state_clear(&p->ipm2);
 }
 
 
@@ -3025,6 +3033,7 @@ void _minqpstate_destroy(void* _p)
     _qqpbuffers_destroy(&p->qqpbuf);
     _qpdenseaulbuffers_destroy(&p->qpdenseaulbuf);
     _vipmstate_destroy(&p->vsolver);
+    _ipm2state_destroy(&p->ipm2);
 }
 
 

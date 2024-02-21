@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -23,6 +23,9 @@
 #include "apserv.h"
 #include "ntheory.h"
 #include "ftbase.h"
+#include "ablasf.h"
+#include "xdebug.h"
+#include "hqrnd.h"
 #include "fft.h"
 
 
@@ -39,29 +42,48 @@ For given A/B returns conv(A,B) (non-circular). Subroutine can automatically
 choose between three implementations: straightforward O(M*N)  formula  for
 very small N (or M), overlap-add algorithm for  cases  where  max(M,N)  is
 significantly larger than min(M,N), but O(M*N) algorithm is too slow,  and
-general FFT-based formula for cases where two previois algorithms are  too
+general FFT-based formula for cases where two previous algorithms are  too
 slow.
 
 Algorithm has max(M,N)*log(max(M,N)) complexity for any M/N.
 
 INPUT PARAMETERS
-    A   -   array[0..M-1] - complex function to be transformed
+    A   -   array[M] - complex function to be transformed
     M   -   problem size
-    B   -   array[0..N-1] - complex function to be transformed
+    B   -   array[N] - complex function to be transformed
     N   -   problem size
 
 OUTPUT PARAMETERS
-    R   -   convolution: A*B. array[0..N+M-2].
+    R   -   convolution: A*B. array[N+M-1]
 
 NOTE:
     It is assumed that A is zero at T<0, B is zero too.  If  one  or  both
-functions have non-zero values at negative T's, you  can  still  use  this
-subroutine - just shift its result correspondingly.
+    functions have non-zero values at negative T's, you can still use this
+    subroutine - just shift its result correspondingly.
+    
+NOTE: there is a buffered version of this  function,  ConvC1DBuf(),  which
+      can reuse space previously allocated in its output parameter R.
 
   -- ALGLIB --
      Copyright 21.07.2009 by Bochkanov Sergey
 *************************************************************************/
 void convc1d(/* Complex */ const ae_vector* a,
+     ae_int_t m,
+     /* Complex */ const ae_vector* b,
+     ae_int_t n,
+     /* Complex */ ae_vector* r,
+     ae_state *_state);
+
+
+/*************************************************************************
+1-dimensional complex convolution, buffered version of ConvC1DBuf(), which
+does not reallocate R[] if its length is enough to store the result  (i.e.
+it reuses previously allocated memory as much as possible).
+
+  -- ALGLIB --
+     Copyright 30.11.2023 by Bochkanov Sergey
+*************************************************************************/
+void convc1dbuf(/* Complex */ const ae_vector* a,
      ae_int_t m,
      /* Complex */ const ae_vector* b,
      ae_int_t n,
@@ -91,11 +113,32 @@ NOTE:
     It is assumed that A is zero at T<0, B is zero too.  If  one  or  both
 functions have non-zero values at negative T's, you  can  still  use  this
 subroutine - just shift its result correspondingly.
+    
+NOTE: there is a buffered version of this  function,  ConvC1DInvBuf(),
+      which can reuse space previously allocated in its output parameter R
 
   -- ALGLIB --
      Copyright 21.07.2009 by Bochkanov Sergey
 *************************************************************************/
 void convc1dinv(/* Complex */ const ae_vector* a,
+     ae_int_t m,
+     /* Complex */ const ae_vector* b,
+     ae_int_t n,
+     /* Complex */ ae_vector* r,
+     ae_state *_state);
+
+
+/*************************************************************************
+1-dimensional complex non-circular deconvolution (inverse of ConvC1D()).
+
+A buffered version, which does not reallocate R[] if its length is  enough
+to store the result (i.e. it reuses previously allocated memory as much as
+possible).
+
+  -- ALGLIB --
+     Copyright 30.11.2023 by Bochkanov Sergey
+*************************************************************************/
+void convc1dinvbuf(/* Complex */ const ae_vector* a,
      ae_int_t m,
      /* Complex */ const ae_vector* b,
      ae_int_t n,
@@ -115,23 +158,44 @@ signal,  periodic function, and another - R - is a response,  non-periodic
 function with limited length.
 
 INPUT PARAMETERS
-    S   -   array[0..M-1] - complex periodic signal
+    S   -   array[M] - complex periodic signal
     M   -   problem size
-    B   -   array[0..N-1] - complex non-periodic response
+    B   -   array[N] - complex non-periodic response
     N   -   problem size
 
 OUTPUT PARAMETERS
-    R   -   convolution: A*B. array[0..M-1].
+    R   -   convolution: A*B. array[M].
 
 NOTE:
     It is assumed that B is zero at T<0. If  it  has  non-zero  values  at
 negative T's, you can still use this subroutine - just  shift  its  result
 correspondingly.
+    
+NOTE: there is a buffered version of this  function,  ConvC1DCircularBuf(),
+      which can reuse space previously allocated in its output parameter R.
 
   -- ALGLIB --
      Copyright 21.07.2009 by Bochkanov Sergey
 *************************************************************************/
 void convc1dcircular(/* Complex */ const ae_vector* s,
+     ae_int_t m,
+     /* Complex */ const ae_vector* r,
+     ae_int_t n,
+     /* Complex */ ae_vector* c,
+     ae_state *_state);
+
+
+/*************************************************************************
+1-dimensional circular complex convolution.
+
+Buffered version of ConvC1DCircular(), which does not  reallocate  C[]  if
+its length is enough to  store  the  result  (i.e.  it  reuses  previously
+allocated memory as much as possible).
+
+  -- ALGLIB --
+     Copyright 30.11.2023 by Bochkanov Sergey
+*************************************************************************/
+void convc1dcircularbuf(/* Complex */ const ae_vector* s,
      ae_int_t m,
      /* Complex */ const ae_vector* r,
      ae_int_t n,
@@ -161,11 +225,32 @@ NOTE:
     It is assumed that B is zero at T<0. If  it  has  non-zero  values  at
 negative T's, you can still use this subroutine - just  shift  its  result
 correspondingly.
+    
+NOTE: there is a buffered version of this  function,  ConvC1DCircularInvBuf(),
+      which can reuse space previously allocated in its output parameter R.
 
   -- ALGLIB --
      Copyright 21.07.2009 by Bochkanov Sergey
 *************************************************************************/
 void convc1dcircularinv(/* Complex */ const ae_vector* a,
+     ae_int_t m,
+     /* Complex */ const ae_vector* b,
+     ae_int_t n,
+     /* Complex */ ae_vector* r,
+     ae_state *_state);
+
+
+/*************************************************************************
+1-dimensional circular complex deconvolution (inverse of ConvC1DCircular()).
+
+Buffered version of ConvC1DCircularInv(), which does not reallocate R[] if
+its length is enough to  store  the  result  (i.e.  it  reuses  previously
+allocated memory as much as possible).
+
+  -- ALGLIB --
+     Copyright 30.11.2023 by Bochkanov Sergey
+*************************************************************************/
+void convc1dcircularinvbuf(/* Complex */ const ae_vector* a,
      ae_int_t m,
      /* Complex */ const ae_vector* b,
      ae_int_t n,
@@ -191,11 +276,33 @@ NOTE:
     It is assumed that A is zero at T<0, B is zero too.  If  one  or  both
 functions have non-zero values at negative T's, you  can  still  use  this
 subroutine - just shift its result correspondingly.
+    
+NOTE: there is a buffered version of this  function,  ConvR1DBuf(),
+      which can reuse space previously allocated in its output parameter R.
+
 
   -- ALGLIB --
      Copyright 21.07.2009 by Bochkanov Sergey
 *************************************************************************/
 void convr1d(/* Real    */ const ae_vector* a,
+     ae_int_t m,
+     /* Real    */ const ae_vector* b,
+     ae_int_t n,
+     /* Real    */ ae_vector* r,
+     ae_state *_state);
+
+
+/*************************************************************************
+1-dimensional real convolution.
+
+Buffered version of ConvR1D(), which does not reallocate R[] if its length
+is enough to store the result (i.e. it reuses previously allocated  memory
+as much as possible).
+
+  -- ALGLIB --
+     Copyright 30.11.2023 by Bochkanov Sergey
+*************************************************************************/
+void convr1dbuf(/* Real    */ const ae_vector* a,
      ae_int_t m,
      /* Real    */ const ae_vector* b,
      ae_int_t n,
@@ -225,11 +332,31 @@ NOTE:
     It is assumed that A is zero at T<0, B is zero too.  If  one  or  both
 functions have non-zero values at negative T's, you  can  still  use  this
 subroutine - just shift its result correspondingly.
+    
+NOTE: there is a buffered version of this  function,  ConvR1DInvBuf(),
+      which can reuse space previously allocated in its output parameter R.
 
   -- ALGLIB --
      Copyright 21.07.2009 by Bochkanov Sergey
 *************************************************************************/
 void convr1dinv(/* Real    */ const ae_vector* a,
+     ae_int_t m,
+     /* Real    */ const ae_vector* b,
+     ae_int_t n,
+     /* Real    */ ae_vector* r,
+     ae_state *_state);
+
+
+/*************************************************************************
+1-dimensional real deconvolution (inverse of ConvR1D()), buffered version,
+which does not reallocate R[] if its length is enough to store the  result
+(i.e. it reuses previously allocated memory as much as possible).
+
+
+  -- ALGLIB --
+     Copyright 30.11.2023 by Bochkanov Sergey
+*************************************************************************/
+void convr1dinvbuf(/* Real    */ const ae_vector* a,
      ae_int_t m,
      /* Real    */ const ae_vector* b,
      ae_int_t n,
@@ -255,11 +382,30 @@ NOTE:
     It is assumed that B is zero at T<0. If  it  has  non-zero  values  at
 negative T's, you can still use this subroutine - just  shift  its  result
 correspondingly.
+    
+NOTE: there is a buffered version of this  function,  ConvR1DCurcularBuf(),
+      which can reuse space previously allocated in its output parameter R.
 
   -- ALGLIB --
      Copyright 21.07.2009 by Bochkanov Sergey
 *************************************************************************/
 void convr1dcircular(/* Real    */ const ae_vector* s,
+     ae_int_t m,
+     /* Real    */ const ae_vector* r,
+     ae_int_t n,
+     /* Real    */ ae_vector* c,
+     ae_state *_state);
+
+
+/*************************************************************************
+1-dimensional circular real convolution, buffered version, which  does not
+reallocate C[] if its length is enough to store the result (i.e. it reuses
+previously allocated memory as much as possible).
+
+  -- ALGLIB --
+     Copyright 30.11.2023 by Bochkanov Sergey
+*************************************************************************/
+void convr1dcircularbuf(/* Real    */ const ae_vector* s,
      ae_int_t m,
      /* Real    */ const ae_vector* r,
      ae_int_t n,
@@ -294,6 +440,24 @@ correspondingly.
      Copyright 21.07.2009 by Bochkanov Sergey
 *************************************************************************/
 void convr1dcircularinv(/* Real    */ const ae_vector* a,
+     ae_int_t m,
+     /* Real    */ const ae_vector* b,
+     ae_int_t n,
+     /* Real    */ ae_vector* r,
+     ae_state *_state);
+
+
+/*************************************************************************
+1-dimensional complex deconvolution, inverse of ConvR1DCircular().
+
+Buffered version, which does not reallocate R[] if its length is enough to
+store the result (i.e. it reuses previously allocated memory  as  much  as
+possible).
+
+  -- ALGLIB --
+     Copyright 21.07.2009 by Bochkanov Sergey
+*************************************************************************/
+void convr1dcircularinvbuf(/* Real    */ const ae_vector* a,
      ae_int_t m,
      /* Real    */ const ae_vector* b,
      ae_int_t n,

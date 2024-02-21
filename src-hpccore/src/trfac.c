@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -1215,6 +1215,7 @@ ae_bool sparsecholesky(sparsematrix* a, ae_bool isupper, ae_state *_state)
     sparsedecompositionanalysis analysis;
     ae_int_t facttype;
     ae_int_t permtype;
+    ae_int_t donotreusemem;
     ae_vector priorities;
     ae_vector dummyd;
     ae_vector dummyp;
@@ -1248,13 +1249,14 @@ ae_bool sparsecholesky(sparsematrix* a, ae_bool isupper, ae_state *_state)
      */
     facttype = 0;
     permtype = -1;
+    donotreusemem = -1;
     
     /*
      * Easy case - CRS matrix in lower triangle, no conversion or transposition is needed
      */
     if( sparseiscrs(a, _state)&&!isupper )
     {
-        result = spsymmanalyze(a, &priorities, 0.0, facttype, permtype, &analysis.analysis, _state);
+        result = spsymmanalyze(a, &priorities, 0.0, 0, facttype, permtype, donotreusemem, &analysis.analysis, _state);
         if( !result )
         {
             ae_frame_leave(_state);
@@ -1283,7 +1285,7 @@ ae_bool sparsecholesky(sparsematrix* a, ae_bool isupper, ae_state *_state)
     {
         sparsecopytocrsbuf(a, &analysis.wrka, _state);
     }
-    result = spsymmanalyze(&analysis.wrka, &priorities, 0.0, facttype, permtype, &analysis.analysis, _state);
+    result = spsymmanalyze(&analysis.wrka, &priorities, 0.0, 0, facttype, permtype, donotreusemem, &analysis.analysis, _state);
     if( !result )
     {
         ae_frame_leave(_state);
@@ -1295,14 +1297,14 @@ ae_bool sparsecholesky(sparsematrix* a, ae_bool isupper, ae_state *_state)
         ae_frame_leave(_state);
         return result;
     }
-    spsymmextract(&analysis.analysis, &analysis.wrka, &dummyd, &dummyp, _state);
     if( isupper )
     {
+        spsymmextract(&analysis.analysis, &analysis.wrka, &dummyd, &dummyp, _state);
         sparsecopytransposecrsbuf(&analysis.wrka, a, _state);
     }
     else
     {
-        sparsecopybuf(&analysis.wrka, a, _state);
+        spsymmextract(&analysis.analysis, a, &dummyd, &dummyp, _state);
     }
     ae_frame_leave(_state);
     return result;
@@ -1369,6 +1371,7 @@ ae_bool sparsecholeskyp(sparsematrix* a,
     ae_vector dummyd;
     ae_int_t facttype;
     ae_int_t permtype;
+    ae_int_t donotreusemem;
     ae_vector priorities;
     ae_bool result;
 
@@ -1399,13 +1402,14 @@ ae_bool sparsecholeskyp(sparsematrix* a,
      */
     facttype = 0;
     permtype = 0;
+    donotreusemem = -1;
     
     /*
      * Easy case - CRS matrix in lower triangle, no conversion or transposition is needed
      */
     if( sparseiscrs(a, _state)&&!isupper )
     {
-        result = spsymmanalyze(a, &priorities, 0.0, facttype, permtype, &analysis.analysis, _state);
+        result = spsymmanalyze(a, &priorities, 0.0, 0, facttype, permtype, donotreusemem, &analysis.analysis, _state);
         if( !result )
         {
             ae_frame_leave(_state);
@@ -1434,7 +1438,7 @@ ae_bool sparsecholeskyp(sparsematrix* a,
     {
         sparsecopytocrsbuf(a, &analysis.wrka, _state);
     }
-    result = spsymmanalyze(&analysis.wrka, &priorities, 0.0, facttype, permtype, &analysis.analysis, _state);
+    result = spsymmanalyze(&analysis.wrka, &priorities, 0.0, 0, facttype, permtype, donotreusemem, &analysis.analysis, _state);
     if( !result )
     {
         ae_frame_leave(_state);
@@ -1446,14 +1450,14 @@ ae_bool sparsecholeskyp(sparsematrix* a,
         ae_frame_leave(_state);
         return result;
     }
-    spsymmextract(&analysis.analysis, &analysis.wrka, &dummyd, p, _state);
     if( isupper )
     {
+        spsymmextract(&analysis.analysis, &analysis.wrka, &dummyd, p, _state);
         sparsecopytransposecrsbuf(&analysis.wrka, a, _state);
     }
     else
     {
-        sparsecopybuf(&analysis.wrka, a, _state);
+        spsymmextract(&analysis.analysis, a, &dummyd, p, _state);
     }
     ae_frame_leave(_state);
     return result;
@@ -1535,6 +1539,7 @@ ae_bool sparsecholeskyanalyze(const sparsematrix* a,
 {
     ae_frame _frame_block;
     ae_vector priorities;
+    ae_int_t reusemem;
     ae_bool result;
 
     ae_frame_make(_state, &_frame_block);
@@ -1552,6 +1557,7 @@ ae_bool sparsecholeskyanalyze(const sparsematrix* a,
     analysis->n = sparsegetnrows(a, _state);
     analysis->facttype = facttype;
     analysis->permtype = permtype;
+    reusemem = 1;
     
     /*
      * Prepare default priorities for the priority ordering
@@ -1576,11 +1582,11 @@ ae_bool sparsecholeskyanalyze(const sparsematrix* a,
         if( isupper )
         {
             sparsecopytransposecrsbuf(&analysis->crsa, &analysis->crsat, _state);
-            result = spsymmanalyze(&analysis->crsat, &priorities, 0.0, facttype, permtype, &analysis->analysis, _state);
+            result = spsymmanalyze(&analysis->crsat, &priorities, 0.0, 0, facttype, permtype, reusemem, &analysis->analysis, _state);
         }
         else
         {
-            result = spsymmanalyze(&analysis->crsa, &priorities, 0.0, facttype, permtype, &analysis->analysis, _state);
+            result = spsymmanalyze(&analysis->crsa, &priorities, 0.0, 0, facttype, permtype, reusemem, &analysis->analysis, _state);
         }
     }
     else
@@ -1594,11 +1600,11 @@ ae_bool sparsecholeskyanalyze(const sparsematrix* a,
         if( isupper )
         {
             sparsecopytransposecrsbuf(a, &analysis->crsat, _state);
-            result = spsymmanalyze(&analysis->crsat, &priorities, 0.0, facttype, permtype, &analysis->analysis, _state);
+            result = spsymmanalyze(&analysis->crsat, &priorities, 0.0, 0, facttype, permtype, reusemem, &analysis->analysis, _state);
         }
         else
         {
-            result = spsymmanalyze(a, &priorities, 0.0, facttype, permtype, &analysis->analysis, _state);
+            result = spsymmanalyze(a, &priorities, 0.0, 0, facttype, permtype, reusemem, &analysis->analysis, _state);
         }
     }
     ae_frame_leave(_state);

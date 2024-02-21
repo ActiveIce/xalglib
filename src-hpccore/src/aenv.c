@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -118,6 +118,7 @@ namespace alglib_impl
 #define _ALGLIB_GET_CORES_COUNT            1000
 #define _ALGLIB_GET_GLOBAL_THREADING       1001
 #define _ALGLIB_GET_NWORKERS               1002
+#define _ALGLIB_GET_CORES_TO_USE           1003
 
 #if defined(ALGLIB_REDZONE)
 #define _ALGLIB_REDZONE_VAL                 0x3c
@@ -416,6 +417,12 @@ ae_int64_t ae_get_dbg_value(ae_int64_t id)
         return (ae_int64_t)ae_get_global_threading();
     if( id==_ALGLIB_GET_NWORKERS )
         return (ae_int64_t)_alglib_cores_to_use;
+    if( id==_ALGLIB_GET_CORES_TO_USE )
+#if defined(AE_SMP)
+        return (ae_int64_t)ae_get_cores_to_use_positive();
+#else
+        return (ae_int64_t)1;
+#endif
     
     /* unknown value */
     return (ae_int64_t)0;
@@ -425,13 +432,21 @@ ae_int64_t ae_get_dbg_value(ae_int64_t id)
 This function sets default (global) threading model:
 * serial execution
 * multithreading, if cores_to_use allows it
+* serial callbacks
+* parallel callbacks
 
 ************************************************************************/
 void ae_set_global_threading(ae_uint64_t flg_value)
 {
-    flg_value = flg_value&_ALGLIB_FLG_THREADING_MASK;
-    AE_CRITICAL_ASSERT(flg_value==_ALGLIB_FLG_THREADING_SERIAL || flg_value==_ALGLIB_FLG_THREADING_PARALLEL);
+    flg_value = flg_value&_ALGLIB_FLG_THREADING_MASK_ALL;
+    AE_CRITICAL_ASSERT((flg_value&_ALGLIB_FLG_THREADING_MASK_WRK)==_ALGLIB_FLG_THREADING_SERIAL ||
+                       (flg_value&_ALGLIB_FLG_THREADING_MASK_WRK)==_ALGLIB_FLG_THREADING_PARALLEL ||
+                       (flg_value&_ALGLIB_FLG_THREADING_MASK_WRK)==_ALGLIB_FLG_THREADING_USE_GLOBAL);
+    AE_CRITICAL_ASSERT((flg_value&_ALGLIB_FLG_THREADING_MASK_CBK)==_ALGLIB_FLG_THREADING_SERIAL_CALLBACKS ||
+                       (flg_value&_ALGLIB_FLG_THREADING_MASK_CBK)==_ALGLIB_FLG_THREADING_PARALLEL_CALLBACKS ||
+                       (flg_value&_ALGLIB_FLG_THREADING_MASK_CBK)==_ALGLIB_FLG_THREADING_USE_GLOBAL);
     _alglib_global_threading_flags = (unsigned char)(flg_value>>_ALGLIB_FLG_THREADING_SHIFT);
+    AE_CRITICAL_ASSERT((((ae_uint64_t)_alglib_global_threading_flags)<<_ALGLIB_FLG_THREADING_SHIFT)==flg_value);
 }
 
 /************************************************************************
@@ -647,6 +662,30 @@ void ae_mfence(ae_lock *lock)
 {
     ae_acquire_lock(lock);
     ae_release_lock(lock);
+}
+
+
+/*************************************************************************
+This function performs thread-unsafe read of an integer value.
+
+Basically, it just reads the pointer contents. Its existince allows us  to
+let ThreadSanitizer ignore reads that lead to benign race conditions.
+*************************************************************************/
+ae_int_t ae_unsafe_read_aeint(ae_int_t *p)
+{
+    return *p; // TODO: fast inline!!!!
+}
+
+
+/*************************************************************************
+This function performs thread-unsafe write of an integer value.
+
+Basically, it just writes v to the target pointer. Its existence allows us
+to let ThreadSanitizer ignore writes that lead to benign race conditions.
+*************************************************************************/
+void ae_unsafe_write_aeint(ae_int_t *dst, ae_int_t v)
+{
+    *dst = v;
 }
 
 /*************************************************************************
@@ -2305,7 +2344,7 @@ Result:
 ************************************************************************/
 ae_int_t ae_obj_array_get_length(ae_obj_array *dst)
 {
-    return dst->cnt;
+    return ae_unsafe_read_aeint(&dst->cnt);
 }
 
 /************************************************************************
@@ -2404,7 +2443,7 @@ On output:
 ************************************************************************/
 void ae_obj_array_get(ae_obj_array *arr, ae_int_t idx, ae_smart_ptr *ptr, ae_state *state)
 {
-    if( idx<0 || idx>=arr->cnt )
+    if( idx<0 || idx>=ae_unsafe_read_aeint(&arr->cnt) )
         ae_assert(ae_false, "ObjArray: out of bounds read access was performed", state);
     ae_smart_ptr_assign(ptr, arr->pp_obj_ptr[idx], ae_false, ae_false, 0, NULL, NULL);
 }
@@ -2435,7 +2474,7 @@ ptr                 smart pointer structure
 void ae_obj_array_set_transfer(ae_obj_array *arr, ae_int_t idx, ae_smart_ptr *ptr, ae_state *state)
 {
     /* initial integrity checks */
-    if( idx<0 || idx>=arr->cnt )
+    if( idx<0 || idx>=ae_unsafe_read_aeint(&arr->cnt) )
         ae_assert(ae_false, "ae_obj_array_set_transfer: out of bounds idx", state);
     ae_assert(ptr->ptr==NULL || ptr->is_owner, "ae_obj_array_set_transfer: ptr does not own its pointer", state);
     ae_assert(ptr->ptr==NULL || ptr->is_dynamic, "ae_obj_array_set_transfer: ptr does not point to dynamic object", state);
@@ -2499,10 +2538,17 @@ ae_int_t ae_obj_array_append_transfer(ae_obj_array *arr, ae_smart_ptr *ptr, ae_s
     /* initial integrity checks */
     ae_assert(ptr->ptr==NULL || ptr->is_owner, "ae_obj_array_append_transfer: ptr does not own its pointer", state);
     ae_assert(ptr->ptr==NULL || ptr->is_dynamic, "ae_obj_array_append_transfer: ptr does not point to dynamic object", state);
-    ae_assert(!arr->fixed_capacity || arr->cnt<arr->capacity, "ae_obj_array_append_transfer: unable to append, all capacity is used up", state);
     
-    /* get primary lock */
+    /* get the primary lock */
     ae_acquire_lock(&arr->array_lock);
+    
+    /* array integrity check */
+    if(arr->fixed_capacity && arr->cnt>=arr->capacity )
+    {
+        /* release lock and throw exception */
+        ae_release_lock(&arr->array_lock);
+        ae_assert(ae_false, "ae_obj_array_append_transfer: unable to append, all capacity is used up", state);
+    }
     
     /* reallocate if needed */
     if( arr->cnt==arr->capacity )
@@ -2737,7 +2783,7 @@ void ae_x_attach_to_matrix(x_matrix *dst, ae_matrix *src)
     dst->cols = src->cols;
     dst->stride = src->stride;
     dst->datatype = src->datatype;
-    dst->x_ptr.p_ptr = &(src->ptr.pp_double[0][0]);
+    dst->x_ptr.p_ptr = (src->rows!=0 && src->cols!=0) ? &(src->ptr.pp_double[0][0]) : NULL;
     dst->last_action = ACT_NEW_LOCATION;
     dst->owner = OWN_CALLER;
 }
@@ -4574,7 +4620,7 @@ void ae_spin_wait(ae_int_t cnt)
     
     /* spin wait, test condition which will never be true */
     for(i=0; i<cnt; i++)
-        if( ae_never_change_it>0 )
+        if( ae_never_change_it>1 )
             ae_never_change_it--;
 }
 
@@ -5016,7 +5062,7 @@ NOTE: this function is NOT thread-safe. It does not acquire pool lock, so
 ************************************************************************/
 void ae_shared_pool_set_seed(
     ae_shared_pool  *dst,
-    void            *seed_object,
+    const void      *seed_object,
     ae_int_t        size_of_object,
     ae_constructor  constructor,
     ae_copy_constructor copy_constructor,

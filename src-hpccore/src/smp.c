@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -281,7 +281,17 @@ ae_int_t ae_get_cores_to_use()
     return 1;
 }
 
+ae_int_t ae_get_cores_to_use_positive()
+{
+    return 1;
+}
+
 ae_bool ae_can_pexec(ae_state *_state)
+{
+    return ae_false;
+}
+
+ae_bool ae_can_parallelize_callbacks(ae_state *_state)
 {
     return ae_false;
 }
@@ -353,13 +363,7 @@ ae_int_t ae_cores_count()
 
 /************************************************************************
 This function returns number of CPU cores which should be used by  worker
-threads, as specified by user. In case user specified non-positive number
-of  cores  to  use,  this number will be converted according to following
-rules:
-*  0 => ae_cores_count()
-* -1 => max(ae_cores_count()-1,1)
-* -2 => max(ae_cores_count()-2,1)
-and so on.
+threads, converted to [1,CORES_COUNT] range.
 
 This function requires initialized thread pool. It will  fail  if  called
 without initialized thread pool.
@@ -367,13 +371,14 @@ without initialized thread pool.
 ae_int_t ae_cores_to_use()
 {
     AE_CRITICAL_ASSERT(main_thread_pool!=NULL);
-    if( _alglib_cores_to_use<=0 )
+    ae_int_t cu = ae_unsafe_read_aeint(&_alglib_cores_to_use);
+    if( cu<=0 )
     {
-        ae_int_t r = (main_thread_pool->queues_count-1)+_alglib_cores_to_use;
+        ae_int_t r = (main_thread_pool->queues_count-1)+cu;
         return r>=1 ? r : 1;
     }
     else
-        return _alglib_cores_to_use;
+        return cu;
 }
 
 
@@ -392,7 +397,7 @@ less than actual number of cores).
 ************************************************************************/
 void ae_set_cores_to_use(ae_int_t ncores)
 {
-    _alglib_cores_to_use = ncores;
+    ae_unsafe_write_aeint(&_alglib_cores_to_use, ncores);
 }
 
 /************************************************************************
@@ -401,7 +406,24 @@ threads, as specified by user. Negative values are returned "as is".
 ************************************************************************/
 ae_int_t ae_get_cores_to_use()
 {
-    return _alglib_cores_to_use;
+    return ae_unsafe_read_aeint(&_alglib_cores_to_use);
+}
+
+/************************************************************************
+This function returns number of CPU cores which should  be used by worker
+threads, converted to [1,CORES_COUNT] range
+************************************************************************/
+ae_int_t ae_get_cores_to_use_positive()
+{
+    ae_int_t cc = ae_cores_count();
+    ae_int_t cu = ae_unsafe_read_aeint(&_alglib_cores_to_use);
+    if( cu<=0 )
+    {
+        ae_int_t r = cc+cu;
+        return r>=1 ? r : 1;
+    }
+    else
+        return cu<cc ? cu : cc;
 }
 
 /************************************************************************
@@ -412,9 +434,9 @@ settings and current execution mode.
 We can NOT parallelize current task if:
 * we have only one core
 * we have more than one core, but cores_to_use allows us to use only one
-* multithreading is disabled at call-local level
-* at call-local level we have default settings (use global settings), and
-  global settings prohibit multithreading)
+* multithreading is disabled at the call-local level
+* at the call-local level we have default settings (use global settings),
+  and global settings prohibit multithreading
 * everything above is fine, but we are already in the multithreaded mode,
   i.e. in some worker thread. It means that we should execute current task
   in the context of the current worker thread.
@@ -426,17 +448,56 @@ ae_bool ae_can_pexec(ae_state *_state)
     _cu = ae_get_cores_to_use();
     if( _cu==1 || (_cu<=0 && ae_cores_count()+_cu<=1) || (_cu>1 && ae_cores_count()<=1) )
         return ae_false;
-    if( (_state->flags&_ALGLIB_FLG_THREADING_MASK)==_ALGLIB_FLG_THREADING_SERIAL )
+    if( (_state->flags&_ALGLIB_FLG_THREADING_MASK_WRK)==_ALGLIB_FLG_THREADING_SERIAL )
         return ae_false;
-    if( (_state->flags&_ALGLIB_FLG_THREADING_MASK)==_ALGLIB_FLG_THREADING_USE_GLOBAL &&
-        _alglib_global_threading_flags==(_ALGLIB_FLG_THREADING_SERIAL>>_ALGLIB_FLG_THREADING_SHIFT) )
-        return ae_false;
+    if( (_state->flags&_ALGLIB_FLG_THREADING_MASK_WRK)==_ALGLIB_FLG_THREADING_USE_GLOBAL )
+    {
+        ae_uint64_t g64 = ((ae_uint64_t)_alglib_global_threading_flags)<<_ALGLIB_FLG_THREADING_SHIFT;
+        if( (g64&_ALGLIB_FLG_THREADING_MASK_WRK)==_ALGLIB_FLG_THREADING_SERIAL ||
+            (g64&_ALGLIB_FLG_THREADING_MASK_WRK)==_ALGLIB_FLG_THREADING_USE_GLOBAL )
+            return ae_false;
+    }
     if( _state->worker_thread!=NULL )
         return ae_false;
     return ae_true;
 #else
     return ae_false;
 #endif
+}
+
+/************************************************************************
+This function tells us whether we can parallelize callbacks, i.e. perform
+parallel numerical differentiation or parallel batch evaluation.
+
+It returns the net result of  all  multithreading  settings  and  current
+execution mode.
+
+We can NOT parallelize callbacks if:
+* we have only one core
+* we have more than one core, but cores_to_use allows us to use only one
+* callback parallelism is disabled at the call-local level
+* at the call-local level we have default settings (use global settings),
+  and global settings prohibit callback parallelism
+************************************************************************/
+ae_bool ae_can_parallelize_callbacks(ae_state *_state)
+{
+    ae_int_t _cu;
+    _cu = ae_get_cores_to_use();
+    if( _cu==1 || (_cu<=0 && ae_cores_count()+_cu<=1) || (_cu>1 && ae_cores_count()<=1) )
+        return ae_false;
+    if( (_state->flags&_ALGLIB_FLG_THREADING_MASK_CBK)==_ALGLIB_FLG_THREADING_SERIAL_CALLBACKS )
+        return ae_false;
+    if( (_state->flags&_ALGLIB_FLG_THREADING_MASK_CBK)==_ALGLIB_FLG_THREADING_PARALLEL_CALLBACKS )
+        return ae_true;
+    if( (_state->flags&_ALGLIB_FLG_THREADING_MASK_CBK)==_ALGLIB_FLG_THREADING_USE_GLOBAL )
+    {
+        ae_uint64_t g64 = ((ae_uint64_t)_alglib_global_threading_flags)<<_ALGLIB_FLG_THREADING_SHIFT;
+        if( (g64&_ALGLIB_FLG_THREADING_MASK_CBK)==_ALGLIB_FLG_THREADING_SERIAL_CALLBACKS ||
+            (g64&_ALGLIB_FLG_THREADING_MASK_CBK)==_ALGLIB_FLG_THREADING_USE_GLOBAL )
+            return ae_false;
+        return ae_true;
+    }
+    return ae_false;
 }
 
 /************************************************************************
@@ -2210,6 +2271,28 @@ void ae_complete_finalization_before_exit()
     ae_sleep_thread(500);
 }
 
+
+/*************************************************************************
+Perform a quick scan and return an index of non-empty queue. The queue may
+be emptied by someone else working from a parallel thread, so  the  result
+is not guaranteed to point to non-empty queue.
+
+Returns -1 if all queues are empty.
+
+This function has a data race inside, it is not an error.
+*************************************************************************/
+static ae_int_t quick_scan_for_nonempty(ae_thread_pool *pool, ae_int_t scans_count)
+{
+    for(ae_int_t i=0; i<=scans_count; i++)
+    {
+        for(ae_int_t j=0; j<pool->queues_count; j++)
+            if( pool->queues[j].cnt>0 )
+                return j;
+    }
+    return -1;
+}
+
+
 #if AE_OS==AE_WINDOWS
 void ae_worker_loop(void *T)
 #elif AE_OS==AE_POSIX
@@ -2347,15 +2430,7 @@ void ae_worker_loop(void *T)
                     break;
                 
                 /* wait (we scan queues during waiting) and continue inner cycle */
-                hint_index = -1;
-                for(i=0; i<=AE_QUICK_SCANS_COUNT; i++)
-                {
-                    for(j=0; j<pool->queues_count; j++)
-                        if( pool->queues[j].cnt>0 )
-                            hint_index = j;
-                    if( hint_index>=0 )
-                        break;
-                }
+                hint_index = quick_scan_for_nonempty(pool, AE_QUICK_SCANS_COUNT);
                 if( hint_index<0 )
                 {
 #ifdef AE_SMP_DEBUGCOUNTERS

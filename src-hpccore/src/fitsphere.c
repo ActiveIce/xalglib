@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -56,7 +56,7 @@ void fitspherels(/* Real    */ const ae_matrix* xy,
     ae_vector_clear(cx);
     *r = 0.0;
 
-    fitspherex(xy, npoints, nx, 0, 0.0, 0, 0.0, cx, &dummy, r, _state);
+    fitspherex(xy, npoints, nx, 0, 0.0, 0, cx, &dummy, r, _state);
 }
 
 
@@ -101,7 +101,7 @@ void fitspheremc(/* Real    */ const ae_matrix* xy,
     ae_vector_clear(cx);
     *rhi = 0.0;
 
-    fitspherex(xy, npoints, nx, 1, 0.0, 0, 0.0, cx, &dummy, rhi, _state);
+    fitspherex(xy, npoints, nx, 1, 0.0, 0, cx, &dummy, rhi, _state);
 }
 
 
@@ -146,7 +146,7 @@ void fitspheremi(/* Real    */ const ae_matrix* xy,
     ae_vector_clear(cx);
     *rlo = 0.0;
 
-    fitspherex(xy, npoints, nx, 2, 0.0, 0, 0.0, cx, rlo, &dummy, _state);
+    fitspherex(xy, npoints, nx, 2, 0.0, 0, cx, rlo, &dummy, _state);
 }
 
 
@@ -193,7 +193,7 @@ void fitspheremz(/* Real    */ const ae_matrix* xy,
     *rlo = 0.0;
     *rhi = 0.0;
 
-    fitspherex(xy, npoints, nx, 3, 0.0, 0, 0.0, cx, rlo, rhi, _state);
+    fitspherex(xy, npoints, nx, 3, 0.0, 0, cx, rlo, rhi, _state);
 }
 
 
@@ -206,9 +206,6 @@ This  is  expert  function  which  allows  to  tweak  many  parameters  of
 underlying nonlinear solver:
 * stopping criteria for inner iterations
 * number of outer iterations
-* penalty coefficient used to handle  nonlinear  constraints  (we  convert
-  unconstrained nonsmooth optimization problem ivolving max() and/or min()
-  operations to quadratically constrained smooth one).
 
 You may tweak all these parameters or only some  of  them,  leaving  other
 ones at their default state - just specify zero  value,  and  solver  will
@@ -243,13 +240,6 @@ INPUT PARAMETERS:
                   speed up solver; 10 often results in good combination of
                   precision and speed; sometimes you may get good results
                   with just 6 outer iterations.
-                Ignored for ProblemType=0.
-    Penalty -   penalty coefficient for NLC optimizer:
-                * must be non-negative
-                * use 0 to choose default value (1.0E6 in current version)
-                * it should be really large, 1.0E6...1.0E7 is a good value
-                  to start from;
-                * generally, default value is good enough
                 Ignored for ProblemType=0.
 
 OUTPUT PARAMETERS:
@@ -354,7 +344,6 @@ void fitspherex(/* Real    */ const ae_matrix* xy,
      ae_int_t problemtype,
      double epsx,
      ae_int_t aulits,
-     double penalty,
      /* Real    */ ae_vector* cx,
      double* rlo,
      double* rhi,
@@ -370,10 +359,9 @@ void fitspherex(/* Real    */ const ae_matrix* xy,
     *rhi = 0.0;
     _fitsphereinternalreport_init(&rep, _state, ae_true);
 
-    ae_assert(ae_isfinite(penalty, _state)&&ae_fp_greater_eq(penalty,(double)(0)), "FitSphereX: Penalty<0 or is not finite", _state);
     ae_assert(ae_isfinite(epsx, _state)&&ae_fp_greater_eq(epsx,(double)(0)), "FitSphereX: EpsX<0 or is not finite", _state);
     ae_assert(aulits>=0, "FitSphereX: AULIts<0", _state);
-    fitsphereinternal(xy, npoints, nx, problemtype, 0, epsx, aulits, penalty, cx, rlo, rhi, &rep, _state);
+    fitsphereinternal(xy, npoints, nx, problemtype, 0, epsx, aulits, cx, rlo, rhi, &rep, _state);
     ae_frame_leave(_state);
 }
 
@@ -425,14 +413,6 @@ INPUT PARAMETERS:
                   speed up solver; 10 often results in good combination of
                   precision and speed
                 Ignored for ProblemType=0.
-    Penalty -   penalty coefficient for NLC optimizer (ignored  for  SLP):
-                * must be non-negative
-                * use 0 to choose default value (1.0E6 in current version)
-                * it should be really large, 1.0E6...1.0E7 is a good value
-                  to start from;
-                * generally, default value is good enough
-                * ignored by SLP optimizer
-                Ignored for ProblemType=0.
 
 OUTPUT PARAMETERS:
     CX      -   central point for a sphere
@@ -455,7 +435,6 @@ void fitsphereinternal(/* Real    */ const ae_matrix* xy,
      ae_int_t solvertype,
      double epsx,
      ae_int_t aulits,
-     double penalty,
      /* Real    */ ae_vector* cx,
      double* rlo,
      double* rhi,
@@ -541,16 +520,11 @@ void fitsphereinternal(/* Real    */ const ae_matrix* xy,
     ae_assert(apservisfinitematrix(xy, npoints, nx, _state), "FitSphereX: XY contains infinite or NAN values", _state);
     ae_assert(problemtype>=0&&problemtype<=3, "FitSphereX: ProblemType is neither 0, 1, 2 or 3", _state);
     ae_assert(solvertype>=0&&solvertype<=3, "FitSphereX: ProblemType is neither 1, 2 or 3", _state);
-    ae_assert(ae_isfinite(penalty, _state)&&ae_fp_greater_eq(penalty,(double)(0)), "FitSphereX: Penalty<0 or is not finite", _state);
     ae_assert(ae_isfinite(epsx, _state)&&ae_fp_greater_eq(epsx,(double)(0)), "FitSphereX: EpsX<0 or is not finite", _state);
     ae_assert(aulits>=0, "FitSphereX: AULIts<0", _state);
     if( solvertype==0 )
     {
         solvertype = 1;
-    }
-    if( ae_fp_eq(penalty,(double)(0)) )
-    {
-        penalty = 1.0E6;
     }
     if( ae_fp_eq(epsx,(double)(0)) )
     {
@@ -756,16 +730,16 @@ void fitsphereinternal(/* Real    */ const ae_matrix* xy,
             minnlcsetbc(&nlcstate, &bl, &bu, _state);
             minnlcsetnlc(&nlcstate, 0, cpr*npoints, _state);
             minnlcsetcond(&nlcstate, epsx, maxits, _state);
-            minnlcsetprecexactrobust(&nlcstate, 5, _state);
             minnlcsetstpmax(&nlcstate, 0.1, _state);
             if( solvertype==1 )
             {
-                minnlcsetalgoaul(&nlcstate, penalty, aulits, _state);
+                minnlcsetalgoaul2(&nlcstate, aulits, _state);
             }
             else
             {
                 minnlcsetalgoslp(&nlcstate, _state);
             }
+            minnlcsetalgosqp(&nlcstate, _state);
             minnlcrestartfrom(&nlcstate, &pcr, _state);
             while(minnlciteration(&nlcstate, _state))
             {

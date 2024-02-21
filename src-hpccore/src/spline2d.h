@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -656,33 +656,241 @@ void spline2dbuildbilinearmissingbuf(/* Real    */ const ae_vector* x,
 
 
 /*************************************************************************
-This subroutine builds bicubic vector-valued spline.
+This subroutine builds a bicubic vector-valued spline using  parabolically
+terminated end conditions.
 
-This function produces C2-continuous spline, i.e. the has smooth first and
-second derivatives both inside spline cells and at the boundaries.
+This function produces a C2-continuous spline, i.e. the  spline has smooth
+first and second  derivatives  both  inside  spline  cells  and  at  their
+boundaries.
 
-Input parameters:
-    X   -   spline abscissas, array[0..N-1]
-    Y   -   spline ordinates, array[0..M-1]
-    F   -   function values, array[0..M*N*D-1]:
+INPUT PARAMETERS:
+    X   -   spline abscissas, array[N]
+    N   -   N>=2:
+            * if not given, automatically determined as len(X)
+            * if given, only leading N elements of X are used
+    Y   -   spline ordinates, array[M]
+    M   -   M>=2:
+            * if not given, automatically determined as len(Y)
+            * if given, only leading M elements of Y are used
+    F   -   function values, array[M*N*D]:
             * first D elements store D values at (X[0],Y[0])
             * next D elements store D values at (X[1],Y[0])
             * general form - D function values at (X[i],Y[j]) are stored
               at F[D*(J*N+I)...D*(J*N+I)+D-1].
-    M,N -   grid size, M>=2, N>=2
-    D   -   vector dimension, D>=1
+    D   -   vector dimension, D>=1:
+            * D=1 means scalar-valued bicubic spline
+            * D>1 means vector-valued bicubic spline
 
-Output parameters:
+OUTPUT PARAMETERS:
     C   -   spline interpolant
 
   -- ALGLIB PROJECT --
-     Copyright 16.04.2012 by Bochkanov Sergey
+     Copyright 2012-2023 by Bochkanov Sergey
 *************************************************************************/
 void spline2dbuildbicubicv(/* Real    */ const ae_vector* x,
      ae_int_t n,
      /* Real    */ const ae_vector* y,
      ae_int_t m,
+     /* Real    */ const ae_vector* f,
+     ae_int_t d,
+     spline2dinterpolant* c,
+     ae_state *_state);
+
+
+/*************************************************************************
+This subroutine  builds  a  bicubic  vector-valued  spline  using  clamped
+boundary conditions:
+* spline values at the grid nodes are specified
+* boundary conditions for  first,  second  derivatives  or  for  parabolic
+  termination at four boundaries (bottom  y=min(Y[]), top y=max(Y[]), left
+  x=min(X[]), right x=max(X[])) are specified
+* mixed derivatives at corners are specified
+* it is possible to  have  different  boundary  conditions  for  different
+  boundaries (first derivatives along  one  boundary,  second  derivatives
+  along other one, parabolic termination along the rest and so on)
+* it is possible to have either a scalar (D=1) or a vector-valued spline
+
+This function produces a C2-continuous spline, i.e. the  spline has smooth
+first and second  derivatives  both  inside  spline  cells  and  at  their
+boundaries.
+
+INPUT PARAMETERS:
+    X           -   spline  abscissas,  array[N].  Can  be  unsorted,  the
+                    function will sort it together with boundary conditions
+                    and F[] array (the same set of  permutations  will  be
+                    applied to X[] and F[]).
+    N           -   N>=2:
+                    * if not given, automatically determined as len(X)
+                    * if given, only leading N elements of X are used
+    Y           -   spline ordinates, array[M].  Can   be   unsorted,  the
+                    function will sort it together with boundary conditions
+                    and F[] array (the same set of  permutations  will  be
+                    applied to X[] and F[]).
+    M           -   M>=2:
+                    * if not given, automatically determined as len(Y)
+                    * if given, only leading M elements of Y are used
+    BndBtm      -   array[D*N], boundary conditions at the bottom boundary
+                    of the interpolation area  (corresponds to y=min(Y[]):
+                    * if  BndTypeBtm=0,  the  spline  has   a   'parabolic
+                      termination' boundary condition across that specific
+                      boundary. In this case BndBtm is not even referenced
+                      by the function and can be unallocated.
+                    * otherwise contains derivatives with respect to X
+                    * if BndTypeBtm=1, first derivatives are given
+                    * if BndTypeBtm=2, second derivatives are given
+                    * first D entries store derivatives at x=X[0], y=minY,
+                      subsequent D entries store  derivatives  at  x=X[1],
+                      y=minY and so on
+    BndTop      -   array[D*N],  boundary  conditions  at the top boundary
+                    of the interpolation area  (corresponds to y=max(Y[]):
+                    * if  BndTypeTop=0,  the  spline  has   a   'parabolic
+                      termination' boundary condition across that specific
+                      boundary. In this case BndTop is not even referenced
+                      by the function and can be unallocated.
+                    * otherwise contains derivatives with respect to X
+                    * if BndTypeTop=1, first derivatives are given
+                    * if BndTypeTop=2, second derivatives are given
+                    * first D entries store derivatives at x=X[0], y=maxY,
+                      subsequent D entries store  derivatives  at  x=X[1],
+                      y=maxY and so on
+    BndLft      -   array[D*M], boundary conditions at  the  left boundary
+                    of the  interpolation area (corresponds to x=min(X[]):
+                    * if  BndTypeLft=0,  the  spline  has   a   'parabolic
+                      termination' boundary condition across that specific
+                      boundary. In this case BndLft is not even referenced
+                      by the function and can be unallocated.
+                    * otherwise contains derivatives with respect to Y
+                    * if BndTypeLft=1, first derivatives are given
+                    * if BndTypeLft=2, second derivatives are given
+                    * first D entries store derivatives at x=minX, y=Y[0],
+                      subsequent D entries store  derivatives  at  x=minX,
+                      y=Y[1] and so on
+    BndRgt      -   array[D*M], boundary conditions at  the right boundary
+                    of the  interpolation area (corresponds to x=max(X[]):
+                    * if  BndTypeRgt=0,  the  spline  has   a   'parabolic
+                      termination' boundary condition across that specific
+                      boundary. In this case BndRgt is not even referenced
+                      by the function and can be unallocated.
+                    * otherwise contains derivatives with respect to Y
+                    * if BndTypeRgt=1, first derivatives are given
+                    * if BndTypeRgt=2, second derivatives are given
+                    * first D entries store derivatives at x=maxX, y=Y[0],
+                      subsequent D entries store  derivatives  at  x=maxX,
+                      y=Y[1] and so on
+    MixedD      -   array[D*4], mixed derivatives  at  4  corners  of  the
+                    interpolation area:
+                    * derivative order depends on the order  of   boundary
+                      conditions (bottom/top and left/right)  intersecting
+                      at that corner:
+                      **  for BndType(Btm|Top)=BndType(Lft|Rgt)=1 user has
+                          to provide d2S/dXdY
+                      **  for BndType(Btm|Top)=BndType(Lft|Rgt)=2 user has
+                          to provide d4S/(dX^2*dY^2)
+                      **  for BndType(Btm|Top)=1, BndType(Lft|Rgt)=2  user
+                          has to provide d3S/(dX^2*dY)
+                      **  for BndType(Btm|Top)=2, BndType(Lft|Rgt)=1  user
+                          has to provide d3S/(dX*dY^2)
+                      **  if one of the intersecting bounds has 'parabolic
+                          termination'  condition,   this  specific  mixed
+                          derivative is not used
+                    * first D entries store derivatives at the bottom left
+                      corner x=min(X[]), y=min(Y[])
+                    * subsequent D entries store derivatives at the bottom
+                      right corner x=max(X[]), y=min(Y[])
+                    * subsequent D entries store derivatives  at  the  top
+                      left corner  x=min(X[]), y=max(Y[])
+                    * subsequent D entries store derivatives  at  the  top
+                      right corner x=max(X[]), y=max(Y[])
+                    * if all bounds have 'parabolic termination' condition,
+                      MixedD[]  is  not  referenced  at  all  and  can  be
+                      unallocated.
+    F           -   function values, array[M*N*D]:
+                    * first D elements store D values at (X[0],Y[0])
+                    * next D elements store D values at (X[1],Y[0])
+                    * general form - D function values at (X[i],Y[j])  are
+                      stored at F[D*(J*N+I)...D*(J*N+I)+D-1].
+    D           -   vector dimension, D>=1:
+                    * D=1 means scalar-valued bicubic spline
+                    * D>1 means vector-valued bicubic spline
+
+OUTPUT PARAMETERS:
+    C   -   spline interpolant
+
+  -- ALGLIB PROJECT --
+     Copyright 2012-2023 by Bochkanov Sergey
+*************************************************************************/
+void spline2dbuildclampedv(/* Real    */ const ae_vector* x,
+     ae_int_t n,
+     /* Real    */ const ae_vector* y,
+     ae_int_t m,
+     /* Real    */ const ae_vector* _bndbtm,
+     ae_int_t bndtypebtm,
+     /* Real    */ const ae_vector* _bndtop,
+     ae_int_t bndtypetop,
+     /* Real    */ const ae_vector* _bndlft,
+     ae_int_t bndtypelft,
+     /* Real    */ const ae_vector* _bndrgt,
+     ae_int_t bndtypergt,
+     /* Real    */ const ae_vector* mixedd,
      /* Real    */ const ae_vector* _f,
+     ae_int_t d,
+     spline2dinterpolant* c,
+     ae_state *_state);
+
+
+/*************************************************************************
+This subroutine builds a Hermite bicubic vector-valued spline.
+
+This function produces merely C1-continuous spline, i.e. the   spline  has
+smooth first derivatives.
+
+INPUT PARAMETERS:
+    X   -   spline abscissas, array[N]
+    N   -   N>=2:
+            * if not given, automatically determined as len(X)
+            * if given, only leading N elements of X are used
+    Y   -   spline ordinates, array[M]
+    M   -   M>=2:
+            * if not given, automatically determined as len(Y)
+            * if given, only leading M elements of Y are used
+    F   -   function values, array[M*N*D]:
+            * first D elements store D values at (X[0],Y[0])
+            * next D elements store D values at (X[1],Y[0])
+            * general form - D function values at (X[i],Y[j]) are stored
+              at F[D*(J*N+I)...D*(J*N+I)+D-1].
+    dFdX-   spline derivatives with respect to X, array[M*N*D]:
+            * first D elements store D values at (X[0],Y[0])
+            * next D elements store D values at (X[1],Y[0])
+            * general form - D function values at (X[i],Y[j]) are stored
+              at F[D*(J*N+I)...D*(J*N+I)+D-1].
+    dFdY-   spline derivatives with respect to Y, array[M*N*D]:
+            * first D elements store D values at (X[0],Y[0])
+            * next D elements store D values at (X[1],Y[0])
+            * general form - D function values at (X[i],Y[j]) are stored
+              at F[D*(J*N+I)...D*(J*N+I)+D-1].
+    d2FdXdY-mixed derivatives with respect to X and Y, array[M*N*D]:
+            * first D elements store D values at (X[0],Y[0])
+            * next D elements store D values at (X[1],Y[0])
+            * general form - D function values at (X[i],Y[j]) are stored
+              at F[D*(J*N+I)...D*(J*N+I)+D-1].
+    D   -   vector dimension, D>=1:
+            * D=1 means scalar-valued bicubic spline
+            * D>1 means vector-valued bicubic spline
+
+OUTPUT PARAMETERS:
+    C   -   spline interpolant
+
+  -- ALGLIB PROJECT --
+     Copyright 2012-2023 by Bochkanov Sergey
+*************************************************************************/
+void spline2dbuildhermitev(/* Real    */ const ae_vector* x,
+     ae_int_t n,
+     /* Real    */ const ae_vector* y,
+     ae_int_t m,
+     /* Real    */ const ae_vector* _f,
+     /* Real    */ const ae_vector* _dfdx,
+     /* Real    */ const ae_vector* _dfdy,
+     /* Real    */ const ae_vector* _d2fdxdy,
      ae_int_t d,
      spline2dinterpolant* c,
      ae_state *_state);

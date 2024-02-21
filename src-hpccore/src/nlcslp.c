@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -292,6 +292,10 @@ void minslpinitbuf(/* Real    */ const ae_vector* bndl,
     /*
      * Stopping criteria
      */
+    if( ae_fp_eq(ae_maxreal(epsx, (double)(maxits), _state),(double)(0)) )
+    {
+        epsx = 1.0E-8;
+    }
     state->epsx = epsx;
     state->maxits = maxits;
     
@@ -2836,7 +2840,7 @@ lbl_7:
     }
     if( mcinfo==1 )
     {
-        hessianupdate(&state->subsolver.hess, curx, &state2->stepklaggrad, &state2->stepkxn, &state2->stepknlaggrad, dotrace, _state);
+        hessianupdatev2(&state->subsolver.hess, curx, &state2->stepklaggrad, &state2->stepkxn, &state2->stepknlaggrad, 2, ae_false, dotrace, 1, _state);
     }
     
     /*

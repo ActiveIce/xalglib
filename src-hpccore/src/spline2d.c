@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -27,6 +27,15 @@ static void spline2d_bicubiccalcderivatives(/* Real    */ const ae_matrix* a,
      /* Real    */ const ae_vector* y,
      ae_int_t m,
      ae_int_t n,
+     /* Real    */ const ae_vector* bndbtm,
+     ae_int_t bndtypebtm,
+     /* Real    */ const ae_vector* bndtop,
+     ae_int_t bndtypetop,
+     /* Real    */ const ae_vector* bndlft,
+     ae_int_t bndtypelft,
+     /* Real    */ const ae_vector* bndrgt,
+     ae_int_t bndtypergt,
+     /* Real    */ const ae_vector* dfmixed,
      /* Real    */ ae_matrix* dx,
      /* Real    */ ae_matrix* dy,
      /* Real    */ ae_matrix* dxy,
@@ -45,6 +54,17 @@ static ae_bool spline2d_scanfornonmissingsegment(/* Boolean */ const ae_vector* 
      ae_int_t n,
      ae_int_t* i1,
      ae_int_t* i2,
+     ae_state *_state);
+static void spline2d_spline2dbuildhermitevbuf(/* Real    */ const ae_vector* x,
+     ae_int_t n,
+     /* Real    */ const ae_vector* y,
+     ae_int_t m,
+     /* Real    */ const ae_vector* _f,
+     /* Real    */ const ae_vector* _dfdx,
+     /* Real    */ const ae_vector* _dfdy,
+     /* Real    */ const ae_vector* _d2fdxdy,
+     ae_int_t d,
+     spline2dinterpolant* c,
      ae_state *_state);
 static void spline2d_generatedesignmatrix(/* Real    */ const ae_vector* xy,
      ae_int_t npoints,
@@ -191,31 +211,6 @@ static void spline2d_flushtozerocell(ae_int_t kx,
      ae_int_t j,
      double eps,
      ae_state *_state);
-static void spline2d_blockllsgenerateata(const sparsematrix* ah,
-     ae_int_t ky0,
-     ae_int_t ky1,
-     ae_int_t kx,
-     ae_int_t ky,
-     /* Real    */ ae_matrix* blockata,
-     sreal* mxata,
-     ae_state *_state);
-void _spawn_spline2d_blockllsgenerateata(const sparsematrix* ah,
-    ae_int_t ky0,
-    ae_int_t ky1,
-    ae_int_t kx,
-    ae_int_t ky,
-    /* Real    */ ae_matrix* blockata,
-    sreal* mxata, ae_task_group *_group, ae_bool smp_enabled, ae_state *_state);
-#if defined(_ALGLIB_HAS_WORKSTEALING)
-void _task_spline2d_blockllsgenerateata(ae_task_data *_data, ae_state *_state);
-#endif
-ae_bool _trypexec_spline2d_blockllsgenerateata(const sparsematrix* ah,
-    ae_int_t ky0,
-    ae_int_t ky1,
-    ae_int_t kx,
-    ae_int_t ky,
-    /* Real    */ ae_matrix* blockata,
-    sreal* mxata, ae_state *_state);
 static ae_bool spline2d_blockllscholesky(/* Real    */ ae_matrix* blockata,
      ae_int_t kx,
      ae_int_t ky,
@@ -420,6 +415,25 @@ static ae_bool spline2d_adjustevaluationinterval(const spline2dinterpolant* s,
      double* u,
      double* du,
      ae_int_t* iy,
+     ae_state *_state);
+static void spline2d_sortgrid(/* Real    */ ae_vector* x,
+     ae_int_t n,
+     /* Real    */ ae_vector* y,
+     ae_int_t m,
+     /* Real    */ ae_vector* bndbtm,
+     ae_bool hasbndbtm,
+     /* Real    */ ae_vector* bndtop,
+     ae_bool hasbndtop,
+     /* Real    */ ae_vector* bndlft,
+     ae_bool hasbndlft,
+     /* Real    */ ae_vector* bndrgt,
+     ae_bool hasbndrgt,
+     /* Real    */ ae_vector* f,
+     ae_int_t d,
+     /* Real    */ ae_vector* dfdx,
+     /* Real    */ ae_vector* dfdy,
+     /* Real    */ ae_vector* d2fdxdy,
+     ae_bool hasderivatives,
      ae_state *_state);
 
 
@@ -2036,22 +2050,37 @@ void spline2dlintransxy(spline2dinterpolant* c,
     ae_vector x;
     ae_vector y;
     ae_vector f;
+    ae_vector dfdx;
+    ae_vector dfdy;
+    ae_vector d2fdxdy;
     ae_vector v;
     ae_vector missing;
     ae_bool missingv;
     ae_int_t i;
     ae_int_t j;
     ae_int_t k;
+    double s;
+    double dsdx;
+    double dsdy;
+    double d2sdx2;
+    double d2sdxdy;
+    double d2sdy2;
 
     ae_frame_make(_state, &_frame_block);
     memset(&x, 0, sizeof(x));
     memset(&y, 0, sizeof(y));
     memset(&f, 0, sizeof(f));
+    memset(&dfdx, 0, sizeof(dfdx));
+    memset(&dfdy, 0, sizeof(dfdy));
+    memset(&d2fdxdy, 0, sizeof(d2fdxdy));
     memset(&v, 0, sizeof(v));
     memset(&missing, 0, sizeof(missing));
     ae_vector_init(&x, 0, DT_REAL, _state, ae_true);
     ae_vector_init(&y, 0, DT_REAL, _state, ae_true);
     ae_vector_init(&f, 0, DT_REAL, _state, ae_true);
+    ae_vector_init(&dfdx, 0, DT_REAL, _state, ae_true);
+    ae_vector_init(&dfdy, 0, DT_REAL, _state, ae_true);
+    ae_vector_init(&d2fdxdy, 0, DT_REAL, _state, ae_true);
     ae_vector_init(&v, 0, DT_REAL, _state, ae_true);
     ae_vector_init(&missing, 0, DT_BOOL, _state, ae_true);
 
@@ -2063,6 +2092,9 @@ void spline2dlintransxy(spline2dinterpolant* c,
     ae_vector_set_length(&x, c->n, _state);
     ae_vector_set_length(&y, c->m, _state);
     ae_vector_set_length(&f, c->m*c->n*c->d, _state);
+    ae_vector_set_length(&dfdx, c->m*c->n*c->d, _state);
+    ae_vector_set_length(&dfdy, c->m*c->n*c->d, _state);
+    ae_vector_set_length(&d2fdxdy, c->m*c->n*c->d, _state);
     for(j=0; j<=c->n-1; j++)
     {
         x.ptr.p_double[j] = c->x.ptr.p_double[j];
@@ -2090,38 +2122,69 @@ void spline2dlintransxy(spline2dinterpolant* c,
     {
         for(i=0; i<=c->m-1; i++)
         {
-            spline2dcalcvbuf(c, bx, y.ptr.p_double[i], &v, _state);
-            y.ptr.p_double[i] = (y.ptr.p_double[i]-by)/ay;
-            missingv = !ae_isfinite(v.ptr.p_double[0], _state);
             for(j=0; j<=c->n-1; j++)
             {
+                missingv = ae_false;
                 for(k=0; k<=c->d-1; k++)
                 {
-                    f.ptr.p_double[c->d*(i*c->n+j)+k] = v.ptr.p_double[k];
+                    spline2ddiff2vi(c, bx, y.ptr.p_double[i], k, &s, &dsdx, &dsdy, &d2sdx2, &d2sdxdy, &d2sdy2, _state);
+                    f.ptr.p_double[c->d*(i*c->n+j)+k] = s;
+                    dfdx.ptr.p_double[c->d*(i*c->n+j)+k] = (double)(0);
+                    dfdy.ptr.p_double[c->d*(i*c->n+j)+k] = ay*dsdy;
+                    d2fdxdy.ptr.p_double[c->d*(i*c->n+j)+k] = (double)(0);
+                    missingv = missingv||!ae_isfinite(s, _state);
                 }
                 missing.ptr.p_bool[i*c->n+j] = missingv;
             }
+        }
+        for(i=0; i<=c->m-1; i++)
+        {
+            y.ptr.p_double[i] = (y.ptr.p_double[i]-by)/ay;
         }
     }
     if( ae_fp_neq(ax,(double)(0))&&ae_fp_eq(ay,(double)(0)) )
     {
         for(j=0; j<=c->n-1; j++)
         {
-            spline2dcalcvbuf(c, x.ptr.p_double[j], by, &v, _state);
-            x.ptr.p_double[j] = (x.ptr.p_double[j]-bx)/ax;
-            missingv = !ae_isfinite(v.ptr.p_double[0], _state);
             for(i=0; i<=c->m-1; i++)
             {
+                missingv = ae_false;
                 for(k=0; k<=c->d-1; k++)
                 {
-                    f.ptr.p_double[c->d*(i*c->n+j)+k] = v.ptr.p_double[k];
+                    spline2ddiff2vi(c, x.ptr.p_double[j], by, k, &s, &dsdx, &dsdy, &d2sdx2, &d2sdxdy, &d2sdy2, _state);
+                    f.ptr.p_double[c->d*(i*c->n+j)+k] = s;
+                    dfdx.ptr.p_double[c->d*(i*c->n+j)+k] = ax*dsdx;
+                    dfdy.ptr.p_double[c->d*(i*c->n+j)+k] = (double)(0);
+                    d2fdxdy.ptr.p_double[c->d*(i*c->n+j)+k] = (double)(0);
+                    missingv = missingv||!ae_isfinite(s, _state);
                 }
                 missing.ptr.p_bool[i*c->n+j] = missingv;
             }
         }
+        for(j=0; j<=c->n-1; j++)
+        {
+            x.ptr.p_double[j] = (x.ptr.p_double[j]-bx)/ax;
+        }
     }
     if( ae_fp_neq(ax,(double)(0))&&ae_fp_neq(ay,(double)(0)) )
     {
+        for(j=0; j<=c->n-1; j++)
+        {
+            for(i=0; i<=c->m-1; i++)
+            {
+                missingv = ae_false;
+                for(k=0; k<=c->d-1; k++)
+                {
+                    spline2ddiff2vi(c, x.ptr.p_double[j], y.ptr.p_double[i], k, &s, &dsdx, &dsdy, &d2sdx2, &d2sdxdy, &d2sdy2, _state);
+                    f.ptr.p_double[c->d*(i*c->n+j)+k] = s;
+                    dfdx.ptr.p_double[c->d*(i*c->n+j)+k] = ax*dsdx;
+                    dfdy.ptr.p_double[c->d*(i*c->n+j)+k] = ay*dsdy;
+                    d2fdxdy.ptr.p_double[c->d*(i*c->n+j)+k] = ax*ay*d2sdxdy;
+                    missingv = missingv||!ae_isfinite(s, _state);
+                }
+                missing.ptr.p_bool[i*c->n+j] = missingv;
+            }
+        }
         for(j=0; j<=c->n-1; j++)
         {
             x.ptr.p_double[j] = (x.ptr.p_double[j]-bx)/ax;
@@ -2129,10 +2192,6 @@ void spline2dlintransxy(spline2dinterpolant* c,
         for(i=0; i<=c->m-1; i++)
         {
             y.ptr.p_double[i] = (y.ptr.p_double[i]-by)/ay;
-        }
-        if( c->hasmissingcells )
-        {
-            bcopyv(c->n*c->m, &c->ismissingnode, &missing, _state);
         }
     }
     if( ae_fp_eq(ax,(double)(0))&&ae_fp_eq(ay,(double)(0)) )
@@ -2145,6 +2204,9 @@ void spline2dlintransxy(spline2dinterpolant* c,
                 for(k=0; k<=c->d-1; k++)
                 {
                     f.ptr.p_double[c->d*(i*c->n+j)+k] = v.ptr.p_double[k];
+                    dfdx.ptr.p_double[c->d*(i*c->n+j)+k] = (double)(0);
+                    dfdy.ptr.p_double[c->d*(i*c->n+j)+k] = (double)(0);
+                    d2fdxdy.ptr.p_double[c->d*(i*c->n+j)+k] = (double)(0);
                 }
             }
         }
@@ -2158,7 +2220,7 @@ void spline2dlintransxy(spline2dinterpolant* c,
     {
         if( c->stype==-3 )
         {
-            spline2dbuildbicubicvbuf(&x, c->n, &y, c->m, &f, c->d, c, _state);
+            spline2d_spline2dbuildhermitevbuf(&x, c->n, &y, c->m, &f, &dfdx, &dfdy, &d2fdxdy, c->d, c, _state);
         }
         if( c->stype==-1 )
         {
@@ -2261,22 +2323,14 @@ void spline2dlintransf(spline2dinterpolant* c,
             /*
              * Quick code for a spline without missing cells
              */
-            ae_vector_set_length(&x, c->n, _state);
-            ae_vector_set_length(&y, c->m, _state);
-            ae_vector_set_length(&f, c->m*c->n*c->d, _state);
-            for(j=0; j<=c->n-1; j++)
-            {
-                x.ptr.p_double[j] = c->x.ptr.p_double[j];
-            }
-            for(i=0; i<=c->m-1; i++)
-            {
-                y.ptr.p_double[i] = c->y.ptr.p_double[i];
-            }
             for(i=0; i<=c->m*c->n*c->d-1; i++)
             {
-                f.ptr.p_double[i] = a*c->f.ptr.p_double[i]+b;
+                c->f.ptr.p_double[i] = a*c->f.ptr.p_double[i]+b;
             }
-            spline2dbuildbicubicvbuf(&x, c->n, &y, c->m, &f, c->d, c, _state);
+            for(i=c->m*c->n*c->d; i<=4*c->m*c->n*c->d-1; i++)
+            {
+                c->f.ptr.p_double[i] = a*c->f.ptr.p_double[i];
+            }
         }
         else
         {
@@ -2934,46 +2988,458 @@ void spline2dbuildbilinearmissingbuf(/* Real    */ const ae_vector* x,
 
 
 /*************************************************************************
-This subroutine builds bicubic vector-valued spline.
+This subroutine builds a bicubic vector-valued spline using  parabolically
+terminated end conditions.
 
-This function produces C2-continuous spline, i.e. the has smooth first and
-second derivatives both inside spline cells and at the boundaries.
+This function produces a C2-continuous spline, i.e. the  spline has smooth
+first and second  derivatives  both  inside  spline  cells  and  at  their
+boundaries.
 
-Input parameters:
-    X   -   spline abscissas, array[0..N-1]
-    Y   -   spline ordinates, array[0..M-1]
-    F   -   function values, array[0..M*N*D-1]:
+INPUT PARAMETERS:
+    X   -   spline abscissas, array[N]
+    N   -   N>=2:
+            * if not given, automatically determined as len(X)
+            * if given, only leading N elements of X are used
+    Y   -   spline ordinates, array[M]
+    M   -   M>=2:
+            * if not given, automatically determined as len(Y)
+            * if given, only leading M elements of Y are used
+    F   -   function values, array[M*N*D]:
             * first D elements store D values at (X[0],Y[0])
             * next D elements store D values at (X[1],Y[0])
             * general form - D function values at (X[i],Y[j]) are stored
               at F[D*(J*N+I)...D*(J*N+I)+D-1].
-    M,N -   grid size, M>=2, N>=2
-    D   -   vector dimension, D>=1
+    D   -   vector dimension, D>=1:
+            * D=1 means scalar-valued bicubic spline
+            * D>1 means vector-valued bicubic spline
 
-Output parameters:
+OUTPUT PARAMETERS:
     C   -   spline interpolant
 
   -- ALGLIB PROJECT --
-     Copyright 16.04.2012 by Bochkanov Sergey
+     Copyright 2012-2023 by Bochkanov Sergey
 *************************************************************************/
 void spline2dbuildbicubicv(/* Real    */ const ae_vector* x,
      ae_int_t n,
      /* Real    */ const ae_vector* y,
      ae_int_t m,
+     /* Real    */ const ae_vector* f,
+     ae_int_t d,
+     spline2dinterpolant* c,
+     ae_state *_state)
+{
+
+    _spline2dinterpolant_clear(c);
+
+    spline2dbuildbicubicvbuf(x, n, y, m, f, d, c, _state);
+}
+
+
+/*************************************************************************
+This subroutine  builds  a  bicubic  vector-valued  spline  using  clamped
+boundary conditions:
+* spline values at the grid nodes are specified
+* boundary conditions for  first,  second  derivatives  or  for  parabolic
+  termination at four boundaries (bottom  y=min(Y[]), top y=max(Y[]), left
+  x=min(X[]), right x=max(X[])) are specified
+* mixed derivatives at corners are specified
+* it is possible to  have  different  boundary  conditions  for  different
+  boundaries (first derivatives along  one  boundary,  second  derivatives
+  along other one, parabolic termination along the rest and so on)
+* it is possible to have either a scalar (D=1) or a vector-valued spline
+
+This function produces a C2-continuous spline, i.e. the  spline has smooth
+first and second  derivatives  both  inside  spline  cells  and  at  their
+boundaries.
+
+INPUT PARAMETERS:
+    X           -   spline  abscissas,  array[N].  Can  be  unsorted,  the
+                    function will sort it together with boundary conditions
+                    and F[] array (the same set of  permutations  will  be
+                    applied to X[] and F[]).
+    N           -   N>=2:
+                    * if not given, automatically determined as len(X)
+                    * if given, only leading N elements of X are used
+    Y           -   spline ordinates, array[M].  Can   be   unsorted,  the
+                    function will sort it together with boundary conditions
+                    and F[] array (the same set of  permutations  will  be
+                    applied to X[] and F[]).
+    M           -   M>=2:
+                    * if not given, automatically determined as len(Y)
+                    * if given, only leading M elements of Y are used
+    BndBtm      -   array[D*N], boundary conditions at the bottom boundary
+                    of the interpolation area  (corresponds to y=min(Y[]):
+                    * if  BndTypeBtm=0,  the  spline  has   a   'parabolic
+                      termination' boundary condition across that specific
+                      boundary. In this case BndBtm is not even referenced
+                      by the function and can be unallocated.
+                    * otherwise contains derivatives with respect to X
+                    * if BndTypeBtm=1, first derivatives are given
+                    * if BndTypeBtm=2, second derivatives are given
+                    * first D entries store derivatives at x=X[0], y=minY,
+                      subsequent D entries store  derivatives  at  x=X[1],
+                      y=minY and so on
+    BndTop      -   array[D*N],  boundary  conditions  at the top boundary
+                    of the interpolation area  (corresponds to y=max(Y[]):
+                    * if  BndTypeTop=0,  the  spline  has   a   'parabolic
+                      termination' boundary condition across that specific
+                      boundary. In this case BndTop is not even referenced
+                      by the function and can be unallocated.
+                    * otherwise contains derivatives with respect to X
+                    * if BndTypeTop=1, first derivatives are given
+                    * if BndTypeTop=2, second derivatives are given
+                    * first D entries store derivatives at x=X[0], y=maxY,
+                      subsequent D entries store  derivatives  at  x=X[1],
+                      y=maxY and so on
+    BndLft      -   array[D*M], boundary conditions at  the  left boundary
+                    of the  interpolation area (corresponds to x=min(X[]):
+                    * if  BndTypeLft=0,  the  spline  has   a   'parabolic
+                      termination' boundary condition across that specific
+                      boundary. In this case BndLft is not even referenced
+                      by the function and can be unallocated.
+                    * otherwise contains derivatives with respect to Y
+                    * if BndTypeLft=1, first derivatives are given
+                    * if BndTypeLft=2, second derivatives are given
+                    * first D entries store derivatives at x=minX, y=Y[0],
+                      subsequent D entries store  derivatives  at  x=minX,
+                      y=Y[1] and so on
+    BndRgt      -   array[D*M], boundary conditions at  the right boundary
+                    of the  interpolation area (corresponds to x=max(X[]):
+                    * if  BndTypeRgt=0,  the  spline  has   a   'parabolic
+                      termination' boundary condition across that specific
+                      boundary. In this case BndRgt is not even referenced
+                      by the function and can be unallocated.
+                    * otherwise contains derivatives with respect to Y
+                    * if BndTypeRgt=1, first derivatives are given
+                    * if BndTypeRgt=2, second derivatives are given
+                    * first D entries store derivatives at x=maxX, y=Y[0],
+                      subsequent D entries store  derivatives  at  x=maxX,
+                      y=Y[1] and so on
+    MixedD      -   array[D*4], mixed derivatives  at  4  corners  of  the
+                    interpolation area:
+                    * derivative order depends on the order  of   boundary
+                      conditions (bottom/top and left/right)  intersecting
+                      at that corner:
+                      **  for BndType(Btm|Top)=BndType(Lft|Rgt)=1 user has
+                          to provide d2S/dXdY
+                      **  for BndType(Btm|Top)=BndType(Lft|Rgt)=2 user has
+                          to provide d4S/(dX^2*dY^2)
+                      **  for BndType(Btm|Top)=1, BndType(Lft|Rgt)=2  user
+                          has to provide d3S/(dX^2*dY)
+                      **  for BndType(Btm|Top)=2, BndType(Lft|Rgt)=1  user
+                          has to provide d3S/(dX*dY^2)
+                      **  if one of the intersecting bounds has 'parabolic
+                          termination'  condition,   this  specific  mixed
+                          derivative is not used
+                    * first D entries store derivatives at the bottom left
+                      corner x=min(X[]), y=min(Y[])
+                    * subsequent D entries store derivatives at the bottom
+                      right corner x=max(X[]), y=min(Y[])
+                    * subsequent D entries store derivatives  at  the  top
+                      left corner  x=min(X[]), y=max(Y[])
+                    * subsequent D entries store derivatives  at  the  top
+                      right corner x=max(X[]), y=max(Y[])
+                    * if all bounds have 'parabolic termination' condition,
+                      MixedD[]  is  not  referenced  at  all  and  can  be
+                      unallocated.
+    F           -   function values, array[M*N*D]:
+                    * first D elements store D values at (X[0],Y[0])
+                    * next D elements store D values at (X[1],Y[0])
+                    * general form - D function values at (X[i],Y[j])  are
+                      stored at F[D*(J*N+I)...D*(J*N+I)+D-1].
+    D           -   vector dimension, D>=1:
+                    * D=1 means scalar-valued bicubic spline
+                    * D>1 means vector-valued bicubic spline
+
+OUTPUT PARAMETERS:
+    C   -   spline interpolant
+
+  -- ALGLIB PROJECT --
+     Copyright 2012-2023 by Bochkanov Sergey
+*************************************************************************/
+void spline2dbuildclampedv(/* Real    */ const ae_vector* x,
+     ae_int_t n,
+     /* Real    */ const ae_vector* y,
+     ae_int_t m,
+     /* Real    */ const ae_vector* _bndbtm,
+     ae_int_t bndtypebtm,
+     /* Real    */ const ae_vector* _bndtop,
+     ae_int_t bndtypetop,
+     /* Real    */ const ae_vector* _bndlft,
+     ae_int_t bndtypelft,
+     /* Real    */ const ae_vector* _bndrgt,
+     ae_int_t bndtypergt,
+     /* Real    */ const ae_vector* mixedd,
      /* Real    */ const ae_vector* _f,
      ae_int_t d,
      spline2dinterpolant* c,
      ae_state *_state)
 {
     ae_frame _frame_block;
+    ae_vector bndbtm;
+    ae_vector bndtop;
+    ae_vector bndlft;
+    ae_vector bndrgt;
     ae_vector f;
+    ae_matrix tf;
+    ae_matrix dx;
+    ae_matrix dy;
+    ae_matrix dxy;
+    ae_vector bndbtm1;
+    ae_vector bndtop1;
+    ae_vector bndlft1;
+    ae_vector bndrgt1;
+    ae_vector mixed1;
+    ae_vector dummy;
+    ae_int_t i;
+    ae_int_t j;
+    ae_int_t k;
+    ae_int_t di;
+    ae_bool allzero;
+
+    ae_frame_make(_state, &_frame_block);
+    memset(&bndbtm, 0, sizeof(bndbtm));
+    memset(&bndtop, 0, sizeof(bndtop));
+    memset(&bndlft, 0, sizeof(bndlft));
+    memset(&bndrgt, 0, sizeof(bndrgt));
+    memset(&f, 0, sizeof(f));
+    memset(&tf, 0, sizeof(tf));
+    memset(&dx, 0, sizeof(dx));
+    memset(&dy, 0, sizeof(dy));
+    memset(&dxy, 0, sizeof(dxy));
+    memset(&bndbtm1, 0, sizeof(bndbtm1));
+    memset(&bndtop1, 0, sizeof(bndtop1));
+    memset(&bndlft1, 0, sizeof(bndlft1));
+    memset(&bndrgt1, 0, sizeof(bndrgt1));
+    memset(&mixed1, 0, sizeof(mixed1));
+    memset(&dummy, 0, sizeof(dummy));
+    ae_vector_init_copy(&bndbtm, _bndbtm, _state, ae_true);
+    ae_vector_init_copy(&bndtop, _bndtop, _state, ae_true);
+    ae_vector_init_copy(&bndlft, _bndlft, _state, ae_true);
+    ae_vector_init_copy(&bndrgt, _bndrgt, _state, ae_true);
+    ae_vector_init_copy(&f, _f, _state, ae_true);
+    _spline2dinterpolant_clear(c);
+    ae_matrix_init(&tf, 0, 0, DT_REAL, _state, ae_true);
+    ae_matrix_init(&dx, 0, 0, DT_REAL, _state, ae_true);
+    ae_matrix_init(&dy, 0, 0, DT_REAL, _state, ae_true);
+    ae_matrix_init(&dxy, 0, 0, DT_REAL, _state, ae_true);
+    ae_vector_init(&bndbtm1, 0, DT_REAL, _state, ae_true);
+    ae_vector_init(&bndtop1, 0, DT_REAL, _state, ae_true);
+    ae_vector_init(&bndlft1, 0, DT_REAL, _state, ae_true);
+    ae_vector_init(&bndrgt1, 0, DT_REAL, _state, ae_true);
+    ae_vector_init(&mixed1, 0, DT_REAL, _state, ae_true);
+    ae_vector_init(&dummy, 0, DT_REAL, _state, ae_true);
+
+    allzero = imin4(bndtypebtm, bndtypetop, bndtypelft, bndtypergt, _state)==0&&imax4(bndtypebtm, bndtypetop, bndtypelft, bndtypergt, _state)==0;
+    ae_assert(n>=2, "Spline2DBuildClampedV: N is less than 2", _state);
+    ae_assert(m>=2, "Spline2DBuildClampedV: M is less than 2", _state);
+    ae_assert(d>=1, "Spline2DBuildClampedV: invalid argument D (D<1)", _state);
+    ae_assert(x->cnt>=n&&y->cnt>=m, "Spline2DBuildClampedV: length of X or Y is too short (Length(X/Y)<N/M)", _state);
+    ae_assert(isfinitevector(x, n, _state)&&isfinitevector(y, m, _state), "Spline2DBuildClampedV: X or Y contains NaN or Infinite value", _state);
+    ae_assert(bndtypebtm==0||bndbtm.cnt>=n*d, "Spline2DBuildClampedV: length of BndBtm is less than N*D", _state);
+    ae_assert(bndtypebtm==0||isfinitevector(&bndbtm, n*d, _state), "Spline2DBuildClampedV: BndBtm contains NaN or Infinite value", _state);
+    ae_assert(bndtypetop==0||bndtop.cnt>=n*d, "Spline2DBuildClampedV: length of BndTop is less than N*D", _state);
+    ae_assert(bndtypetop==0||isfinitevector(&bndtop, n*d, _state), "Spline2DBuildClampedV: BndTop contains NaN or Infinite value", _state);
+    ae_assert(bndtypelft==0||bndlft.cnt>=m*d, "Spline2DBuildClampedV: length of BndLft is less than M*D", _state);
+    ae_assert(bndtypelft==0||isfinitevector(&bndlft, m*d, _state), "Spline2DBuildClampedV: BndLft contains NaN or Infinite value", _state);
+    ae_assert(bndtypergt==0||bndrgt.cnt>=m*d, "Spline2DBuildClampedV: length of BndRgt is less than M*D", _state);
+    ae_assert(bndtypergt==0||isfinitevector(&bndrgt, m*d, _state), "Spline2DBuildClampedV: BndRgt contains NaN or Infinite value", _state);
+    ae_assert(allzero||mixedd->cnt>=4*d, "Spline2DBuildClampedV: length of MixedD is less than 4*D", _state);
+    ae_assert(allzero||isfinitevector(mixedd, 4*d, _state), "Spline2DBuildClampedV: MixedD contains NaN or Infinite value", _state);
+    ae_assert((bndtypebtm==0||bndtypebtm==1)||bndtypebtm==2, "Spline2DBuildClampedV: BndTypeBtm is neither 0, 1 or 2", _state);
+    ae_assert((bndtypetop==0||bndtypetop==1)||bndtypetop==2, "Spline2DBuildClampedV: BndTypeTop is neither 0, 1 or 2", _state);
+    ae_assert((bndtypelft==0||bndtypelft==1)||bndtypelft==2, "Spline2DBuildClampedV: BndTypeLft is neither 0, 1 or 2", _state);
+    ae_assert((bndtypergt==0||bndtypergt==1)||bndtypergt==2, "Spline2DBuildClampedV: BndTypeRgt is neither 0, 1 or 2", _state);
+    k = n*m*d;
+    ae_assert(f.cnt>=k, "Spline2DBuildClampedV: length of F is too short (Length(F)<N*M*D)", _state);
+    ae_assert(isfinitevector(&f, k, _state), "Spline2DBuildClampedV: F contains NaN or Infinite value", _state);
+    
+    /*
+     * Fill interpolant:
+     *  F[0]...F[N*M*D-1]:
+     *      f(i,j) table. f(0,0), f(0, 1), f(0,2) and so on...
+     *  F[N*M*D]...F[2*N*M*D-1]:
+     *      df(i,j)/dx table.
+     *  F[2*N*M*D]...F[3*N*M*D-1]:
+     *      df(i,j)/dy table.
+     *  F[3*N*M*D]...F[4*N*M*D-1]:
+     *      d2f(i,j)/dxdy table.
+     */
+    c->d = d;
+    c->n = n;
+    c->m = m;
+    c->stype = -3;
+    c->hasmissingcells = ae_false;
+    k = 4*k;
+    ae_vector_set_length(&c->x, c->n, _state);
+    ae_vector_set_length(&c->y, c->m, _state);
+    ae_vector_set_length(&c->f, k, _state);
+    ae_matrix_set_length(&tf, c->m, c->n, _state);
+    ae_vector_set_length(&bndbtm1, n, _state);
+    ae_vector_set_length(&bndtop1, n, _state);
+    ae_vector_set_length(&bndlft1, m, _state);
+    ae_vector_set_length(&bndrgt1, m, _state);
+    ae_vector_set_length(&mixed1, 4, _state);
+    for(i=0; i<=c->n-1; i++)
+    {
+        c->x.ptr.p_double[i] = x->ptr.p_double[i];
+    }
+    for(i=0; i<=c->m-1; i++)
+    {
+        c->y.ptr.p_double[i] = y->ptr.p_double[i];
+    }
+    spline2d_sortgrid(&c->x, n, &c->y, m, &bndbtm, bndtypebtm!=0, &bndtop, bndtypetop!=0, &bndlft, bndtypelft!=0, &bndrgt, bndtypergt!=0, &f, d, &dummy, &dummy, &dummy, ae_false, _state);
+    for(di=0; di<=c->d-1; di++)
+    {
+        for(i=0; i<=c->m-1; i++)
+        {
+            for(j=0; j<=c->n-1; j++)
+            {
+                tf.ptr.pp_double[i][j] = f.ptr.p_double[c->d*(i*c->n+j)+di];
+            }
+        }
+        if( bndtypebtm!=0 )
+        {
+            for(i=0; i<=c->n-1; i++)
+            {
+                bndbtm1.ptr.p_double[i] = bndbtm.ptr.p_double[i*d+di];
+            }
+        }
+        if( bndtypetop!=0 )
+        {
+            for(i=0; i<=c->n-1; i++)
+            {
+                bndtop1.ptr.p_double[i] = bndtop.ptr.p_double[i*d+di];
+            }
+        }
+        if( bndtypelft!=0 )
+        {
+            for(i=0; i<=c->m-1; i++)
+            {
+                bndlft1.ptr.p_double[i] = bndlft.ptr.p_double[i*d+di];
+            }
+        }
+        if( bndtypergt!=0 )
+        {
+            for(i=0; i<=c->m-1; i++)
+            {
+                bndrgt1.ptr.p_double[i] = bndrgt.ptr.p_double[i*d+di];
+            }
+        }
+        if( !allzero )
+        {
+            for(i=0; i<=3; i++)
+            {
+                mixed1.ptr.p_double[i] = mixedd->ptr.p_double[i*d+di];
+            }
+        }
+        spline2d_bicubiccalcderivatives(&tf, &c->x, &c->y, c->m, c->n, &bndbtm1, bndtypebtm, &bndtop1, bndtypetop, &bndlft1, bndtypelft, &bndrgt1, bndtypergt, &mixed1, &dx, &dy, &dxy, _state);
+        for(i=0; i<=c->m-1; i++)
+        {
+            for(j=0; j<=c->n-1; j++)
+            {
+                k = c->d*(i*c->n+j)+di;
+                c->f.ptr.p_double[k] = tf.ptr.pp_double[i][j];
+                c->f.ptr.p_double[c->n*c->m*c->d+k] = dx.ptr.pp_double[i][j];
+                c->f.ptr.p_double[2*c->n*c->m*c->d+k] = dy.ptr.pp_double[i][j];
+                c->f.ptr.p_double[3*c->n*c->m*c->d+k] = dxy.ptr.pp_double[i][j];
+            }
+        }
+    }
+    ae_frame_leave(_state);
+}
+
+
+/*************************************************************************
+This subroutine builds a Hermite bicubic vector-valued spline.
+
+This function produces merely C1-continuous spline, i.e. the   spline  has
+smooth first derivatives.
+
+INPUT PARAMETERS:
+    X   -   spline abscissas, array[N]
+    N   -   N>=2:
+            * if not given, automatically determined as len(X)
+            * if given, only leading N elements of X are used
+    Y   -   spline ordinates, array[M]
+    M   -   M>=2:
+            * if not given, automatically determined as len(Y)
+            * if given, only leading M elements of Y are used
+    F   -   function values, array[M*N*D]:
+            * first D elements store D values at (X[0],Y[0])
+            * next D elements store D values at (X[1],Y[0])
+            * general form - D function values at (X[i],Y[j]) are stored
+              at F[D*(J*N+I)...D*(J*N+I)+D-1].
+    dFdX-   spline derivatives with respect to X, array[M*N*D]:
+            * first D elements store D values at (X[0],Y[0])
+            * next D elements store D values at (X[1],Y[0])
+            * general form - D function values at (X[i],Y[j]) are stored
+              at F[D*(J*N+I)...D*(J*N+I)+D-1].
+    dFdY-   spline derivatives with respect to Y, array[M*N*D]:
+            * first D elements store D values at (X[0],Y[0])
+            * next D elements store D values at (X[1],Y[0])
+            * general form - D function values at (X[i],Y[j]) are stored
+              at F[D*(J*N+I)...D*(J*N+I)+D-1].
+    d2FdXdY-mixed derivatives with respect to X and Y, array[M*N*D]:
+            * first D elements store D values at (X[0],Y[0])
+            * next D elements store D values at (X[1],Y[0])
+            * general form - D function values at (X[i],Y[j]) are stored
+              at F[D*(J*N+I)...D*(J*N+I)+D-1].
+    D   -   vector dimension, D>=1:
+            * D=1 means scalar-valued bicubic spline
+            * D>1 means vector-valued bicubic spline
+
+OUTPUT PARAMETERS:
+    C   -   spline interpolant
+
+  -- ALGLIB PROJECT --
+     Copyright 2012-2023 by Bochkanov Sergey
+*************************************************************************/
+void spline2dbuildhermitev(/* Real    */ const ae_vector* x,
+     ae_int_t n,
+     /* Real    */ const ae_vector* y,
+     ae_int_t m,
+     /* Real    */ const ae_vector* _f,
+     /* Real    */ const ae_vector* _dfdx,
+     /* Real    */ const ae_vector* _dfdy,
+     /* Real    */ const ae_vector* _d2fdxdy,
+     ae_int_t d,
+     spline2dinterpolant* c,
+     ae_state *_state)
+{
+    ae_frame _frame_block;
+    ae_vector f;
+    ae_vector dfdx;
+    ae_vector dfdy;
+    ae_vector d2fdxdy;
+    ae_int_t k;
 
     ae_frame_make(_state, &_frame_block);
     memset(&f, 0, sizeof(f));
+    memset(&dfdx, 0, sizeof(dfdx));
+    memset(&dfdy, 0, sizeof(dfdy));
+    memset(&d2fdxdy, 0, sizeof(d2fdxdy));
     ae_vector_init_copy(&f, _f, _state, ae_true);
+    ae_vector_init_copy(&dfdx, _dfdx, _state, ae_true);
+    ae_vector_init_copy(&dfdy, _dfdy, _state, ae_true);
+    ae_vector_init_copy(&d2fdxdy, _d2fdxdy, _state, ae_true);
     _spline2dinterpolant_clear(c);
 
-    spline2dbuildbicubicvbuf(x, n, y, m, &f, d, c, _state);
+    ae_assert(n>=2, "Spline2DBuildHermiteV: N is less than 2", _state);
+    ae_assert(m>=2, "Spline2DBuildHermiteV: M is less than 2", _state);
+    ae_assert(d>=1, "Spline2DBuildHermiteV: invalid argument D (D<1)", _state);
+    ae_assert(x->cnt>=n&&y->cnt>=m, "Spline2DBuildHermiteV: X or Y is too short (Length(X/Y)<N/M)", _state);
+    ae_assert(isfinitevector(x, n, _state)&&isfinitevector(y, m, _state), "Spline2DBuildHermiteV: X or Y contains NaN or Infinite value", _state);
+    k = n*m*d;
+    ae_assert(f.cnt>=k, "Spline2DBuildHermiteV: F is too short (Length(F)<N*M*D)", _state);
+    ae_assert(isfinitevector(&f, k, _state), "Spline2DBuildHermiteV: F contains NaN or Infinite value", _state);
+    ae_assert(dfdx.cnt>=k, "Spline2DBuildHermiteV: dFdX is too short (Length(dFdX)<N*M*D)", _state);
+    ae_assert(isfinitevector(&dfdx, k, _state), "Spline2DBuildHermiteV: dFdX contains NaN or Infinite value", _state);
+    ae_assert(dfdy.cnt>=k, "Spline2DBuildHermiteV: dFdY is too short (Length(dFdY)<N*M*D)", _state);
+    ae_assert(isfinitevector(&dfdy, k, _state), "Spline2DBuildHermiteV: dFdY contains NaN or Infinite value", _state);
+    ae_assert(d2fdxdy.cnt>=k, "Spline2DBuildHermiteV: d2FdXdY is too short (Length(d2FdXdY)<N*M*D)", _state);
+    ae_assert(isfinitevector(&d2fdxdy, k, _state), "Spline2DBuildHermiteV: d2FdXdY contains NaN or Infinite value", _state);
+    spline2d_spline2dbuildhermitevbuf(x, n, y, m, &f, &dfdx, &dfdy, &d2fdxdy, d, c, _state);
     ae_frame_leave(_state);
 }
 
@@ -3002,7 +3468,7 @@ void spline2dbuildbicubicvbuf(/* Real    */ const ae_vector* x,
     ae_matrix dx;
     ae_matrix dy;
     ae_matrix dxy;
-    double t;
+    ae_vector dummy;
     ae_int_t i;
     ae_int_t j;
     ae_int_t k;
@@ -3014,11 +3480,13 @@ void spline2dbuildbicubicvbuf(/* Real    */ const ae_vector* x,
     memset(&dx, 0, sizeof(dx));
     memset(&dy, 0, sizeof(dy));
     memset(&dxy, 0, sizeof(dxy));
+    memset(&dummy, 0, sizeof(dummy));
     ae_vector_init_copy(&f, _f, _state, ae_true);
     ae_matrix_init(&tf, 0, 0, DT_REAL, _state, ae_true);
     ae_matrix_init(&dx, 0, 0, DT_REAL, _state, ae_true);
     ae_matrix_init(&dy, 0, 0, DT_REAL, _state, ae_true);
     ae_matrix_init(&dxy, 0, 0, DT_REAL, _state, ae_true);
+    ae_vector_init(&dummy, 0, DT_REAL, _state, ae_true);
 
     ae_assert(n>=2, "Spline2DBuildBicubicV: N is less than 2", _state);
     ae_assert(m>=2, "Spline2DBuildBicubicV: M is less than 2", _state);
@@ -3058,62 +3526,7 @@ void spline2dbuildbicubicvbuf(/* Real    */ const ae_vector* x,
     {
         c->y.ptr.p_double[i] = y->ptr.p_double[i];
     }
-    
-    /*
-     * Sort points
-     */
-    for(j=0; j<=c->n-1; j++)
-    {
-        k = j;
-        for(i=j+1; i<=c->n-1; i++)
-        {
-            if( ae_fp_less(c->x.ptr.p_double[i],c->x.ptr.p_double[k]) )
-            {
-                k = i;
-            }
-        }
-        if( k!=j )
-        {
-            for(i=0; i<=c->m-1; i++)
-            {
-                for(di=0; di<=c->d-1; di++)
-                {
-                    t = f.ptr.p_double[c->d*(i*c->n+j)+di];
-                    f.ptr.p_double[c->d*(i*c->n+j)+di] = f.ptr.p_double[c->d*(i*c->n+k)+di];
-                    f.ptr.p_double[c->d*(i*c->n+k)+di] = t;
-                }
-            }
-            t = c->x.ptr.p_double[j];
-            c->x.ptr.p_double[j] = c->x.ptr.p_double[k];
-            c->x.ptr.p_double[k] = t;
-        }
-    }
-    for(i=0; i<=c->m-1; i++)
-    {
-        k = i;
-        for(j=i+1; j<=c->m-1; j++)
-        {
-            if( ae_fp_less(c->y.ptr.p_double[j],c->y.ptr.p_double[k]) )
-            {
-                k = j;
-            }
-        }
-        if( k!=i )
-        {
-            for(j=0; j<=c->n-1; j++)
-            {
-                for(di=0; di<=c->d-1; di++)
-                {
-                    t = f.ptr.p_double[c->d*(i*c->n+j)+di];
-                    f.ptr.p_double[c->d*(i*c->n+j)+di] = f.ptr.p_double[c->d*(k*c->n+j)+di];
-                    f.ptr.p_double[c->d*(k*c->n+j)+di] = t;
-                }
-            }
-            t = c->y.ptr.p_double[i];
-            c->y.ptr.p_double[i] = c->y.ptr.p_double[k];
-            c->y.ptr.p_double[k] = t;
-        }
-    }
+    spline2d_sortgrid(&c->x, n, &c->y, m, &c->x, ae_false, &c->x, ae_false, &c->y, ae_false, &c->y, ae_false, &f, d, &dummy, &dummy, &dummy, ae_false, _state);
     for(di=0; di<=c->d-1; di++)
     {
         for(i=0; i<=c->m-1; i++)
@@ -3123,7 +3536,7 @@ void spline2dbuildbicubicvbuf(/* Real    */ const ae_vector* x,
                 tf.ptr.pp_double[i][j] = f.ptr.p_double[c->d*(i*c->n+j)+di];
             }
         }
-        spline2d_bicubiccalcderivatives(&tf, &c->x, &c->y, c->m, c->n, &dx, &dy, &dxy, _state);
+        spline2d_bicubiccalcderivatives(&tf, &c->x, &c->y, c->m, c->n, &dummy, 0, &dummy, 0, &dummy, 0, &dummy, 0, &dummy, &dx, &dy, &dxy, _state);
         for(i=0; i<=c->m-1; i++)
         {
             for(j=0; j<=c->n-1; j++)
@@ -3732,17 +4145,20 @@ void spline2dbuildbicubic(/* Real    */ const ae_vector* x,
     ae_int_t i;
     ae_int_t j;
     ae_int_t k;
+    ae_vector dummy;
 
     ae_frame_make(_state, &_frame_block);
     memset(&f, 0, sizeof(f));
     memset(&dx, 0, sizeof(dx));
     memset(&dy, 0, sizeof(dy));
     memset(&dxy, 0, sizeof(dxy));
+    memset(&dummy, 0, sizeof(dummy));
     ae_matrix_init_copy(&f, _f, _state, ae_true);
     _spline2dinterpolant_clear(c);
     ae_matrix_init(&dx, 0, 0, DT_REAL, _state, ae_true);
     ae_matrix_init(&dy, 0, 0, DT_REAL, _state, ae_true);
     ae_matrix_init(&dxy, 0, 0, DT_REAL, _state, ae_true);
+    ae_vector_init(&dummy, 0, DT_REAL, _state, ae_true);
 
     ae_assert(n>=2, "Spline2DBuildBicubicSpline: N<2", _state);
     ae_assert(m>=2, "Spline2DBuildBicubicSpline: M<2", _state);
@@ -3831,7 +4247,7 @@ void spline2dbuildbicubic(/* Real    */ const ae_vector* x,
             c->y.ptr.p_double[k] = t;
         }
     }
-    spline2d_bicubiccalcderivatives(&f, &c->x, &c->y, c->m, c->n, &dx, &dy, &dxy, _state);
+    spline2d_bicubiccalcderivatives(&f, &c->x, &c->y, c->m, c->n, &dummy, 0, &dummy, 0, &dummy, 0, &dummy, 0, &dummy, &dx, &dy, &dxy, _state);
     for(i=0; i<=c->m-1; i++)
     {
         for(j=0; j<=c->n-1; j++)
@@ -5235,6 +5651,15 @@ static void spline2d_bicubiccalcderivatives(/* Real    */ const ae_matrix* a,
      /* Real    */ const ae_vector* y,
      ae_int_t m,
      ae_int_t n,
+     /* Real    */ const ae_vector* bndbtm,
+     ae_int_t bndtypebtm,
+     /* Real    */ const ae_vector* bndtop,
+     ae_int_t bndtypetop,
+     /* Real    */ const ae_vector* bndlft,
+     ae_int_t bndtypelft,
+     /* Real    */ const ae_vector* bndrgt,
+     ae_int_t bndtypergt,
+     /* Real    */ const ae_vector* dfmixed,
      /* Real    */ ae_matrix* dx,
      /* Real    */ ae_matrix* dy,
      /* Real    */ ae_matrix* dxy,
@@ -5244,23 +5669,53 @@ static void spline2d_bicubiccalcderivatives(/* Real    */ const ae_matrix* a,
     ae_int_t i;
     ae_int_t j;
     ae_vector xt;
+    ae_vector yt;
     ae_vector ft;
+    ae_vector dt;
+    ae_vector dleft;
+    ae_vector dright;
+    ae_vector tmp0;
+    ae_vector tmp1;
+    ae_vector tmp2;
+    ae_vector tmp3;
+    ae_vector tmp4;
     double s;
     double ds;
     double d2s;
+    double v0;
+    double v1;
     spline1dinterpolant c;
 
     ae_frame_make(_state, &_frame_block);
     memset(&xt, 0, sizeof(xt));
+    memset(&yt, 0, sizeof(yt));
     memset(&ft, 0, sizeof(ft));
+    memset(&dt, 0, sizeof(dt));
+    memset(&dleft, 0, sizeof(dleft));
+    memset(&dright, 0, sizeof(dright));
+    memset(&tmp0, 0, sizeof(tmp0));
+    memset(&tmp1, 0, sizeof(tmp1));
+    memset(&tmp2, 0, sizeof(tmp2));
+    memset(&tmp3, 0, sizeof(tmp3));
+    memset(&tmp4, 0, sizeof(tmp4));
     memset(&c, 0, sizeof(c));
     ae_matrix_clear(dx);
     ae_matrix_clear(dy);
     ae_matrix_clear(dxy);
     ae_vector_init(&xt, 0, DT_REAL, _state, ae_true);
+    ae_vector_init(&yt, 0, DT_REAL, _state, ae_true);
     ae_vector_init(&ft, 0, DT_REAL, _state, ae_true);
+    ae_vector_init(&dt, 0, DT_REAL, _state, ae_true);
+    ae_vector_init(&dleft, 0, DT_REAL, _state, ae_true);
+    ae_vector_init(&dright, 0, DT_REAL, _state, ae_true);
+    ae_vector_init(&tmp0, 0, DT_REAL, _state, ae_true);
+    ae_vector_init(&tmp1, 0, DT_REAL, _state, ae_true);
+    ae_vector_init(&tmp2, 0, DT_REAL, _state, ae_true);
+    ae_vector_init(&tmp3, 0, DT_REAL, _state, ae_true);
+    ae_vector_init(&tmp4, 0, DT_REAL, _state, ae_true);
     _spline1dinterpolant_init(&c, _state, ae_true);
 
+    ae_assert(imax4(bndtypebtm, bndtypetop, bndtypelft, bndtypergt, _state)<=2&&imin4(bndtypebtm, bndtypetop, bndtypelft, bndtypergt, _state)>=0, "SPLINE2D: integrity check 9513 failed", _state);
     ae_matrix_set_length(dx, m, n, _state);
     ae_matrix_set_length(dy, m, n, _state);
     ae_matrix_set_length(dxy, m, n, _state);
@@ -5270,6 +5725,8 @@ static void spline2d_bicubiccalcderivatives(/* Real    */ const ae_matrix* a,
      */
     ae_vector_set_length(&xt, n, _state);
     ae_vector_set_length(&ft, n, _state);
+    v0 = (double)(0);
+    v1 = (double)(0);
     for(i=0; i<=m-1; i++)
     {
         for(j=0; j<=n-1; j++)
@@ -5277,11 +5734,19 @@ static void spline2d_bicubiccalcderivatives(/* Real    */ const ae_matrix* a,
             xt.ptr.p_double[j] = x->ptr.p_double[j];
             ft.ptr.p_double[j] = a->ptr.pp_double[i][j];
         }
-        spline1dbuildcubic(&xt, &ft, n, 0, 0.0, 0, 0.0, &c, _state);
+        if( bndtypelft!=0 )
+        {
+            v0 = bndlft->ptr.p_double[i];
+        }
+        if( bndtypergt!=0 )
+        {
+            v1 = bndrgt->ptr.p_double[i];
+        }
+        rallocv(n, &dt, _state);
+        spline1dgriddiffcubicinternal(&xt, &ft, n, bndtypelft, v0, bndtypergt, v1, &dt, &tmp0, &tmp1, &tmp2, &tmp3, &tmp4, _state);
         for(j=0; j<=n-1; j++)
         {
-            spline1ddiff(&c, x->ptr.p_double[j], &s, &ds, &d2s, _state);
-            dx->ptr.pp_double[i][j] = ds;
+            dx->ptr.pp_double[i][j] = dt.ptr.p_double[j];
         }
     }
     
@@ -5290,6 +5755,8 @@ static void spline2d_bicubiccalcderivatives(/* Real    */ const ae_matrix* a,
      */
     ae_vector_set_length(&xt, m, _state);
     ae_vector_set_length(&ft, m, _state);
+    v0 = (double)(0);
+    v1 = (double)(0);
     for(j=0; j<=n-1; j++)
     {
         for(i=0; i<=m-1; i++)
@@ -5297,19 +5764,51 @@ static void spline2d_bicubiccalcderivatives(/* Real    */ const ae_matrix* a,
             xt.ptr.p_double[i] = y->ptr.p_double[i];
             ft.ptr.p_double[i] = a->ptr.pp_double[i][j];
         }
-        spline1dbuildcubic(&xt, &ft, m, 0, 0.0, 0, 0.0, &c, _state);
+        if( bndtypebtm!=0 )
+        {
+            v0 = bndbtm->ptr.p_double[j];
+        }
+        if( bndtypetop!=0 )
+        {
+            v1 = bndtop->ptr.p_double[j];
+        }
+        rallocv(m, &dt, _state);
+        spline1dgriddiffcubicinternal(&xt, &ft, m, bndtypebtm, v0, bndtypetop, v1, &dt, &tmp0, &tmp1, &tmp2, &tmp3, &tmp4, _state);
         for(i=0; i<=m-1; i++)
         {
-            spline1ddiff(&c, y->ptr.p_double[i], &s, &ds, &d2s, _state);
-            dy->ptr.pp_double[i][j] = ds;
+            dy->ptr.pp_double[i][j] = dt.ptr.p_double[i];
         }
     }
     
     /*
      * d2F/dXdY
      */
-    ae_vector_set_length(&xt, n, _state);
-    ae_vector_set_length(&ft, n, _state);
+    rsetallocv(m, 0.0, &dleft, _state);
+    rsetallocv(m, 0.0, &dright, _state);
+    if( bndtypelft!=0 )
+    {
+        rcopyallocv(m, y, &yt, _state);
+        rcopyallocv(m, bndlft, &dt, _state);
+        spline1dbuildcubic(&yt, &dt, m, bndtypebtm, rcase2(bndtypebtm!=0, dfmixed->ptr.p_double[0], 0.0, _state), bndtypetop, rcase2(bndtypetop!=0, dfmixed->ptr.p_double[2], (double)(0), _state), &c, _state);
+        for(j=0; j<=m-1; j++)
+        {
+            spline1ddiff(&c, y->ptr.p_double[j], &s, &ds, &d2s, _state);
+            dleft.ptr.p_double[j] = ds;
+        }
+    }
+    if( bndtypergt!=0 )
+    {
+        rcopyallocv(m, y, &yt, _state);
+        rcopyallocv(m, bndrgt, &dt, _state);
+        spline1dbuildcubic(&yt, &dt, m, bndtypebtm, rcase2(bndtypebtm!=0, dfmixed->ptr.p_double[1], 0.0, _state), bndtypetop, rcase2(bndtypetop!=0, dfmixed->ptr.p_double[3], (double)(0), _state), &c, _state);
+        for(j=0; j<=m-1; j++)
+        {
+            spline1ddiff(&c, y->ptr.p_double[j], &s, &ds, &d2s, _state);
+            dright.ptr.p_double[j] = ds;
+        }
+    }
+    rallocv(n, &xt, _state);
+    rallocv(n, &ft, _state);
     for(i=0; i<=m-1; i++)
     {
         for(j=0; j<=n-1; j++)
@@ -5317,11 +5816,11 @@ static void spline2d_bicubiccalcderivatives(/* Real    */ const ae_matrix* a,
             xt.ptr.p_double[j] = x->ptr.p_double[j];
             ft.ptr.p_double[j] = dy->ptr.pp_double[i][j];
         }
-        spline1dbuildcubic(&xt, &ft, n, 0, 0.0, 0, 0.0, &c, _state);
+        rallocv(n, &dt, _state);
+        spline1dgriddiffcubicinternal(&xt, &ft, n, bndtypelft, dleft.ptr.p_double[i], bndtypergt, dright.ptr.p_double[i], &dt, &tmp0, &tmp1, &tmp2, &tmp3, &tmp4, _state);
         for(j=0; j<=n-1; j++)
         {
-            spline1ddiff(&c, x->ptr.p_double[j], &s, &ds, &d2s, _state);
-            dxy->ptr.pp_double[i][j] = ds;
+            dxy->ptr.pp_double[i][j] = dt.ptr.p_double[j];
         }
     }
     ae_frame_leave(_state);
@@ -5557,6 +6056,106 @@ static ae_bool spline2d_scanfornonmissingsegment(/* Boolean */ const ae_vector* 
         result = ae_true;
     }
     return result;
+}
+
+
+/*************************************************************************
+Actual construction of a Hermite spline
+
+  -- ALGLIB PROJECT --
+     Copyright 2012-2023 by Bochkanov Sergey
+*************************************************************************/
+static void spline2d_spline2dbuildhermitevbuf(/* Real    */ const ae_vector* x,
+     ae_int_t n,
+     /* Real    */ const ae_vector* y,
+     ae_int_t m,
+     /* Real    */ const ae_vector* _f,
+     /* Real    */ const ae_vector* _dfdx,
+     /* Real    */ const ae_vector* _dfdy,
+     /* Real    */ const ae_vector* _d2fdxdy,
+     ae_int_t d,
+     spline2dinterpolant* c,
+     ae_state *_state)
+{
+    ae_frame _frame_block;
+    ae_vector f;
+    ae_vector dfdx;
+    ae_vector dfdy;
+    ae_vector d2fdxdy;
+    ae_int_t i;
+    ae_int_t j;
+    ae_int_t k;
+    ae_int_t di;
+
+    ae_frame_make(_state, &_frame_block);
+    memset(&f, 0, sizeof(f));
+    memset(&dfdx, 0, sizeof(dfdx));
+    memset(&dfdy, 0, sizeof(dfdy));
+    memset(&d2fdxdy, 0, sizeof(d2fdxdy));
+    ae_vector_init_copy(&f, _f, _state, ae_true);
+    ae_vector_init_copy(&dfdx, _dfdx, _state, ae_true);
+    ae_vector_init_copy(&dfdy, _dfdy, _state, ae_true);
+    ae_vector_init_copy(&d2fdxdy, _d2fdxdy, _state, ae_true);
+
+    ae_assert(n>=2, "Spline2DBuildHermiteV: N is less than 2", _state);
+    ae_assert(m>=2, "Spline2DBuildHermiteV: M is less than 2", _state);
+    ae_assert(d>=1, "Spline2DBuildHermiteV: invalid argument D (D<1)", _state);
+    ae_assert(x->cnt>=n&&y->cnt>=m, "Spline2DBuildHermiteV: X or Y is too short (Length(X/Y)<N/M)", _state);
+    ae_assert(isfinitevector(x, n, _state)&&isfinitevector(y, m, _state), "Spline2DBuildHermiteV: X or Y contains NaN or Infinite value", _state);
+    k = n*m*d;
+    ae_assert(f.cnt>=k, "Spline2DBuildHermiteV: F is too short (Length(F)<N*M*D)", _state);
+    ae_assert(isfinitevector(&f, k, _state), "Spline2DBuildHermiteV: F contains NaN or Infinite value", _state);
+    ae_assert(dfdx.cnt>=k, "Spline2DBuildHermiteV: dFdX is too short (Length(dFdX)<N*M*D)", _state);
+    ae_assert(isfinitevector(&dfdx, k, _state), "Spline2DBuildHermiteV: dFdX contains NaN or Infinite value", _state);
+    ae_assert(dfdy.cnt>=k, "Spline2DBuildHermiteV: dFdY is too short (Length(dFdY)<N*M*D)", _state);
+    ae_assert(isfinitevector(&dfdy, k, _state), "Spline2DBuildHermiteV: dFdY contains NaN or Infinite value", _state);
+    ae_assert(d2fdxdy.cnt>=k, "Spline2DBuildHermiteV: d2FdXdY is too short (Length(d2FdXdY)<N*M*D)", _state);
+    ae_assert(isfinitevector(&d2fdxdy, k, _state), "Spline2DBuildHermiteV: d2FdXdY contains NaN or Infinite value", _state);
+    
+    /*
+     * Fill interpolant:
+     *  F[0]...F[N*M*D-1]:
+     *      f(i,j) table. f(0,0), f(0, 1), f(0,2) and so on...
+     *  F[N*M*D]...F[2*N*M*D-1]:
+     *      df(i,j)/dx table.
+     *  F[2*N*M*D]...F[3*N*M*D-1]:
+     *      df(i,j)/dy table.
+     *  F[3*N*M*D]...F[4*N*M*D-1]:
+     *      d2f(i,j)/dxdy table.
+     */
+    c->d = d;
+    c->n = n;
+    c->m = m;
+    c->stype = -3;
+    c->hasmissingcells = ae_false;
+    k = 4*k;
+    ae_vector_set_length(&c->x, c->n, _state);
+    ae_vector_set_length(&c->y, c->m, _state);
+    ae_vector_set_length(&c->f, k, _state);
+    for(i=0; i<=c->n-1; i++)
+    {
+        c->x.ptr.p_double[i] = x->ptr.p_double[i];
+    }
+    for(i=0; i<=c->m-1; i++)
+    {
+        c->y.ptr.p_double[i] = y->ptr.p_double[i];
+    }
+    spline2d_sortgrid(&c->x, n, &c->y, m, &c->x, ae_false, &c->x, ae_false, &c->y, ae_false, &c->y, ae_false, &f, d, &dfdx, &dfdy, &d2fdxdy, ae_true, _state);
+    for(di=0; di<=c->d-1; di++)
+    {
+        for(i=0; i<=c->m-1; i++)
+        {
+            for(j=0; j<=c->n-1; j++)
+            {
+                k = c->d*(i*c->n+j)+di;
+                c->f.ptr.p_double[k] = f.ptr.p_double[c->d*(i*c->n+j)+di];
+                c->f.ptr.p_double[c->n*c->m*c->d+k] = dfdx.ptr.p_double[c->d*(i*c->n+j)+di];
+                c->f.ptr.p_double[2*c->n*c->m*c->d+k] = dfdy.ptr.p_double[c->d*(i*c->n+j)+di];
+                c->f.ptr.p_double[3*c->n*c->m*c->d+k] = d2fdxdy.ptr.p_double[c->d*(i*c->n+j)+di];
+            }
+        }
+    }
+    ae_frame_leave(_state);
 }
 
 
@@ -7265,286 +7864,6 @@ static void spline2d_flushtozerocell(ae_int_t kx,
             }
         }
     }
-}
-
-
-/*************************************************************************
-This function generates squared design matrix stored in block band format.
-
-We use adaptation of block skyline storage format, with
-TOWERSIZE*KX skyline bands (towers) stored sequentially;
-here TOWERSIZE=(BlockBandwidth+1)*KX. So, we have KY
-"towers", stored one below other, in BlockATA matrix.
-Every "tower" is a sequence of BlockBandwidth+1 cells,
-each of them being KX*KX in size.
-
-INPUT PARAMETERS:
-    AH      -   sparse matrix, [KX*KY,ARows] in size. "Horizontal" version
-                of design matrix, cols [0,NPoints] contain values of basis
-                functions at dataset  points.  Other  cols  are  used  for
-                nonlinearity penalty and other stuff like that.
-    KY0, KY1-   subset of output matrix bands to process; on entry it MUST
-                be set to 0 and KY respectively.
-    KX, KY  -   grid size
-    BlockATA-   array[KY*(BlockBandwidth+1)*KX,KX],  preallocated  storage
-                for output matrix in compressed block band format
-    MXATA   -   on entry MUST be zero
-
-OUTPUT PARAMETERS:
-    BlockATA-   AH*AH', stored in compressed block band format
-
-  -- ALGLIB --
-     Copyright 05.02.2018 by Bochkanov Sergey
-*************************************************************************/
-static void spline2d_blockllsgenerateata(const sparsematrix* ah,
-     ae_int_t ky0,
-     ae_int_t ky1,
-     ae_int_t kx,
-     ae_int_t ky,
-     /* Real    */ ae_matrix* blockata,
-     sreal* mxata,
-     ae_state *_state)
-{
-    ae_frame _frame_block;
-    ae_task_group *_child_tasks = NULL;
-    ae_bool _smp_enabled = ae_false;
-    ae_int_t blockbandwidth;
-    double avgrowlen;
-    double cellcost;
-    double totalcost;
-    sreal tmpmxata;
-    ae_int_t i;
-    ae_int_t j;
-    ae_int_t i0;
-    ae_int_t i1;
-    ae_int_t j0;
-    ae_int_t j1;
-    ae_int_t celloffset;
-    double v;
-    ae_int_t srci;
-    ae_int_t srcj;
-    ae_int_t idxi;
-    ae_int_t idxj;
-    ae_int_t endi;
-    ae_int_t endj;
-
-    ae_frame_make(_state, &_frame_block);
-    memset(&tmpmxata, 0, sizeof(tmpmxata));
-    _sreal_init(&tmpmxata, _state, ae_true);
-
-    ae_assert(ae_fp_greater_eq(mxata->val,(double)(0)), "BlockLLSGenerateATA: integrity check failed", _state);
-    blockbandwidth = 3;
-    
-    /*
-     * Determine problem cost, perform recursive subdivision
-     * (with optional parallelization)
-     */
-    avgrowlen = (double)ah->ridx.ptr.p_int[kx*ky]/(double)(kx*ky);
-    cellcost = rmul3((double)(kx), (double)(1+2*blockbandwidth), avgrowlen, _state);
-    totalcost = rmul3((double)(ky1-ky0), (double)(1+2*blockbandwidth), cellcost, _state);
-    if( ky1-ky0>=2&&ae_fp_greater(totalcost,smpactivationlevel(_state)) )
-    {
-        if( _trypexec_spline2d_blockllsgenerateata(ah,ky0,ky1,kx,ky,blockata,mxata, _state) )
-        {
-            ae_sync(_child_tasks, _smp_enabled, ae_true, _state);
-            ae_frame_leave(_state);
-            return;
-        }
-    }
-    if( ky1-ky0>=2 )
-    {
-        
-        /*
-         * Split X: X*A = (X1 X2)^T*A
-         */
-        j = (ky1-ky0)/2;
-        ae_set_smp_support(&_child_tasks, &_smp_enabled, ae_fp_greater(totalcost,spawnlevel(_state)), _state);
-        _spawn_spline2d_blockllsgenerateata(ah, ky0, ky0+j, kx, ky, blockata, &tmpmxata, _child_tasks, _smp_enabled, _state);
-        spline2d_blockllsgenerateata(ah, ky0+j, ky1, kx, ky, blockata, mxata, _state);
-        ae_sync(_child_tasks, _smp_enabled, ae_false, _state);
-        mxata->val = ae_maxreal(mxata->val, tmpmxata.val, _state);
-        ae_sync(_child_tasks, _smp_enabled, ae_true, _state);
-        ae_frame_leave(_state);
-        return;
-    }
-    
-    /*
-     * Splitting in Y-dimension is done, fill I1-th "tower"
-     */
-    ae_assert(ky1==ky0+1, "BlockLLSGenerateATA: integrity check failed", _state);
-    i1 = ky0;
-    for(j1=i1; j1<=ae_minint(ky-1, i1+blockbandwidth, _state); j1++)
-    {
-        celloffset = spline2d_getcelloffset(kx, ky, blockbandwidth, i1, j1, _state);
-        
-        /*
-         * Clear cell (I1,J1)
-         */
-        for(i0=0; i0<=kx-1; i0++)
-        {
-            for(j0=0; j0<=kx-1; j0++)
-            {
-                blockata->ptr.pp_double[celloffset+i0][j0] = 0.0;
-            }
-        }
-        
-        /*
-         * Initialize cell internals
-         */
-        for(i0=0; i0<=kx-1; i0++)
-        {
-            for(j0=0; j0<=kx-1; j0++)
-            {
-                if( ae_iabs(i0-j0, _state)<=blockbandwidth )
-                {
-                    
-                    /*
-                     * Nodes are close enough, calculate product of columns I and J of A.
-                     */
-                    v = (double)(0);
-                    i = i1*kx+i0;
-                    j = j1*kx+j0;
-                    srci = ah->ridx.ptr.p_int[i];
-                    srcj = ah->ridx.ptr.p_int[j];
-                    endi = ah->ridx.ptr.p_int[i+1];
-                    endj = ah->ridx.ptr.p_int[j+1];
-                    for(;;)
-                    {
-                        if( srci>=endi||srcj>=endj )
-                        {
-                            break;
-                        }
-                        idxi = ah->idx.ptr.p_int[srci];
-                        idxj = ah->idx.ptr.p_int[srcj];
-                        if( idxi==idxj )
-                        {
-                            v = v+ah->vals.ptr.p_double[srci]*ah->vals.ptr.p_double[srcj];
-                            srci = srci+1;
-                            srcj = srcj+1;
-                            continue;
-                        }
-                        if( idxi<idxj )
-                        {
-                            srci = srci+1;
-                        }
-                        else
-                        {
-                            srcj = srcj+1;
-                        }
-                    }
-                    blockata->ptr.pp_double[celloffset+i0][j0] = v;
-                    mxata->val = ae_maxreal(mxata->val, ae_fabs(v, _state), _state);
-                }
-            }
-        }
-    }
-    ae_sync(_child_tasks, _smp_enabled, ae_true, _state);
-    ae_frame_leave(_state);
-}
-
-
-/*************************************************************************
-When called in the multithreaded mode (non-NULL _group), spawns child task.
-Executed serially when called with NULL _group.
-*************************************************************************/
-void _spawn_spline2d_blockllsgenerateata(const sparsematrix* ah,
-    ae_int_t ky0,
-    ae_int_t ky1,
-    ae_int_t kx,
-    ae_int_t ky,
-    /* Real    */ ae_matrix* blockata,
-    sreal* mxata,
-    ae_task_group *_group, ae_bool smp_enabled, ae_state *_state)
-{
-    if( _group==NULL || !smp_enabled)
-    {
-        spline2d_blockllsgenerateata(ah,ky0,ky1,kx,ky,blockata,mxata, _state);
-        return;
-    }
-#if defined(_ALGLIB_HAS_WORKSTEALING)
-    {
-        ae_task_info *_task;
-        _task = ae_create_task(_group, _state);
-        _task->data.func = _task_spline2d_blockllsgenerateata;
-        _task->data.flags = _state->flags;
-        _task->data.parameters[0].value.const_val = ah;
-        _task->data.parameters[1].value.ival = ky0;
-        _task->data.parameters[2].value.ival = ky1;
-        _task->data.parameters[3].value.ival = kx;
-        _task->data.parameters[4].value.ival = ky;
-        _task->data.parameters[5].value.val = blockata;
-        _task->data.parameters[6].value.val = mxata;
-        ae_push_task(_task, _state, ae_false);
-    }
-#else
-    abort(); /* critical integrity failure */
-#endif
-}
-
-
-/*************************************************************************
-This method is called when worker thread starts working on a non-root task.
-*************************************************************************/
-#if defined(_ALGLIB_HAS_WORKSTEALING)
-void _task_spline2d_blockllsgenerateata(ae_task_data *_data, ae_state *_state)
-{
-    const sparsematrix* ah;
-    ae_int_t ky0;
-    ae_int_t ky1;
-    ae_int_t kx;
-    ae_int_t ky;
-    ae_matrix* blockata;
-    sreal* mxata;
-    ah = (const sparsematrix*)_data->parameters[0].value.const_val;
-    ky0 = _data->parameters[1].value.ival;
-    ky1 = _data->parameters[2].value.ival;
-    kx = _data->parameters[3].value.ival;
-    ky = _data->parameters[4].value.ival;
-    blockata = (ae_matrix*)_data->parameters[5].value.val;
-    mxata = (sreal*)_data->parameters[6].value.val;
-   ae_state_set_flags(_state, _data->flags);
-   spline2d_blockllsgenerateata(ah,ky0,ky1,kx,ky,blockata,mxata, _state);
-}
-#endif
-
-
-/*************************************************************************
-Inserts task as root into worker queue if called from non-worker thread, waits for completion and returns true.
-Returns false if ALGLIB is configured for serial execution or we are already in the worker context.
-*************************************************************************/
-ae_bool _trypexec_spline2d_blockllsgenerateata(const sparsematrix* ah,
-    ae_int_t ky0,
-    ae_int_t ky1,
-    ae_int_t kx,
-    ae_int_t ky,
-    /* Real    */ ae_matrix* blockata,
-    sreal* mxata,
-    ae_state *_state)
-{
-#if defined(_ALGLIB_HAS_WORKSTEALING)
-    ae_task_info *_task;
-    const char *_e;
-    if( !ae_can_pexec(_state) )
-        return ae_false;
-    _task = ae_create_task(NULL, _state);
-    _task->data.func = _task_spline2d_blockllsgenerateata;
-    _task->data.flags = _state->flags;
-    _task->data.parameters[0].value.const_val = ah;
-    _task->data.parameters[1].value.ival = ky0;
-    _task->data.parameters[2].value.ival = ky1;
-    _task->data.parameters[3].value.ival = kx;
-    _task->data.parameters[4].value.ival = ky;
-    _task->data.parameters[5].value.val = blockata;
-    _task->data.parameters[6].value.val = mxata;
-    ae_push_root_task(_task);
-    ae_wait_for_event(&_task->done_event);
-    _e = _task->exception;
-    ae_dispose_task(_task);
-    ae_assert(_e==NULL, _e, _state);
-    return ae_true;
-#else
-    return ae_false;
-#endif
 }
 
 
@@ -9393,6 +9712,159 @@ static ae_bool spline2d_adjustevaluationinterval(const spline2dinterpolant* s,
         *u = (*y-s->y.ptr.p_double[*iy])*(*du);
     }
     return result;
+}
+
+
+/*************************************************************************
+This subroutine sorts grid nodes by  ascending  and  also  sorts  boundary
+conditions and target values
+
+  -- ALGLIB PROJECT --
+     Copyright 16.04.2012 by Bochkanov Sergey
+*************************************************************************/
+static void spline2d_sortgrid(/* Real    */ ae_vector* x,
+     ae_int_t n,
+     /* Real    */ ae_vector* y,
+     ae_int_t m,
+     /* Real    */ ae_vector* bndbtm,
+     ae_bool hasbndbtm,
+     /* Real    */ ae_vector* bndtop,
+     ae_bool hasbndtop,
+     /* Real    */ ae_vector* bndlft,
+     ae_bool hasbndlft,
+     /* Real    */ ae_vector* bndrgt,
+     ae_bool hasbndrgt,
+     /* Real    */ ae_vector* f,
+     ae_int_t d,
+     /* Real    */ ae_vector* dfdx,
+     /* Real    */ ae_vector* dfdy,
+     /* Real    */ ae_vector* d2fdxdy,
+     ae_bool hasderivatives,
+     ae_state *_state)
+{
+    double t;
+    ae_int_t i;
+    ae_int_t j;
+    ae_int_t k;
+    ae_int_t di;
+
+
+    ae_assert(n>=2, "Spline2DSortGrid: N is less than 2", _state);
+    ae_assert(m>=2, "Spline2DSortGrid: M is less than 2", _state);
+    ae_assert(d>=1, "Spline2DSortGrid: invalid argument D (D<1)", _state);
+    k = n*m*d;
+    for(j=0; j<=n-1; j++)
+    {
+        k = j;
+        for(i=j+1; i<=n-1; i++)
+        {
+            if( ae_fp_less(x->ptr.p_double[i],x->ptr.p_double[k]) )
+            {
+                k = i;
+            }
+        }
+        if( k!=j )
+        {
+            for(i=0; i<=m-1; i++)
+            {
+                for(di=0; di<=d-1; di++)
+                {
+                    t = f->ptr.p_double[d*(i*n+j)+di];
+                    f->ptr.p_double[d*(i*n+j)+di] = f->ptr.p_double[d*(i*n+k)+di];
+                    f->ptr.p_double[d*(i*n+k)+di] = t;
+                    if( hasderivatives )
+                    {
+                        t = dfdx->ptr.p_double[d*(i*n+j)+di];
+                        dfdx->ptr.p_double[d*(i*n+j)+di] = dfdx->ptr.p_double[d*(i*n+k)+di];
+                        dfdx->ptr.p_double[d*(i*n+k)+di] = t;
+                        t = dfdy->ptr.p_double[d*(i*n+j)+di];
+                        dfdy->ptr.p_double[d*(i*n+j)+di] = dfdy->ptr.p_double[d*(i*n+k)+di];
+                        dfdy->ptr.p_double[d*(i*n+k)+di] = t;
+                        t = d2fdxdy->ptr.p_double[d*(i*n+j)+di];
+                        d2fdxdy->ptr.p_double[d*(i*n+j)+di] = d2fdxdy->ptr.p_double[d*(i*n+k)+di];
+                        d2fdxdy->ptr.p_double[d*(i*n+k)+di] = t;
+                    }
+                }
+            }
+            t = x->ptr.p_double[j];
+            x->ptr.p_double[j] = x->ptr.p_double[k];
+            x->ptr.p_double[k] = t;
+            if( hasbndbtm )
+            {
+                for(di=0; di<=d-1; di++)
+                {
+                    t = bndbtm->ptr.p_double[j*d+di];
+                    bndbtm->ptr.p_double[j*d+di] = bndbtm->ptr.p_double[k*d+di];
+                    bndbtm->ptr.p_double[k*d+di] = t;
+                }
+            }
+            if( hasbndtop )
+            {
+                for(di=0; di<=d-1; di++)
+                {
+                    t = bndtop->ptr.p_double[j*d+di];
+                    bndtop->ptr.p_double[j*d+di] = bndtop->ptr.p_double[k*d+di];
+                    bndtop->ptr.p_double[k*d+di] = t;
+                }
+            }
+        }
+    }
+    for(i=0; i<=m-1; i++)
+    {
+        k = i;
+        for(j=i+1; j<=m-1; j++)
+        {
+            if( ae_fp_less(y->ptr.p_double[j],y->ptr.p_double[k]) )
+            {
+                k = j;
+            }
+        }
+        if( k!=i )
+        {
+            for(j=0; j<=n-1; j++)
+            {
+                for(di=0; di<=d-1; di++)
+                {
+                    t = f->ptr.p_double[d*(i*n+j)+di];
+                    f->ptr.p_double[d*(i*n+j)+di] = f->ptr.p_double[d*(k*n+j)+di];
+                    f->ptr.p_double[d*(k*n+j)+di] = t;
+                    if( hasderivatives )
+                    {
+                        t = dfdx->ptr.p_double[d*(i*n+j)+di];
+                        dfdx->ptr.p_double[d*(i*n+j)+di] = dfdx->ptr.p_double[d*(k*n+j)+di];
+                        dfdx->ptr.p_double[d*(k*n+j)+di] = t;
+                        t = dfdy->ptr.p_double[d*(i*n+j)+di];
+                        dfdy->ptr.p_double[d*(i*n+j)+di] = dfdy->ptr.p_double[d*(k*n+j)+di];
+                        dfdy->ptr.p_double[d*(k*n+j)+di] = t;
+                        t = d2fdxdy->ptr.p_double[d*(i*n+j)+di];
+                        d2fdxdy->ptr.p_double[d*(i*n+j)+di] = d2fdxdy->ptr.p_double[d*(k*n+j)+di];
+                        d2fdxdy->ptr.p_double[d*(k*n+j)+di] = t;
+                    }
+                }
+            }
+            t = y->ptr.p_double[i];
+            y->ptr.p_double[i] = y->ptr.p_double[k];
+            y->ptr.p_double[k] = t;
+            if( hasbndlft )
+            {
+                for(di=0; di<=d-1; di++)
+                {
+                    t = bndlft->ptr.p_double[i*d+di];
+                    bndlft->ptr.p_double[i*d+di] = bndlft->ptr.p_double[k*d+di];
+                    bndlft->ptr.p_double[k*d+di] = t;
+                }
+            }
+            if( hasbndrgt )
+            {
+                for(di=0; di<=d-1; di++)
+                {
+                    t = bndrgt->ptr.p_double[i*d+di];
+                    bndrgt->ptr.p_double[i*d+di] = bndrgt->ptr.p_double[k*d+di];
+                    bndrgt->ptr.p_double[k*d+di] = t;
+                }
+            }
+        }
+    }
 }
 
 

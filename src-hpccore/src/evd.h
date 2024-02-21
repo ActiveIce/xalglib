@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -56,7 +56,7 @@ typedef struct
     ae_int_t maxits;
     double eps;
     ae_int_t eigenvectorsneeded;
-    ae_int_t matrixtype;
+    ae_int_t solvermode;
     ae_bool usewarmstart;
     ae_bool firstcall;
     hqrndstate rs;
@@ -73,6 +73,7 @@ typedef struct
     ae_matrix dummy;
     ae_vector rw;
     ae_vector tw;
+    ae_vector tmprow;
     ae_vector wcur;
     ae_vector wprev;
     ae_vector wrank;
@@ -246,18 +247,35 @@ this subspackage in a loop like below:
 
 INPUT PARAMETERS:
     State       -   solver object
-    MType       -   matrix type:
-                    * 0 for real  symmetric  matrix  (solver  assumes that
-                      matrix  being   processed  is  symmetric;  symmetric
-                      direct eigensolver is used for  smaller  subproblems
-                      arising during solution of larger "full" task)
+    MType       -   matrix type and solver mode:
+    
+                    * 0 =   real symmetric matrix A, products  of the form
+                            A*X are computed. At every step  the  basis of
+                            the  invariant  subspace  is  reorthogonalized
+                            with LQ decomposition  which  makes  the  algo
+                            more robust.
+                            
+                            The first mode introduced in ALGLIB, the  most
+                            precise and robust. However, it is  suboptimal
+                            for easy problems which can be solved  in  3-5
+                            iterations without LQ step.
+                            
+                    * 1 =   real symmetric matrix A, products  of the form
+                            A*X are computed. The  invariant  subspace  is
+                            NOT reorthogonalized,  no  error  checks.  The
+                            solver  stops  after   specified   number   of
+                            iterations which should be small, 5 at most.
+                            
+                            This mode is intended for easy  problems  with
+                            extremely fast convergence.
+                    
                     Future versions of ALGLIB may  introduce  support  for
                     other  matrix   types;   for   now,   only   symmetric
                     eigenproblems are supported.
 
 
   -- ALGLIB --
-     Copyright 16.01.2017 by Bochkanov Sergey
+     Copyright 07.06.2023 by Bochkanov Sergey
 *************************************************************************/
 void eigsubspaceoocstart(eigsubspacestate* state,
      ae_int_t mtype,

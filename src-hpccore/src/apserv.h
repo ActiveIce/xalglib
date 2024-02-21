@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -234,6 +234,22 @@ typedef struct
     ae_vector elems;
     double prior;
 } squantilecounter;
+
+
+/*************************************************************************
+Debug timer used to measure wall clock time for tracing:
+* no warranties regarding accuracy
+* when ALGLIB is compiled in OS-agnostic mode, returns zeros
+
+  -- ALGLIB --
+     Copyright 06.07.2022 by Bochkanov Sergey
+*************************************************************************/
+typedef struct
+{
+    ae_int_t ttotal;
+    ae_int_t tcurrent;
+    ae_bool isrunning;
+} stimer;
 
 
 /*$ Body $*/
@@ -1004,6 +1020,33 @@ void threadunsafeincby(ae_int_t* v, ae_int_t k, ae_state *_state);
 
 
 /*************************************************************************
+This function is used to increment value of a real variable;  name of  the
+function suggests that increment is done in multithreaded setting  in  the
+thread-unsafe manner (optional progress reports which do not need guaranteed
+correctness)
+*************************************************************************/
+void rthreadunsafeincby(double* v, double x, ae_state *_state);
+
+
+/*************************************************************************
+This function is used to set value of a real variable;  name of  the
+function suggests that increment is done in multithreaded setting  in  the
+thread-unsafe manner (optional progress reports which do not need guaranteed
+correctness), although the library may try to use safe options, if available.
+*************************************************************************/
+void rthreadunsafeset(double* v, double x, ae_state *_state);
+
+
+/*************************************************************************
+This function is used to read value of a real variable;  name of  the
+function suggests that read is done in multithreaded setting  in  the
+thread-unsafe manner (optional progress reports which do not need guaranteed
+correctness), although the library may try to use safe options, if available.
+*************************************************************************/
+double rthreadunsafeget(double* v, ae_state *_state);
+
+
+/*************************************************************************
 This function performs two operations:
 1. decrements value of integer variable, if it is positive
 2. explicitly sets variable to zero if it is non-positive
@@ -1017,6 +1060,13 @@ This function returns +1 or -1 depending on sign of X.
 x=0 results in +1 being returned.
 *************************************************************************/
 double possign(double x, ae_state *_state);
+
+
+/*************************************************************************
+This function returns +1 or -1 depending on sign of X.
+x=0 results in +1 being returned.
+*************************************************************************/
+ae_int_t ipossign(double x, ae_state *_state);
 
 
 /*************************************************************************
@@ -1060,6 +1110,16 @@ ae_int_t imin3(ae_int_t i0, ae_int_t i1, ae_int_t i2, ae_state *_state);
 
 
 /*************************************************************************
+This function returns min(i0,i1,i2,i3)
+*************************************************************************/
+ae_int_t imin4(ae_int_t i0,
+     ae_int_t i1,
+     ae_int_t i2,
+     ae_int_t i3,
+     ae_state *_state);
+
+
+/*************************************************************************
 This function returns max(i0,i1)
 *************************************************************************/
 ae_int_t imax2(ae_int_t i0, ae_int_t i1, ae_state *_state);
@@ -1069,6 +1129,16 @@ ae_int_t imax2(ae_int_t i0, ae_int_t i1, ae_state *_state);
 This function returns max(i0,i1,i2)
 *************************************************************************/
 ae_int_t imax3(ae_int_t i0, ae_int_t i1, ae_int_t i2, ae_state *_state);
+
+
+/*************************************************************************
+This function returns max(i0,i1,i2,i3)
+*************************************************************************/
+ae_int_t imax4(ae_int_t i0,
+     ae_int_t i1,
+     ae_int_t i2,
+     ae_int_t i3,
+     ae_state *_state);
 
 
 /*************************************************************************
@@ -1715,6 +1785,12 @@ void tracespaces(ae_int_t cnt, ae_state *_state);
 
 
 /*************************************************************************
+Outputs specified number of ">" symbols
+*************************************************************************/
+void traceangles(ae_int_t cnt, ae_state *_state);
+
+
+/*************************************************************************
 Minimum speedup feasible for multithreading
 *************************************************************************/
 double minspeedup(ae_state *_state);
@@ -1774,6 +1850,30 @@ Get k-th quantile. Thread-unsafe, modifies internal structures.
 double squantilecounterget(squantilecounter* c,
      double q,
      ae_state *_state);
+
+
+/*************************************************************************
+Initialize timer
+*************************************************************************/
+void stimerinit(stimer* t, ae_state *_state);
+
+
+/*************************************************************************
+Start measurement
+*************************************************************************/
+void stimerstart(stimer* t, ae_state *_state);
+
+
+/*************************************************************************
+Stop measurement, add time to already accumulated
+*************************************************************************/
+void stimerstop(stimer* t, ae_state *_state);
+
+
+/*************************************************************************
+Retrieve time in milliseconds, accuracy unknown
+*************************************************************************/
+double stimergetms(stimer* t, ae_state *_state);
 void _apbuffers_init(void* _p, ae_state *_state, ae_bool make_automatic);
 void _apbuffers_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
 void _apbuffers_clear(void* _p);
@@ -1830,6 +1930,10 @@ void _squantilecounter_init(void* _p, ae_state *_state, ae_bool make_automatic);
 void _squantilecounter_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
 void _squantilecounter_clear(void* _p);
 void _squantilecounter_destroy(void* _p);
+void _stimer_init(void* _p, ae_state *_state, ae_bool make_automatic);
+void _stimer_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic);
+void _stimer_clear(void* _p);
+void _stimer_destroy(void* _p);
 
 
 /*$ End $*/

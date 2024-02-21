@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -25,12 +25,12 @@ if sys.platform=="win32" or sys.platform=="cygwin":
     #
     # we are running under windows
     #
-    libnames   = ["alglib400_"+str(ctypes.sizeof(ctypes.c_void_p)*8)+"hpc"+".dll"]
-    targetname =  "alglib400_"+str(ctypes.sizeof(ctypes.c_void_p)*8)+"hpc"+".dll"
+    libnames   = ["alglib401_"+str(ctypes.sizeof(ctypes.c_void_p)*8)+"hpc"+".dll"]
+    targetname =  "alglib401_"+str(ctypes.sizeof(ctypes.c_void_p)*8)+"hpc"+".dll"
     dirname    = "bin-windows-intel"
 else:
-    libnames   = ["alglib400_"+str(ctypes.sizeof(ctypes.c_void_p)*8)+"hpc"+".so"]
-    targetname = "alglib400_"+str(ctypes.sizeof(ctypes.c_void_p)*8)+"hpc"+".so"
+    libnames   = ["alglib401_"+str(ctypes.sizeof(ctypes.c_void_p)*8)+"hpc"+".so"]
+    targetname = "alglib401_"+str(ctypes.sizeof(ctypes.c_void_p)*8)+"hpc"+".so"
     dirname    = "bin-linux-intel"
 libname = ""
 for s in libnames:
@@ -44,7 +44,7 @@ shutil.copyfile(os.path.join(dirname,libname), targetname)
 
 setup(
     name        =   'xalglib',
-    version     =   '4.0.0',
+    version     =   '4.01.0',
     description =   'ALGLIB for Python: numerical library',
     author      =   'ALGLIB Project',
     url         =   'http://www.alglib.net/',

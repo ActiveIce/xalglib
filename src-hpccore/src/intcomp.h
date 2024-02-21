@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -69,12 +69,15 @@
 #include "qpdenseaulsolver.h"
 #include "qpbleicsolver.h"
 #include "vipmsolver.h"
+#include "ipm2solver.h"
 #include "minqp.h"
 #include "minlm.h"
 #include "lpqppresolve.h"
 #include "reviseddualsimplex.h"
 #include "nlcslp.h"
 #include "nlcsqp.h"
+#include "nlcfsqp.h"
+#include "nlcaul.h"
 #include "minnlc.h"
 #include "fitsphere.h"
 #include "intfitserv.h"

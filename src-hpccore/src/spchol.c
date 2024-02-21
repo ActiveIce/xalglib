@@ -1,5 +1,5 @@
 ###########################################################################
-# ALGLIB 4.00.0 (source code generated 2023-05-21)
+# ALGLIB 4.01.0 (source code generated 2023-12-27)
 # Copyright (c) Sergey Bochkanov (ALGLIB project).
 # 
 # >>> SOURCE LICENSE >>>
@@ -184,11 +184,8 @@ static void spchol_partialcholeskypattern(const sparsematrix* a,
      ae_int_t head,
      ae_int_t tail,
      sparsematrix* atail,
-     /* Integer */ ae_vector* tmpparent,
-     /* Integer */ ae_vector* tmpchildrenr,
-     /* Integer */ ae_vector* tmpchildreni,
-     /* Integer */ ae_vector* tmp1,
-     /* Boolean */ ae_vector* flagarray,
+     nipool* n1ipool,
+     nbpool* n1bpool,
      sparsematrix* tmpbottomt,
      sparsematrix* tmpupdatet,
      sparsematrix* tmpupdate,
@@ -291,16 +288,18 @@ static ae_bool spchol_updatekernelrank2(/* Real    */ ae_vector* rowstorage,
      /* Integer */ const ae_vector* superrowidx,
      ae_int_t urbase,
      ae_state *_state);
-static void spchol_slowdebugchecks(const sparsematrix* a,
-     /* Integer */ const ae_vector* fillinperm,
-     ae_int_t n,
-     ae_int_t tail,
-     const sparsematrix* referencetaila,
-     ae_state *_state);
-static ae_bool spchol_dbgmatrixcholesky2(/* Real    */ ae_matrix* aaa,
-     ae_int_t offs,
-     ae_int_t n,
-     ae_bool isupper,
+static void spchol_generatepriorityamdpermutation(sparsematrix* wrka,
+     /* Integer */ ae_vector* wrkpriorities,
+     double promoteabove,
+     ae_int_t promoteto,
+     ae_bool debugordering,
+     ae_bool dotrace,
+     nbpool* n1bpool,
+     nipool* n1ipool,
+     priorityamdbuffers* buf,
+     ae_bool userbuffers,
+     /* Integer */ ae_vector* fillinperm,
+     /* Integer */ ae_vector* invfillinperm,
      ae_state *_state);
 
 
@@ -365,12 +364,22 @@ INPUT PARAMETERS:
                     * zero value means that appropriate  value  for  a  soft
                       priority (between 2 and 5) is automatically chosen.
                       Specific value may change in future ALGLIB versions.
+    PromoteTo   -   controls column promotion:
+                    * columns which will be postponed due to being too dense
+                      will be promoted to the priority group #PromoteTo
+                      instead of the next group.
+                    * Ignored for PermType<>3 and PermType<>-3.
+                    * If column already belongs to a priority group #PromoteTo
+                      or higher, it will be promoted to the next priority group.
+                    * Can be zero (means default way of promoting columns).
+                    * Avoid specifying too large values (above 10) because
+                      algorithm will perform at least (PromoteTo+1) elimination rounds.
     FactType    -   factorization type:
                     * 0 for traditional Cholesky
                     * 1 for LDLT decomposition with strictly diagonal D
     PermType    -   permutation type:
-                    *-3 for debug improved AMD which debugs AMD itself and
-                        parallel block supernodal code:
+                    *-3 for debug improved AMD which debugs AMD itself, parallel
+                        block supernodal code and advanced memory management:
                         * AMD is debugged by generating a sequence of decreasing
                           tail sizes, ~logN in total, even if ordering can be
                           done with just one round of AMD. This ordering is
@@ -379,6 +388,8 @@ INPUT PARAMETERS:
                           partitioning problems into smallest possible chunks,
                           ignoring thresholds set by SMPActivationLevel()
                           and SpawnLevel().
+                        * memory management is debugged by randomly switching
+                          MemReuse between +1 and -1, ignoring its original value
                     *-2 for column count ordering (NOT RECOMMENDED!)
                     *-1 for absence of permutation
                     * 0 for best permutation available
@@ -389,13 +400,25 @@ INPUT PARAMETERS:
                         ordering with better  handling  of  matrices  with
                         dense rows/columns and ability to perform priority
                         ordering
+    MemReuse    -   the memory management strategy:
+                    * +1 means that the internally allocated memory is reused
+                         as much as possible. What was once allocated is not
+                         freed as long as SPCholAnalysis structure is alive.
+                         Ideal for many small and medium-sized repeated
+                         factorization problems.
+                    * -1 means that some potentially large memory blocks
+                         are freed as soon as they are not needed. Whilst
+                         some limited amount of dynamically allocated memory
+                         is still reused, the largest block are not.
+                         Ideal for large-scale problems that occupy almost
+                         all available RAM.
     Analysis    -   can be uninitialized instance, or previous analysis
                     results. Previously allocated memory is reused as much
                     as possible.
     Buf         -   buffer; may be completely uninitialized, or one remained
                     from previous calls (including ones with completely
                     different matrices). Previously allocated temporary
-                    space will be reused as much as possible.
+                    space will be reused.
 
 OUTPUT PARAMETERS:
     Analysis    -   symbolic analysis of the matrix structure  which  will
@@ -424,31 +447,29 @@ NOTE: defining 'DEBUG.SLOW' trace tag will  activate  extra-slow  (roughly
 ae_bool spsymmanalyze(const sparsematrix* a,
      /* Integer */ const ae_vector* priorities,
      double promoteabove,
+     ae_int_t promoteto,
      ae_int_t facttype,
      ae_int_t permtype,
+     ae_int_t memreuse,
      spcholanalysis* analysis,
      ae_state *_state)
 {
     ae_int_t n;
-    ae_int_t m;
     ae_int_t i;
     ae_int_t j;
     ae_int_t jj;
-    ae_int_t j0;
-    ae_int_t j1;
     ae_int_t k;
-    ae_int_t range0;
-    ae_int_t range1;
-    ae_int_t newrange0;
-    ae_int_t eligiblecnt;
     ae_bool permready;
     ae_bool result;
 
 
+    ae_assert(ae_isfinite(promoteabove, _state)&&ae_fp_greater_eq(promoteabove,(double)(0)), "SPSymmAnalyze: PromoteAbove is negative or infinite", _state);
+    ae_assert(promoteto>=0, "SPSymmAnalyze: PromoteTo is negative", _state);
     ae_assert(sparseiscrs(a, _state), "SPSymmAnalyze: A is not stored in CRS format", _state);
     ae_assert(sparsegetnrows(a, _state)==sparsegetncols(a, _state), "SPSymmAnalyze: non-square A", _state);
     ae_assert(facttype==0||facttype==1, "SPSymmAnalyze: unexpected FactType", _state);
     ae_assert((((((permtype==0||permtype==1)||permtype==2)||permtype==3)||permtype==-1)||permtype==-2)||permtype==-3, "SPSymmAnalyze: unexpected PermType", _state);
+    ae_assert(memreuse==-1||memreuse==1, "SPSymmAnalyze: unexpected MemType", _state);
     ae_assert((permtype!=3&&permtype!=-3)||(ae_isfinite(promoteabove, _state)&&ae_fp_greater_eq(promoteabove,(double)(0))), "SPSymmAnalyze: unexpected PromoteAbove - infinite or negative", _state);
     result = ae_true;
     n = sparsegetnrows(a, _state);
@@ -462,6 +483,7 @@ ae_bool spsymmanalyze(const sparsematrix* a,
         isetallocv(n, 0, &analysis->curpriorities, _state);
         permtype = 3;
         promoteabove = 0.0;
+        promoteto = 0;
     }
     analysis->tasktype = 0;
     analysis->n = n;
@@ -491,8 +513,8 @@ ae_bool spsymmanalyze(const sparsematrix* a,
     ivectorsetlengthatleast(&analysis->tmp3, n+1, _state);
     ivectorsetlengthatleast(&analysis->tmp4, n+1, _state);
     bvectorsetlengthatleast(&analysis->flagarray, n+1, _state);
-    nbpoolinit(&analysis->nbooleanpool, n, _state);
-    nipoolinit(&analysis->nintegerpool, n, _state);
+    nbpoolinit(&analysis->n1booleanpool, n+1, _state);
+    nipoolinit(&analysis->n1integerpool, n+1, _state);
     nrpoolinit(&analysis->nrealpool, n, _state);
     
     /*
@@ -623,190 +645,8 @@ ae_bool spsymmanalyze(const sparsematrix* a,
         }
         if( permtype==3||permtype==-3 )
         {
-            ae_assert(analysis->curpriorities.cnt>=n, "SPSymmAnalyze: integrity check failed (4653)", _state);
-            
-            /*
-             * Perform iterative AMD, with nearly-dense columns being postponed to be handled later.
-             *
-             * The current (residual) matrix A is divided into two parts: head, with its columns being
-             * properly ordered, and tail, with its columns being reordered at the next iteration.
-             *
-             * After each partial AMD we compute sparsity pattern of the tail, set it as the new residual
-             * and repeat iteration.
-             */
-            iallocv(n, &analysis->fillinperm, _state);
-            iallocv(n, &analysis->invfillinperm, _state);
-            iallocv(n, &analysis->tmpperm, _state);
-            iallocv(n, &analysis->invtmpperm, _state);
-            for(i=0; i<=n-1; i++)
-            {
-                analysis->fillinperm.ptr.p_int[i] = i;
-                analysis->invfillinperm.ptr.p_int[i] = i;
-            }
             sparsecopybuf(a, &analysis->tmpa, _state);
-            ballocv(n, &analysis->eligible, _state);
-            range0 = 0;
-            range1 = n;
-            while(range0<range1)
-            {
-                m = range1-range0;
-                
-                /*
-                 * Perform partial AMD ordering of the residual matrix:
-                 * * determine columns in the residual part that are eligible for elimination.
-                 * * generate partial fill-in reducing permutation (leading Residual-Tail columns
-                 *   are properly ordered, the rest is unordered).
-                 * * update column elimination priorities (decrease by 1)
-                 */
-                bsetv(range1-range0, ae_false, &analysis->eligible, _state);
-                eligiblecnt = 0;
-                for(i=0; i<=n-1; i++)
-                {
-                    j = analysis->fillinperm.ptr.p_int[i];
-                    if( (j>=range0&&j<range1)&&analysis->curpriorities.ptr.p_int[i]<=0 )
-                    {
-                        analysis->eligible.ptr.p_bool[j-range0] = ae_true;
-                        eligiblecnt = eligiblecnt+1;
-                    }
-                }
-                if( analysis->dotrace )
-                {
-                    ae_trace("> multiround AMD, column_range=[%7d,%7d] (%7d out of %7d), %5.1f%% eligible\n",
-                        (int)(range0),
-                        (int)(range1),
-                        (int)(range1-range0),
-                        (int)(n),
-                        (double)((double)(100*eligiblecnt)/(double)m));
-                }
-                newrange0 = range0+generateamdpermutationx(&analysis->tmpa, &analysis->eligible, range1-range0, promoteabove, &analysis->tmpperm, &analysis->invtmpperm, 1, &analysis->amdtmp, _state);
-                if( permtype==-3 )
-                {
-                    
-                    /*
-                     * Special debug ordering in order to test correctness of multiple AMD rounds
-                     */
-                    newrange0 = ae_minint(newrange0, range0+m/2+1, _state);
-                }
-                for(i=0; i<=n-1; i++)
-                {
-                    analysis->curpriorities.ptr.p_int[i] = analysis->curpriorities.ptr.p_int[i]-1;
-                }
-                
-                /*
-                 * If there were columns that both eligible and sparse enough,
-                 * apply permutation and recompute trail.
-                 */
-                if( newrange0>range0 )
-                {
-                    
-                    /*
-                     * Apply permutation TmpPerm[] to the tail of the permutation FillInPerm[]
-                     */
-                    for(i=0; i<=m-1; i++)
-                    {
-                        analysis->fillinperm.ptr.p_int[analysis->invfillinperm.ptr.p_int[range0+analysis->invtmpperm.ptr.p_int[i]]] = range0+i;
-                    }
-                    for(i=0; i<=n-1; i++)
-                    {
-                        analysis->invfillinperm.ptr.p_int[analysis->fillinperm.ptr.p_int[i]] = i;
-                    }
-                    
-                    /*
-                     * Compute partial Cholesky of the trailing submatrix (after applying rank-K update to the
-                     * trailing submatrix but before Cholesky-factorizing it).
-                     */
-                    if( newrange0<range1 )
-                    {
-                        sparsesymmpermtblbuf(&analysis->tmpa, ae_false, &analysis->tmpperm, &analysis->tmpa2, _state);
-                        spchol_partialcholeskypattern(&analysis->tmpa2, newrange0-range0, range1-newrange0, &analysis->tmpa, &analysis->tmpparent, &analysis->tmp0, &analysis->tmp1, &analysis->tmp2, &analysis->flagarray, &analysis->tmpbottomt, &analysis->tmpupdatet, &analysis->tmpupdate, &analysis->tmpnewtailt, _state);
-                        if( analysis->extendeddebug )
-                        {
-                            spchol_slowdebugchecks(a, &analysis->fillinperm, n, range1-newrange0, &analysis->tmpa, _state);
-                        }
-                    }
-                    range0 = newrange0;
-                    m = range1-range0;
-                }
-                
-                /*
-                 * Analyze sparsity pattern of the current submatrix (TmpA), manually move completely dense rows to the end.
-                 */
-                if( m>0 )
-                {
-                    ae_assert((analysis->tmpa.m==m&&analysis->tmpa.n==m)&&analysis->tmpa.ninitialized==analysis->tmpa.ridx.ptr.p_int[m], "SPSymmAnalyze: integrity check failed (0572)", _state);
-                    isetallocv(m, 1, &analysis->tmp0, _state);
-                    for(i=0; i<=m-1; i++)
-                    {
-                        j0 = analysis->tmpa.ridx.ptr.p_int[i];
-                        j1 = analysis->tmpa.didx.ptr.p_int[i]-1;
-                        for(jj=j0; jj<=j1; jj++)
-                        {
-                            j = analysis->tmpa.idx.ptr.p_int[jj];
-                            analysis->tmp0.ptr.p_int[i] = analysis->tmp0.ptr.p_int[i]+1;
-                            analysis->tmp0.ptr.p_int[j] = analysis->tmp0.ptr.p_int[j]+1;
-                        }
-                    }
-                    j = 0;
-                    k = 0;
-                    for(i=0; i<=m-1; i++)
-                    {
-                        if( analysis->tmp0.ptr.p_int[i]<m )
-                        {
-                            analysis->invtmpperm.ptr.p_int[j] = i;
-                            j = j+1;
-                        }
-                    }
-                    for(i=0; i<=m-1; i++)
-                    {
-                        if( analysis->tmp0.ptr.p_int[i]==m )
-                        {
-                            analysis->invtmpperm.ptr.p_int[j] = i;
-                            j = j+1;
-                            k = k+1;
-                        }
-                    }
-                    for(i=0; i<=m-1; i++)
-                    {
-                        analysis->tmpperm.ptr.p_int[analysis->invtmpperm.ptr.p_int[i]] = i;
-                    }
-                    ae_assert(j==m, "SPSymmAnalyze: integrity check failed (6432)", _state);
-                    if( k>0 )
-                    {
-                        
-                        /*
-                         * K dense rows are moved to the end
-                         */
-                        if( k<m )
-                        {
-                            
-                            /*
-                             * There are still exist sparse rows that need reordering, apply permutation and manually truncate matrix
-                             */
-                            for(i=0; i<=m-1; i++)
-                            {
-                                analysis->fillinperm.ptr.p_int[analysis->invfillinperm.ptr.p_int[range0+analysis->invtmpperm.ptr.p_int[i]]] = range0+i;
-                            }
-                            for(i=0; i<=n-1; i++)
-                            {
-                                analysis->invfillinperm.ptr.p_int[analysis->fillinperm.ptr.p_int[i]] = i;
-                            }
-                            sparsesymmpermtblbuf(&analysis->tmpa, ae_false, &analysis->tmpperm, &analysis->tmpa2, _state);
-                            sparsecopybuf(&analysis->tmpa2, &analysis->tmpa, _state);
-                            analysis->tmpa.m = m-k;
-                            analysis->tmpa.n = m-k;
-                            analysis->tmpa.ninitialized = analysis->tmpa.ridx.ptr.p_int[analysis->tmpa.m];
-                        }
-                        range1 = range1-k;
-                        m = range1-range0;
-                    }
-                }
-            }
-            if( analysis->dotrace )
-            {
-                ae_trace("> multiround AMD, column_range=[%7d,%7d], stopped\n",
-                    (int)(range0),
-                    (int)(range1));
-            }
+            spchol_generatepriorityamdpermutation(&analysis->tmpa, &analysis->curpriorities, promoteabove, promoteto, permtype==-3&&ae_randominteger(100, _state)>50, analysis->dotrace, &analysis->n1booleanpool, &analysis->n1integerpool, &analysis->pamdtmp, memreuse>0, &analysis->fillinperm, &analysis->invfillinperm, _state);
             permready = ae_true;
         }
         ae_assert(permready, "SPSymmAnalyze: integrity check failed (pp4td)", _state);
@@ -880,6 +720,10 @@ INPUT PARAMETERS:
                         and will stop immediately
                       * if ModParam0 is zero, no pivot modification is applied
                       * if ModParam1 is zero, no overflow check is performed
+                    * 2 for modified Cholesky/LDLT which handles pivots
+                      smaller than ModParam0 in the following way:
+                      * a diagonal element is set to a very large value
+                      * offdiagonal elements are zeroed
     P0, P1, P2,P3 - modification parameters #0 #1, #2 and #3.
                     Params #2 and #3 are ignored in current version.
 
@@ -901,7 +745,7 @@ void spsymmsetmodificationstrategy(spcholanalysis* analysis,
 {
 
 
-    ae_assert(modstrategy==0||modstrategy==1, "SPSymmSetModificationStrategy: unexpected ModStrategy", _state);
+    ae_assert((modstrategy==0||modstrategy==1)||modstrategy==2, "SPSymmSetModificationStrategy: unexpected ModStrategy", _state);
     ae_assert(ae_isfinite(p0, _state)&&ae_fp_greater_eq(p0,(double)(0)), "SPSymmSetModificationStrategy: bad P0", _state);
     ae_assert(ae_isfinite(p1, _state), "SPSymmSetModificationStrategy: bad P1", _state);
     ae_assert(ae_isfinite(p2, _state), "SPSymmSetModificationStrategy: bad P2", _state);
@@ -2063,7 +1907,7 @@ static void spchol_spsymmprocessupdatesbatch(spcholanalysis* analysis,
     memset(&raw2smap, 0, sizeof(raw2smap));
     ae_vector_init(&raw2smap, 0, DT_INT, _state, ae_true);
 
-    nipoolretrieve(&analysis->nintegerpool, &raw2smap, _state);
+    nipoolretrieve(&analysis->n1integerpool, &raw2smap, _state);
     sequencescnt = analysis->blkstruct.ptr.p_int[blkoffs+1];
     blkoffs = blkoffs+spchol_batchheadersize;
     for(seqidx=0; seqidx<=sequencescnt-1; seqidx++)
@@ -2071,36 +1915,43 @@ static void spchol_spsymmprocessupdatesbatch(spcholanalysis* analysis,
         sidx = analysis->blkstruct.ptr.p_int[blkoffs+0];
         i0 = analysis->blkstruct.ptr.p_int[blkoffs+1];
         i1 = analysis->blkstruct.ptr.p_int[blkoffs+2];
-        cols0 = analysis->supercolrange.ptr.p_int[sidx];
-        cols1 = analysis->supercolrange.ptr.p_int[sidx+1];
-        supernodesize = cols1-cols0;
-        offss = analysis->rowoffsets.ptr.p_int[sidx];
         
         /*
-         * Prepare mapping of raw (range 0...N-1) indexes into internal (range 0...SupernodeSize+OffdiagSize-1) ones
+         * Do we need updates (do we have children columns)?
          */
-        for(i=cols0; i<=cols1-1; i++)
+        if( i1>i0 )
         {
-            raw2smap.ptr.p_int[i] = i-cols0;
+            
+            /*
+             * Prepare mapping of raw (range 0...N-1) indexes into internal (range 0...SupernodeSize+OffdiagSize-1) ones
+             */
+            cols0 = analysis->supercolrange.ptr.p_int[sidx];
+            cols1 = analysis->supercolrange.ptr.p_int[sidx+1];
+            supernodesize = cols1-cols0;
+            offss = analysis->rowoffsets.ptr.p_int[sidx];
+            for(i=cols0; i<=cols1-1; i++)
+            {
+                raw2smap.ptr.p_int[i] = i-cols0;
+            }
+            k0 = analysis->superrowridx.ptr.p_int[sidx];
+            k1 = analysis->superrowridx.ptr.p_int[sidx+1]-1;
+            for(k=k0; k<=k1; k++)
+            {
+                raw2smap.ptr.p_int[analysis->superrowidx.ptr.p_int[k]] = supernodesize+(k-k0);
+            }
+            
+            /*
+             * Update current supernode with remaining updates.
+             */
+            spchol_updatesupernode(analysis, sidx, cols0, cols1, offss, &raw2smap, i0, i1, &analysis->diagd, _state);
         }
-        k0 = analysis->superrowridx.ptr.p_int[sidx];
-        k1 = analysis->superrowridx.ptr.p_int[sidx+1]-1;
-        for(k=k0; k<=k1; k++)
-        {
-            raw2smap.ptr.p_int[analysis->superrowidx.ptr.p_int[k]] = supernodesize+(k-k0);
-        }
-        
-        /*
-         * Update current supernode with remaining updates.
-         */
-        spchol_updatesupernode(analysis, sidx, cols0, cols1, offss, &raw2smap, i0, i1, &analysis->diagd, _state);
         
         /*
          * Factorize current supernode if last update was applied
          */
         if( i1==analysis->ladj.rowend.ptr.p_int[sidx]&&!spchol_factorizesupernode(analysis, sidx, _state) )
         {
-            nipoolrecycle(&analysis->nintegerpool, &raw2smap, _state);
+            nipoolrecycle(&analysis->n1integerpool, &raw2smap, _state);
             failureflag->val = ae_true;
             ae_sync(_child_tasks, _smp_enabled, ae_true, _state);
             ae_frame_leave(_state);
@@ -2112,7 +1963,7 @@ static void spchol_spsymmprocessupdatesbatch(spcholanalysis* analysis,
          */
         blkoffs = blkoffs+spchol_sequenceentrysize;
     }
-    nipoolrecycle(&analysis->nintegerpool, &raw2smap, _state);
+    nipoolrecycle(&analysis->n1integerpool, &raw2smap, _state);
     ae_sync(_child_tasks, _smp_enabled, ae_true, _state);
     ae_frame_leave(_state);
 }
@@ -3364,8 +3215,8 @@ static void spchol_createblockstructure(spcholanalysis* analysis,
     /*
      * Retrieve temporary arrays from the pool
      */
-    nipoolretrieve(&analysis->nintegerpool, &heads, _state);
-    nipoolretrieve(&analysis->nintegerpool, &rootbatchsizes, _state);
+    nipoolretrieve(&analysis->n1integerpool, &heads, _state);
+    nipoolretrieve(&analysis->n1integerpool, &rootbatchsizes, _state);
     nrpoolretrieve(&analysis->nrealpool, &costs, _state);
     
     /*
@@ -3505,8 +3356,8 @@ static void spchol_createblockstructure(spcholanalysis* analysis,
     /*
      * Recycle temporary arrays
      */
-    nipoolrecycle(&analysis->nintegerpool, &heads, _state);
-    nipoolrecycle(&analysis->nintegerpool, &rootbatchsizes, _state);
+    nipoolrecycle(&analysis->n1integerpool, &heads, _state);
+    nipoolrecycle(&analysis->n1integerpool, &rootbatchsizes, _state);
     nrpoolrecycle(&analysis->nrealpool, &costs, _state);
     ae_frame_leave(_state);
 }
@@ -3690,8 +3541,8 @@ static void spchol_processbatchofheadsrec(spcholanalysis* analysis,
         ae_trace(">> running scheduler for a block of %0d supernodes\n",
             (int)(blocksize));
     }
-    nbpoolretrieve(&analysis->nbooleanpool, &isfactorized, _state);
-    nipoolretrieve(&analysis->nintegerpool, &rowbegin, _state);
+    nbpoolretrieve(&analysis->n1booleanpool, &isfactorized, _state);
+    nipoolretrieve(&analysis->n1integerpool, &rowbegin, _state);
     nrpoolretrieve(&analysis->nrealpool, &nflop, _state);
     bsetv(analysis->nsuper, ae_false, &isfactorized, _state);
     icopyv(analysis->nsuper, &analysis->ladj.rowbegin, &rowbegin, _state);
@@ -3704,8 +3555,8 @@ static void spchol_processbatchofheadsrec(spcholanalysis* analysis,
     spchol_scheduleupdatesforablockrec(analysis, &rowbegin, &isfactorized, &nflop, blkstruct, blockitemslistoffs, blocksize, 0, offs, &groupscreated, totalflops, &sequentialblockflops, _state);
     blkstruct->ptr.p_int[updatesheaderoffs+0] = *offs-updatesheaderoffs;
     blkstruct->ptr.p_int[updatesheaderoffs+1] = groupscreated;
-    nbpoolrecycle(&analysis->nbooleanpool, &isfactorized, _state);
-    nipoolrecycle(&analysis->nintegerpool, &rowbegin, _state);
+    nbpoolrecycle(&analysis->n1booleanpool, &isfactorized, _state);
+    nipoolrecycle(&analysis->n1integerpool, &rowbegin, _state);
     nrpoolrecycle(&analysis->nrealpool, &nflop, _state);
     
     /*
@@ -4396,7 +4247,7 @@ INPUT PARAMETERS:
     cmpChildrenI
     tmp1,
     FlagArray
-            -   preallocated temporary arrays, length at least Head+Tail
+            -   preallocated temporary arrays, length at least Head+Tail+1
     tmpBottomT,
     tmpUpdateT,
     tmpUpdate-  temporary sparsematrix instances; previously allocated
@@ -4414,17 +4265,15 @@ static void spchol_partialcholeskypattern(const sparsematrix* a,
      ae_int_t head,
      ae_int_t tail,
      sparsematrix* atail,
-     /* Integer */ ae_vector* tmpparent,
-     /* Integer */ ae_vector* tmpchildrenr,
-     /* Integer */ ae_vector* tmpchildreni,
-     /* Integer */ ae_vector* tmp1,
-     /* Boolean */ ae_vector* flagarray,
+     nipool* n1ipool,
+     nbpool* n1bpool,
      sparsematrix* tmpbottomt,
      sparsematrix* tmpupdatet,
      sparsematrix* tmpupdate,
      sparsematrix* tmpnewtailt,
      ae_state *_state)
 {
+    ae_frame _frame_block;
     ae_int_t i;
     ae_int_t j;
     ae_int_t k;
@@ -4435,17 +4284,42 @@ static void spchol_partialcholeskypattern(const sparsematrix* a,
     ae_int_t kb;
     ae_int_t cursize;
     double v;
+    ae_vector tmpparent;
+    ae_vector tmpchildrenr;
+    ae_vector tmpchildreni;
+    ae_vector tmp1;
+    ae_vector flagarray;
 
+    ae_frame_make(_state, &_frame_block);
+    memset(&tmpparent, 0, sizeof(tmpparent));
+    memset(&tmpchildrenr, 0, sizeof(tmpchildrenr));
+    memset(&tmpchildreni, 0, sizeof(tmpchildreni));
+    memset(&tmp1, 0, sizeof(tmp1));
+    memset(&flagarray, 0, sizeof(flagarray));
+    ae_vector_init(&tmpparent, 0, DT_INT, _state, ae_true);
+    ae_vector_init(&tmpchildrenr, 0, DT_INT, _state, ae_true);
+    ae_vector_init(&tmpchildreni, 0, DT_INT, _state, ae_true);
+    ae_vector_init(&tmp1, 0, DT_INT, _state, ae_true);
+    ae_vector_init(&flagarray, 0, DT_BOOL, _state, ae_true);
 
     ae_assert(a->m==head+tail, "PartialCholeskyPattern: rows(A)!=Head+Tail", _state);
     ae_assert(a->n==head+tail, "PartialCholeskyPattern: cols(A)!=Head+Tail", _state);
-    ae_assert(tmpparent->cnt>=head+tail+1, "PartialCholeskyPattern: Length(tmpParent)<Head+Tail+1", _state);
-    ae_assert(tmpchildrenr->cnt>=head+tail+1, "PartialCholeskyPattern: Length(tmpChildrenR)<Head+Tail+1", _state);
-    ae_assert(tmpchildreni->cnt>=head+tail+1, "PartialCholeskyPattern: Length(tmpChildrenI)<Head+Tail+1", _state);
-    ae_assert(tmp1->cnt>=head+tail+1, "PartialCholeskyPattern: Length(tmp1)<Head+Tail+1", _state);
-    ae_assert(flagarray->cnt>=head+tail+1, "PartialCholeskyPattern: Length(tmp1)<Head+Tail+1", _state);
+    
+    /*
+     * Initialize and retrieve temporary arrays
+     */
+    nipoolretrieve(n1ipool, &tmpparent, _state);
+    nipoolretrieve(n1ipool, &tmpchildrenr, _state);
+    nipoolretrieve(n1ipool, &tmpchildreni, _state);
+    nipoolretrieve(n1ipool, &tmp1, _state);
+    nbpoolretrieve(n1bpool, &flagarray, _state);
     cursize = head+tail;
     v = (double)1/(double)cursize;
+    ae_assert(tmpparent.cnt>=head+tail+1, "PartialCholeskyPattern: Length(tmpParent)<Head+Tail+1", _state);
+    ae_assert(tmpchildrenr.cnt>=head+tail+1, "PartialCholeskyPattern: Length(tmpChildrenR)<Head+Tail+1", _state);
+    ae_assert(tmpchildreni.cnt>=head+tail+1, "PartialCholeskyPattern: Length(tmpChildrenI)<Head+Tail+1", _state);
+    ae_assert(tmp1.cnt>=head+tail+1, "PartialCholeskyPattern: Length(tmp1)<Head+Tail+1", _state);
+    ae_assert(flagarray.cnt>=head+tail+1, "PartialCholeskyPattern: Length(tmp1)<Head+Tail+1", _state);
     
     /*
      * Compute leading Head columns of the Cholesky decomposition of A.
@@ -4465,8 +4339,8 @@ static void spchol_partialcholeskypattern(const sparsematrix* a,
      *       A, store it into ATail, and work with transposed matrix.
      */
     sparsecopytransposecrsbuf(a, atail, _state);
-    spchol_buildunorderedetree(a, cursize, tmpparent, tmp1, _state);
-    spchol_fromparenttochildren(tmpparent, cursize, tmpchildrenr, tmpchildreni, tmp1, _state);
+    spchol_buildunorderedetree(a, cursize, &tmpparent, &tmp1, _state);
+    spchol_fromparenttochildren(&tmpparent, cursize, &tmpchildrenr, &tmpchildreni, &tmp1, _state);
     tmpbottomt->m = head;
     tmpbottomt->n = tail;
     iallocv(head+1, &tmpbottomt->ridx, _state);
@@ -4475,7 +4349,7 @@ static void spchol_partialcholeskypattern(const sparsematrix* a,
     tmpupdatet->n = tail;
     iallocv(head+1, &tmpupdatet->ridx, _state);
     tmpupdatet->ridx.ptr.p_int[0] = 0;
-    bsetv(tail, ae_false, flagarray, _state);
+    bsetv(tail, ae_false, &flagarray, _state);
     for(j=0; j<=head-1; j++)
     {
         
@@ -4500,7 +4374,7 @@ static void spchol_partialcholeskypattern(const sparsematrix* a,
             i = atail->idx.ptr.p_int[jj]-head;
             tmpbottomt->idx.ptr.p_int[kb] = i;
             tmpbottomt->vals.ptr.p_double[kb] = v;
-            flagarray->ptr.p_bool[i] = ae_true;
+            flagarray.ptr.p_bool[i] = ae_true;
             kb = kb+1;
             jj = jj+1;
         }
@@ -4508,19 +4382,19 @@ static void spchol_partialcholeskypattern(const sparsematrix* a,
         /*
          * Fetch sparsity pattern from the immediate children in the elimination tree
          */
-        for(jj=tmpchildrenr->ptr.p_int[j]; jj<=tmpchildrenr->ptr.p_int[j+1]-1; jj++)
+        for(jj=tmpchildrenr.ptr.p_int[j]; jj<=tmpchildrenr.ptr.p_int[j+1]-1; jj++)
         {
-            j1 = tmpchildreni->ptr.p_int[jj];
+            j1 = tmpchildreni.ptr.p_int[jj];
             ii = tmpbottomt->ridx.ptr.p_int[j1];
             i1 = tmpbottomt->ridx.ptr.p_int[j1+1]-1;
             while(ii<=i1)
             {
                 i = tmpbottomt->idx.ptr.p_int[ii];
-                if( !flagarray->ptr.p_bool[i] )
+                if( !flagarray.ptr.p_bool[i] )
                 {
                     tmpbottomt->idx.ptr.p_int[kb] = i;
                     tmpbottomt->vals.ptr.p_double[kb] = v;
-                    flagarray->ptr.p_bool[i] = ae_true;
+                    flagarray.ptr.p_bool[i] = ae_true;
                     kb = kb+1;
                 }
                 ii = ii+1;
@@ -4532,14 +4406,14 @@ static void spchol_partialcholeskypattern(const sparsematrix* a,
          */
         for(ii=tmpbottomt->ridx.ptr.p_int[j]; ii<=kb-1; ii++)
         {
-            flagarray->ptr.p_bool[tmpbottomt->idx.ptr.p_int[ii]] = ae_false;
+            flagarray.ptr.p_bool[tmpbottomt->idx.ptr.p_int[ii]] = ae_false;
         }
         tmpbottomt->ridx.ptr.p_int[j+1] = kb;
         
         /*
          * Only columns that forward their sparsity pattern directly into the tail are added to tmpUpdateT
          */
-        if( tmpparent->ptr.p_int[j]>=head )
+        if( tmpparent.ptr.p_int[j]>=head )
         {
             
             /*
@@ -4578,7 +4452,7 @@ static void spchol_partialcholeskypattern(const sparsematrix* a,
      * Apply update U*U' to the trailing Tail*Tail matrix and generate new
      * residual matrix in tmpNewTailT. Then transpose/copy it to TmpA[].
      */
-    bsetv(tail, ae_false, flagarray, _state);
+    bsetv(tail, ae_false, &flagarray, _state);
     tmpnewtailt->m = tail;
     tmpnewtailt->n = tail;
     iallocv(tail+1, &tmpnewtailt->ridx, _state);
@@ -4594,7 +4468,7 @@ static void spchol_partialcholeskypattern(const sparsematrix* a,
          */
         tmpnewtailt->idx.ptr.p_int[k] = j;
         tmpnewtailt->vals.ptr.p_double[k] = (double)(1);
-        flagarray->ptr.p_bool[j] = ae_true;
+        flagarray.ptr.p_bool[j] = ae_true;
         k = k+1;
         jj = atail->didx.ptr.p_int[head+j]+1;
         j1 = atail->ridx.ptr.p_int[head+j+1]-1;
@@ -4603,7 +4477,7 @@ static void spchol_partialcholeskypattern(const sparsematrix* a,
             i = atail->idx.ptr.p_int[jj]-head;
             tmpnewtailt->idx.ptr.p_int[k] = i;
             tmpnewtailt->vals.ptr.p_double[k] = v;
-            flagarray->ptr.p_bool[i] = ae_true;
+            flagarray.ptr.p_bool[i] = ae_true;
             k = k+1;
             jj = jj+1;
         }
@@ -4635,11 +4509,11 @@ static void spchol_partialcholeskypattern(const sparsematrix* a,
             while(ii<=i1)
             {
                 i = tmpupdatet->idx.ptr.p_int[ii];
-                if( !flagarray->ptr.p_bool[i] )
+                if( !flagarray.ptr.p_bool[i] )
                 {
                     tmpnewtailt->idx.ptr.p_int[k] = i;
                     tmpnewtailt->vals.ptr.p_double[k] = v;
-                    flagarray->ptr.p_bool[i] = ae_true;
+                    flagarray.ptr.p_bool[i] = ae_true;
                     k = k+1;
                 }
                 ii = ii+1;
@@ -4662,12 +4536,22 @@ static void spchol_partialcholeskypattern(const sparsematrix* a,
          */
         for(ii=tmpnewtailt->ridx.ptr.p_int[j]; ii<=k-1; ii++)
         {
-            flagarray->ptr.p_bool[tmpnewtailt->idx.ptr.p_int[ii]] = ae_false;
+            flagarray.ptr.p_bool[tmpnewtailt->idx.ptr.p_int[ii]] = ae_false;
         }
         tmpnewtailt->ridx.ptr.p_int[j+1] = k;
     }
     sparsecreatecrsinplace(tmpnewtailt, _state);
     sparsecopytransposecrsbuf(tmpnewtailt, atail, _state);
+    
+    /*
+     * Recycle temporaries
+     */
+    nipoolrecycle(n1ipool, &tmpparent, _state);
+    nipoolrecycle(n1ipool, &tmpchildrenr, _state);
+    nipoolrecycle(n1ipool, &tmpchildreni, _state);
+    nipoolrecycle(n1ipool, &tmp1, _state);
+    nbpoolrecycle(n1bpool, &flagarray, _state);
+    ae_frame_leave(_state);
 }
 
 
@@ -5244,7 +5128,7 @@ static void spchol_updatesupernodegeneric(spcholanalysis* analysis,
     /*
      * Handle general update, rerefence code
      */
-    nipoolretrieve(&analysis->nintegerpool, &u2smap, _state);
+    nipoolretrieve(&analysis->n1integerpool, &u2smap, _state);
     ivectorsetlengthatleast(&u2smap, uheight, _state);
     for(i=0; i<=uheight-1; i++)
     {
@@ -5298,7 +5182,7 @@ static void spchol_updatesupernodegeneric(spcholanalysis* analysis,
             }
         }
     }
-    nipoolrecycle(&analysis->nintegerpool, &u2smap, _state);
+    nipoolrecycle(&analysis->n1integerpool, &u2smap, _state);
     ae_frame_leave(_state);
 }
 
@@ -5327,6 +5211,7 @@ static ae_bool spchol_factorizesupernode(spcholanalysis* analysis,
     double vs;
     double possignvraw;
     ae_bool controlpivot;
+    ae_bool droppivot;
     ae_bool controloverflow;
     ae_bool result;
 
@@ -5337,8 +5222,9 @@ static ae_bool spchol_factorizesupernode(spcholanalysis* analysis,
     blocksize = cols1-cols0;
     offdiagsize = analysis->superrowridx.ptr.p_int[sidx+1]-analysis->superrowridx.ptr.p_int[sidx];
     sstride = analysis->rowstrides.ptr.p_int[sidx];
+    droppivot = analysis->modtype==2&&ae_fp_greater(analysis->modparam0,(double)(0));
     controlpivot = analysis->modtype==1&&ae_fp_greater(analysis->modparam0,(double)(0));
-    controloverflow = analysis->modtype==1&&ae_fp_greater(analysis->modparam1,(double)(0));
+    controloverflow = (analysis->modtype==1||analysis->modtype==2)&&ae_fp_greater(analysis->modparam1,(double)(0));
     if( analysis->unitd )
     {
         
@@ -5463,24 +5349,36 @@ static ae_bool spchol_factorizesupernode(spcholanalysis* analysis,
                 {
                     analysis->outputstorage.ptr.p_double[offss+k*sstride+j] = v*analysis->outputstorage.ptr.p_double[offss+k*sstride+j];
                 }
+                continue;
             }
-            else
+            if( droppivot&&v/possignvraw<=analysis->modparam0 )
             {
                 
                 /*
-                 * Unmodified LDLT
+                 * Basic modified LDLT
                  */
-                if( v==(double)0 )
+                analysis->diagd.ptr.p_double[cols0+j] = 1.0E50;
+                analysis->outputstorage.ptr.p_double[offss+j*sstride+j] = 1.0;
+                for(k=j+1; k<=blocksize+offdiagsize-1; k++)
                 {
-                    result = ae_false;
-                    return result;
+                    analysis->outputstorage.ptr.p_double[offss+k*sstride+j] = 0.0;
                 }
-                analysis->diagd.ptr.p_double[cols0+j] = v;
-                v = (double)1/v;
-                for(k=j; k<=blocksize+offdiagsize-1; k++)
-                {
-                    analysis->outputstorage.ptr.p_double[offss+k*sstride+j] = v*analysis->outputstorage.ptr.p_double[offss+k*sstride+j];
-                }
+                continue;
+            }
+            
+            /*
+             * Unmodified LDLT
+             */
+            if( v==(double)0 )
+            {
+                result = ae_false;
+                return result;
+            }
+            analysis->diagd.ptr.p_double[cols0+j] = v;
+            v = (double)1/v;
+            for(k=j; k<=blocksize+offdiagsize-1; k++)
+            {
+                analysis->outputstorage.ptr.p_double[offss+k*sstride+j] = v*analysis->outputstorage.ptr.p_double[offss+k*sstride+j];
             }
         }
     }
@@ -6274,201 +6172,368 @@ static ae_bool spchol_updatekernelrank2(/* Real    */ ae_vector* rowstorage,
 
 
 /*************************************************************************
-Debug checks for sparsity structure
+Generates sparsity-reducing permutation using priority AMD ordering
+
+INPUT PARAMETERS:
+    Analysis        -   analysis object
+    WrkA            -   matrix being analyzed, destroyed during analysis
+    Priorities      -   element priorities, destroyed during analysis
+    PromoteAbove,
+    PromoteTo       -   parameters, see SPSymmAnalyze() for more info
+    DebugOrdering   -   whether special debug ordering which tests all
+                        algorithm branches is used.
+    DoTrace         -   whether trace is needed
+    Buf             -   temporary buffers provided by user
+    UserBuffers     -   whether to use buffers provided by user or local
+                        buffers:
+                        * if True, temporaries will be allocated by this
+                          function in Buf and will be retained after the
+                          function is done. Future calls to this function
+                          will reuse previously allocated memory. Good
+                          for many sequential tasks.
+                        * if True, the function will allocate its own
+                          local buffers. All memory allocated by this
+                          function will be freed upon exit. Good for
+                          large-scale one-off problems.
 
   -- ALGLIB routine --
-     22.08.2021
+     17.11.2023
      Bochkanov Sergey
 *************************************************************************/
-static void spchol_slowdebugchecks(const sparsematrix* a,
-     /* Integer */ const ae_vector* fillinperm,
-     ae_int_t n,
-     ae_int_t tail,
-     const sparsematrix* referencetaila,
+static void spchol_generatepriorityamdpermutation(sparsematrix* wrka,
+     /* Integer */ ae_vector* wrkpriorities,
+     double promoteabove,
+     ae_int_t promoteto,
+     ae_bool debugordering,
+     ae_bool dotrace,
+     nbpool* n1bpool,
+     nipool* n1ipool,
+     priorityamdbuffers* buf,
+     ae_bool userbuffers,
+     /* Integer */ ae_vector* fillinperm,
+     /* Integer */ ae_vector* invfillinperm,
      ae_state *_state)
 {
     ae_frame _frame_block;
+    priorityamdbuffers localbuf;
     ae_int_t i;
     ae_int_t j;
-    sparsematrix perma;
-    ae_matrix densea;
+    ae_int_t k;
+    ae_int_t jj;
+    ae_int_t j0;
+    ae_int_t j1;
+    ae_int_t n;
+    ae_int_t m;
+    ae_int_t range0;
+    ae_int_t range1;
+    ae_int_t newrange0;
+    ae_int_t promoteoffset;
+    ae_int_t npostponed;
+    ae_int_t eligiblecnt;
+    ae_vector eligible;
+    ae_vector tmp0;
 
     ae_frame_make(_state, &_frame_block);
-    memset(&perma, 0, sizeof(perma));
-    memset(&densea, 0, sizeof(densea));
-    _sparsematrix_init(&perma, _state, ae_true);
-    ae_matrix_init(&densea, 0, 0, DT_REAL, _state, ae_true);
+    memset(&localbuf, 0, sizeof(localbuf));
+    memset(&eligible, 0, sizeof(eligible));
+    memset(&tmp0, 0, sizeof(tmp0));
+    _priorityamdbuffers_init(&localbuf, _state, ae_true);
+    ae_vector_init(&eligible, 0, DT_BOOL, _state, ae_true);
+    ae_vector_init(&tmp0, 0, DT_INT, _state, ae_true);
 
-    sparsesymmpermtblbuf(a, ae_false, fillinperm, &perma, _state);
-    ae_matrix_set_length(&densea, n, n, _state);
+    
+    /*
+     * If local buffers have to be used, allocate one and run again
+     */
+    if( !userbuffers )
+    {
+        spchol_generatepriorityamdpermutation(wrka, wrkpriorities, promoteabove, promoteto, debugordering, dotrace, n1bpool, n1ipool, buf, ae_true, fillinperm, invfillinperm, _state);
+        ae_frame_leave(_state);
+        return;
+    }
+    
+    /*
+     * Initialize
+     */
+    n = wrka->n;
+    ae_assert(wrkpriorities->cnt>=n, "SPSymmAnalyze: integrity check failed (4653)", _state);
+    
+    /*
+     * Retrieve temporary arrays
+     */
+    nbpoolretrieve(n1bpool, &eligible, _state);
+    nipoolretrieve(n1ipool, &tmp0, _state);
+    
+    /*
+     * Perform iterative AMD, with nearly-dense columns being postponed to be handled later.
+     *
+     * The current (residual) matrix A is divided into two parts: head, with its columns being
+     * properly ordered, and tail, with its columns being reordered at the next iteration.
+     *
+     * After each partial AMD we compute sparsity pattern of the tail, set it as the new residual
+     * and repeat iteration.
+     */
+    iallocv(n, fillinperm, _state);
+    iallocv(n, invfillinperm, _state);
+    iallocv(n, &buf->tmpperm, _state);
+    iallocv(n, &buf->invtmpperm, _state);
     for(i=0; i<=n-1; i++)
     {
-        for(j=0; j<=i; j++)
-        {
-            if( !sparseexists(&perma, i, j, _state) )
-            {
-                densea.ptr.pp_double[i][j] = (double)(0);
-                continue;
-            }
-            if( i==j )
-            {
-                densea.ptr.pp_double[i][j] = (double)(1);
-            }
-            else
-            {
-                densea.ptr.pp_double[i][j] = 0.01*(ae_cos((double)(i+1), _state)+1.23*ae_sin((double)(j+1), _state))/(double)n;
-            }
-        }
+        fillinperm->ptr.p_int[i] = i;
+        invfillinperm->ptr.p_int[i] = i;
     }
-    ae_assert(spchol_dbgmatrixcholesky2(&densea, 0, n-tail, ae_false, _state), "densechol failed", _state);
-    rmatrixrighttrsm(tail, n-tail, &densea, 0, 0, ae_false, ae_false, 1, &densea, n-tail, 0, _state);
-    rmatrixsyrk(tail, n-tail, -1.0, &densea, n-tail, 0, 0, 1.0, &densea, n-tail, n-tail, ae_false, _state);
-    for(i=n-tail; i<=n-1; i++)
+    range0 = 0;
+    range1 = n;
+    promoteoffset = 0;
+    while(range0<range1)
     {
-        for(j=n-tail; j<=i; j++)
+        m = range1-range0;
+        
+        /*
+         * Perform partial AMD ordering of the residual matrix:
+         * * determine columns in the residual part that are eligible for elimination.
+         * * generate partial fill-in reducing permutation (leading Residual-Tail columns
+         *   are properly ordered, the rest is unordered).
+         * * update column elimination priorities and promotion target (decrease by 1)
+         */
+        bsetv(range1-range0, ae_false, &eligible, _state);
+        eligiblecnt = 0;
+        for(i=0; i<=n-1; i++)
         {
-            ae_assert(!(ae_fp_eq(densea.ptr.pp_double[i][j],(double)(0))&&sparseexists(referencetaila, i-(n-tail), j-(n-tail), _state)), "SPSymmAnalyze: structure check 1 failed", _state);
-            ae_assert(!(ae_fp_neq(densea.ptr.pp_double[i][j],(double)(0))&&!sparseexists(referencetaila, i-(n-tail), j-(n-tail), _state)), "SPSymmAnalyze: structure check 2 failed", _state);
+            j = fillinperm->ptr.p_int[i];
+            if( (j>=range0&&j<range1)&&wrkpriorities->ptr.p_int[i]<=0 )
+            {
+                eligible.ptr.p_bool[j-range0] = ae_true;
+                eligiblecnt = eligiblecnt+1;
+            }
+        }
+        if( dotrace )
+        {
+            ae_trace("> multiround AMD, column_range=[%7d,%7d] (%7d out of %7d), %5.1f%% eligible",
+                (int)(range0),
+                (int)(range1),
+                (int)(range1-range0),
+                (int)(n),
+                (double)((double)(100*eligiblecnt)/(double)m));
+        }
+        newrange0 = range0+generateamdpermutationx(wrka, &eligible, range1-range0, promoteabove, &buf->tmpperm, &buf->invtmpperm, 1, &buf->amdtmp, _state);
+        if( debugordering )
+        {
+            
+            /*
+             * Special debug ordering in order to test correctness of multiple AMD rounds
+             */
+            newrange0 = ae_minint(newrange0, range0+m/2+1, _state);
+        }
+        for(i=0; i<=n-1; i++)
+        {
+            wrkpriorities->ptr.p_int[i] = wrkpriorities->ptr.p_int[i]-1;
+        }
+        promoteto = ae_maxint(promoteto-1, 0, _state);
+        promoteoffset = promoteoffset+1;
+        npostponed = 0;
+        for(i=0; i<=range1-newrange0-1; i++)
+        {
+            if( eligible.ptr.p_bool[buf->invtmpperm.ptr.p_int[newrange0-range0+i]] )
+            {
+                
+                /*
+                 * The column was marked as eligible, but was postponed due to its density.
+                 * Promote column to a higher priority group.
+                 */
+                wrkpriorities->ptr.p_int[range0+buf->invtmpperm.ptr.p_int[newrange0-range0+i]] = promoteto;
+                npostponed = npostponed+1;
+            }
+        }
+        if( dotrace )
+        {
+            if( npostponed>0 )
+            {
+                ae_trace(", %5.1f%% postponed (promoted to elimination group %0d)",
+                    (double)((double)(100*npostponed)/(double)m),
+                    (int)(promoteoffset+promoteto));
+            }
+            ae_trace("\n");
+        }
+        
+        /*
+         * If there were columns that both eligible and sparse enough,
+         * apply permutation and recompute trail.
+         */
+        if( newrange0>range0 )
+        {
+            
+            /*
+             * Apply permutation TmpPerm[] to the tail of the permutation FillInPerm[]
+             */
+            for(i=0; i<=m-1; i++)
+            {
+                fillinperm->ptr.p_int[invfillinperm->ptr.p_int[range0+buf->invtmpperm.ptr.p_int[i]]] = range0+i;
+            }
+            for(i=0; i<=n-1; i++)
+            {
+                invfillinperm->ptr.p_int[fillinperm->ptr.p_int[i]] = i;
+            }
+            
+            /*
+             * Compute partial Cholesky of the trailing submatrix (after applying rank-K update to the
+             * trailing submatrix but before Cholesky-factorizing it).
+             */
+            if( newrange0<range1 )
+            {
+                sparsesymmpermtblbuf(wrka, ae_false, &buf->tmpperm, &buf->tmpa2, _state);
+                spchol_partialcholeskypattern(&buf->tmpa2, newrange0-range0, range1-newrange0, wrka, n1ipool, n1bpool, &buf->tmpbottomt, &buf->tmpupdatet, &buf->tmpupdate, &buf->tmpnewtailt, _state);
+            }
+            range0 = newrange0;
+            m = range1-range0;
+        }
+        
+        /*
+         * Analyze sparsity pattern of the current submatrix (TmpA), manually move completely dense rows to the end.
+         */
+        if( m>0 )
+        {
+            ae_assert((wrka->m==m&&wrka->n==m)&&wrka->ninitialized==wrka->ridx.ptr.p_int[m], "SPSymmAnalyze: integrity check failed (0572)", _state);
+            isetv(m, 1, &tmp0, _state);
+            for(i=0; i<=m-1; i++)
+            {
+                j0 = wrka->ridx.ptr.p_int[i];
+                j1 = wrka->didx.ptr.p_int[i]-1;
+                for(jj=j0; jj<=j1; jj++)
+                {
+                    j = wrka->idx.ptr.p_int[jj];
+                    tmp0.ptr.p_int[i] = tmp0.ptr.p_int[i]+1;
+                    tmp0.ptr.p_int[j] = tmp0.ptr.p_int[j]+1;
+                }
+            }
+            j = 0;
+            k = 0;
+            for(i=0; i<=m-1; i++)
+            {
+                if( tmp0.ptr.p_int[i]<m )
+                {
+                    buf->invtmpperm.ptr.p_int[j] = i;
+                    j = j+1;
+                }
+            }
+            for(i=0; i<=m-1; i++)
+            {
+                if( tmp0.ptr.p_int[i]==m )
+                {
+                    buf->invtmpperm.ptr.p_int[j] = i;
+                    j = j+1;
+                    k = k+1;
+                }
+            }
+            for(i=0; i<=m-1; i++)
+            {
+                buf->tmpperm.ptr.p_int[buf->invtmpperm.ptr.p_int[i]] = i;
+            }
+            ae_assert(j==m, "SPSymmAnalyze: integrity check failed (6432)", _state);
+            if( k>0 )
+            {
+                
+                /*
+                 * K dense rows are moved to the end
+                 */
+                if( k<m )
+                {
+                    
+                    /*
+                     * There are still exist sparse rows that need reordering, apply permutation and manually truncate matrix
+                     */
+                    for(i=0; i<=m-1; i++)
+                    {
+                        fillinperm->ptr.p_int[invfillinperm->ptr.p_int[range0+buf->invtmpperm.ptr.p_int[i]]] = range0+i;
+                    }
+                    for(i=0; i<=n-1; i++)
+                    {
+                        invfillinperm->ptr.p_int[fillinperm->ptr.p_int[i]] = i;
+                    }
+                    sparsesymmpermtblbuf(wrka, ae_false, &buf->tmpperm, &buf->tmpa2, _state);
+                    sparsecopybuf(&buf->tmpa2, wrka, _state);
+                    wrka->m = m-k;
+                    wrka->n = m-k;
+                    wrka->ninitialized = wrka->ridx.ptr.p_int[wrka->m];
+                }
+                range1 = range1-k;
+                m = range1-range0;
+            }
         }
     }
+    if( dotrace )
+    {
+        ae_trace("> multiround AMD, column_range=[%7d,%7d], stopped\n",
+            (int)(range0),
+            (int)(range1));
+    }
+    
+    /*
+     * Recycle temporary arrays
+     */
+    nbpoolrecycle(n1bpool, &eligible, _state);
+    nipoolrecycle(n1ipool, &tmp0, _state);
     ae_frame_leave(_state);
 }
 
 
-/*************************************************************************
-Dense Cholesky driver for internal integrity checks
-
-  -- ALGLIB routine --
-     22.08.2021
-     Bochkanov Sergey
-*************************************************************************/
-static ae_bool spchol_dbgmatrixcholesky2(/* Real    */ ae_matrix* aaa,
-     ae_int_t offs,
-     ae_int_t n,
-     ae_bool isupper,
-     ae_state *_state)
+void _priorityamdbuffers_init(void* _p, ae_state *_state, ae_bool make_automatic)
 {
-    ae_frame _frame_block;
-    ae_int_t i;
-    ae_int_t j;
-    double ajj;
-    double v;
-    double r;
-    ae_vector tmp;
-    ae_bool result;
+    priorityamdbuffers *p = (priorityamdbuffers*)_p;
+    ae_touch_ptr((void*)p);
+    ae_vector_init(&p->tmpperm, 0, DT_INT, _state, make_automatic);
+    ae_vector_init(&p->invtmpperm, 0, DT_INT, _state, make_automatic);
+    _amdbuffer_init(&p->amdtmp, _state, make_automatic);
+    _sparsematrix_init(&p->tmpa2, _state, make_automatic);
+    _sparsematrix_init(&p->tmpbottomt, _state, make_automatic);
+    _sparsematrix_init(&p->tmpupdate, _state, make_automatic);
+    _sparsematrix_init(&p->tmpupdatet, _state, make_automatic);
+    _sparsematrix_init(&p->tmpnewtailt, _state, make_automatic);
+}
 
-    ae_frame_make(_state, &_frame_block);
-    memset(&tmp, 0, sizeof(tmp));
-    ae_vector_init(&tmp, 0, DT_REAL, _state, ae_true);
 
-    ae_vector_set_length(&tmp, 2*n, _state);
-    result = ae_true;
-    if( n<0 )
-    {
-        result = ae_false;
-        ae_frame_leave(_state);
-        return result;
-    }
-    
-    /*
-     * Quick return if possible
-     */
-    if( n==0 )
-    {
-        ae_frame_leave(_state);
-        return result;
-    }
-    if( isupper )
-    {
-        
-        /*
-         * Compute the Cholesky factorization A = U'*U.
-         */
-        for(j=0; j<=n-1; j++)
-        {
-            
-            /*
-             * Compute U(J,J) and test for non-positive-definiteness.
-             */
-            v = ae_v_dotproduct(&aaa->ptr.pp_double[offs][offs+j], aaa->stride, &aaa->ptr.pp_double[offs][offs+j], aaa->stride, ae_v_len(offs,offs+j-1));
-            ajj = aaa->ptr.pp_double[offs+j][offs+j]-v;
-            if( ae_fp_less_eq(ajj,(double)(0)) )
-            {
-                aaa->ptr.pp_double[offs+j][offs+j] = ajj;
-                result = ae_false;
-                ae_frame_leave(_state);
-                return result;
-            }
-            ajj = ae_sqrt(ajj, _state);
-            aaa->ptr.pp_double[offs+j][offs+j] = ajj;
-            
-            /*
-             * Compute elements J+1:N-1 of row J.
-             */
-            if( j<n-1 )
-            {
-                if( j>0 )
-                {
-                    ae_v_moveneg(&tmp.ptr.p_double[0], 1, &aaa->ptr.pp_double[offs][offs+j], aaa->stride, ae_v_len(0,j-1));
-                    rmatrixmv(n-j-1, j, aaa, offs, offs+j+1, 1, &tmp, 0, &tmp, n, _state);
-                    ae_v_add(&aaa->ptr.pp_double[offs+j][offs+j+1], 1, &tmp.ptr.p_double[n], 1, ae_v_len(offs+j+1,offs+n-1));
-                }
-                r = (double)1/ajj;
-                ae_v_muld(&aaa->ptr.pp_double[offs+j][offs+j+1], 1, ae_v_len(offs+j+1,offs+n-1), r);
-            }
-        }
-    }
-    else
-    {
-        
-        /*
-         * Compute the Cholesky factorization A = L*L'.
-         */
-        for(j=0; j<=n-1; j++)
-        {
-            
-            /*
-             * Compute L(J+1,J+1) and test for non-positive-definiteness.
-             */
-            v = ae_v_dotproduct(&aaa->ptr.pp_double[offs+j][offs], 1, &aaa->ptr.pp_double[offs+j][offs], 1, ae_v_len(offs,offs+j-1));
-            ajj = aaa->ptr.pp_double[offs+j][offs+j]-v;
-            if( ae_fp_less_eq(ajj,(double)(0)) )
-            {
-                aaa->ptr.pp_double[offs+j][offs+j] = ajj;
-                result = ae_false;
-                ae_frame_leave(_state);
-                return result;
-            }
-            ajj = ae_sqrt(ajj, _state);
-            aaa->ptr.pp_double[offs+j][offs+j] = ajj;
-            
-            /*
-             * Compute elements J+1:N of column J.
-             */
-            if( j<n-1 )
-            {
-                r = (double)1/ajj;
-                if( j>0 )
-                {
-                    ae_v_move(&tmp.ptr.p_double[0], 1, &aaa->ptr.pp_double[offs+j][offs], 1, ae_v_len(0,j-1));
-                    rmatrixmv(n-j-1, j, aaa, offs+j+1, offs, 0, &tmp, 0, &tmp, n, _state);
-                    for(i=0; i<=n-j-2; i++)
-                    {
-                        aaa->ptr.pp_double[offs+j+1+i][offs+j] = (aaa->ptr.pp_double[offs+j+1+i][offs+j]-tmp.ptr.p_double[n+i])*r;
-                    }
-                }
-                else
-                {
-                    for(i=0; i<=n-j-2; i++)
-                    {
-                        aaa->ptr.pp_double[offs+j+1+i][offs+j] = aaa->ptr.pp_double[offs+j+1+i][offs+j]*r;
-                    }
-                }
-            }
-        }
-    }
-    ae_frame_leave(_state);
-    return result;
+void _priorityamdbuffers_init_copy(void* _dst, const void* _src, ae_state *_state, ae_bool make_automatic)
+{
+    priorityamdbuffers       *dst = (priorityamdbuffers*)_dst;
+    const priorityamdbuffers *src = (const priorityamdbuffers*)_src;
+    ae_vector_init_copy(&dst->tmpperm, &src->tmpperm, _state, make_automatic);
+    ae_vector_init_copy(&dst->invtmpperm, &src->invtmpperm, _state, make_automatic);
+    _amdbuffer_init_copy(&dst->amdtmp, &src->amdtmp, _state, make_automatic);
+    _sparsematrix_init_copy(&dst->tmpa2, &src->tmpa2, _state, make_automatic);
+    _sparsematrix_init_copy(&dst->tmpbottomt, &src->tmpbottomt, _state, make_automatic);
+    _sparsematrix_init_copy(&dst->tmpupdate, &src->tmpupdate, _state, make_automatic);
+    _sparsematrix_init_copy(&dst->tmpupdatet, &src->tmpupdatet, _state, make_automatic);
+    _sparsematrix_init_copy(&dst->tmpnewtailt, &src->tmpnewtailt, _state, make_automatic);
+}
+
+
+void _priorityamdbuffers_clear(void* _p)
+{
+    priorityamdbuffers *p = (priorityamdbuffers*)_p;
+    ae_touch_ptr((void*)p);
+    ae_vector_clear(&p->tmpperm);
+    ae_vector_clear(&p->invtmpperm);
+    _amdbuffer_clear(&p->amdtmp);
+    _sparsematrix_clear(&p->tmpa2);
+    _sparsematrix_clear(&p->tmpbottomt);
+    _sparsematrix_clear(&p->tmpupdate);
+    _sparsematrix_clear(&p->tmpupdatet);
+    _sparsematrix_clear(&p->tmpnewtailt);
+}
+
+
+void _priorityamdbuffers_destroy(void* _p)
+{
+    priorityamdbuffers *p = (priorityamdbuffers*)_p;
+    ae_touch_ptr((void*)p);
+    ae_vector_destroy(&p->tmpperm);
+    ae_vector_destroy(&p->invtmpperm);
+    _amdbuffer_destroy(&p->amdtmp);
+    _sparsematrix_destroy(&p->tmpa2);
+    _sparsematrix_destroy(&p->tmpbottomt);
+    _sparsematrix_destroy(&p->tmpupdate);
+    _sparsematrix_destroy(&p->tmpupdatet);
+    _sparsematrix_destroy(&p->tmpnewtailt);
 }
 
 
@@ -6557,16 +6622,16 @@ void _spcholanalysis_init(void* _p, ae_state *_state, ae_bool make_automatic)
     ae_vector_init(&p->rowstrides, 0, DT_INT, _state, make_automatic);
     ae_vector_init(&p->rowoffsets, 0, DT_INT, _state, make_automatic);
     ae_vector_init(&p->diagd, 0, DT_REAL, _state, make_automatic);
-    _nbpool_init(&p->nbooleanpool, _state, make_automatic);
-    _nipool_init(&p->nintegerpool, _state, make_automatic);
+    _nbpool_init(&p->n1booleanpool, _state, make_automatic);
+    _nipool_init(&p->n1integerpool, _state, make_automatic);
     _nrpool_init(&p->nrealpool, _state, make_automatic);
     ae_vector_init(&p->currowbegin, 0, DT_INT, _state, make_automatic);
     ae_vector_init(&p->flagarray, 0, DT_BOOL, _state, make_automatic);
-    ae_vector_init(&p->eligible, 0, DT_BOOL, _state, make_automatic);
     ae_vector_init(&p->curpriorities, 0, DT_INT, _state, make_automatic);
     ae_vector_init(&p->tmpparent, 0, DT_INT, _state, make_automatic);
     ae_vector_init(&p->node2supernode, 0, DT_INT, _state, make_automatic);
     _amdbuffer_init(&p->amdtmp, _state, make_automatic);
+    _priorityamdbuffers_init(&p->pamdtmp, _state, make_automatic);
     ae_vector_init(&p->tmp0, 0, DT_INT, _state, make_automatic);
     ae_vector_init(&p->tmp1, 0, DT_INT, _state, make_automatic);
     ae_vector_init(&p->tmp2, 0, DT_INT, _state, make_automatic);
@@ -6575,13 +6640,6 @@ void _spcholanalysis_init(void* _p, ae_state *_state, ae_bool make_automatic)
     ae_vector_init(&p->raw2smap, 0, DT_INT, _state, make_automatic);
     _sparsematrix_init(&p->tmpa, _state, make_automatic);
     _sparsematrix_init(&p->tmpat, _state, make_automatic);
-    _sparsematrix_init(&p->tmpa2, _state, make_automatic);
-    _sparsematrix_init(&p->tmpbottomt, _state, make_automatic);
-    _sparsematrix_init(&p->tmpupdate, _state, make_automatic);
-    _sparsematrix_init(&p->tmpupdatet, _state, make_automatic);
-    _sparsematrix_init(&p->tmpnewtailt, _state, make_automatic);
-    ae_vector_init(&p->tmpperm, 0, DT_INT, _state, make_automatic);
-    ae_vector_init(&p->invtmpperm, 0, DT_INT, _state, make_automatic);
     ae_vector_init(&p->tmpx, 0, DT_REAL, _state, make_automatic);
     ae_vector_init(&p->simdbuf, 0, DT_REAL, _state, make_automatic);
 }
@@ -6630,16 +6688,16 @@ void _spcholanalysis_init_copy(void* _dst, const void* _src, ae_state *_state, a
     ae_vector_init_copy(&dst->rowstrides, &src->rowstrides, _state, make_automatic);
     ae_vector_init_copy(&dst->rowoffsets, &src->rowoffsets, _state, make_automatic);
     ae_vector_init_copy(&dst->diagd, &src->diagd, _state, make_automatic);
-    _nbpool_init_copy(&dst->nbooleanpool, &src->nbooleanpool, _state, make_automatic);
-    _nipool_init_copy(&dst->nintegerpool, &src->nintegerpool, _state, make_automatic);
+    _nbpool_init_copy(&dst->n1booleanpool, &src->n1booleanpool, _state, make_automatic);
+    _nipool_init_copy(&dst->n1integerpool, &src->n1integerpool, _state, make_automatic);
     _nrpool_init_copy(&dst->nrealpool, &src->nrealpool, _state, make_automatic);
     ae_vector_init_copy(&dst->currowbegin, &src->currowbegin, _state, make_automatic);
     ae_vector_init_copy(&dst->flagarray, &src->flagarray, _state, make_automatic);
-    ae_vector_init_copy(&dst->eligible, &src->eligible, _state, make_automatic);
     ae_vector_init_copy(&dst->curpriorities, &src->curpriorities, _state, make_automatic);
     ae_vector_init_copy(&dst->tmpparent, &src->tmpparent, _state, make_automatic);
     ae_vector_init_copy(&dst->node2supernode, &src->node2supernode, _state, make_automatic);
     _amdbuffer_init_copy(&dst->amdtmp, &src->amdtmp, _state, make_automatic);
+    _priorityamdbuffers_init_copy(&dst->pamdtmp, &src->pamdtmp, _state, make_automatic);
     ae_vector_init_copy(&dst->tmp0, &src->tmp0, _state, make_automatic);
     ae_vector_init_copy(&dst->tmp1, &src->tmp1, _state, make_automatic);
     ae_vector_init_copy(&dst->tmp2, &src->tmp2, _state, make_automatic);
@@ -6648,13 +6706,6 @@ void _spcholanalysis_init_copy(void* _dst, const void* _src, ae_state *_state, a
     ae_vector_init_copy(&dst->raw2smap, &src->raw2smap, _state, make_automatic);
     _sparsematrix_init_copy(&dst->tmpa, &src->tmpa, _state, make_automatic);
     _sparsematrix_init_copy(&dst->tmpat, &src->tmpat, _state, make_automatic);
-    _sparsematrix_init_copy(&dst->tmpa2, &src->tmpa2, _state, make_automatic);
-    _sparsematrix_init_copy(&dst->tmpbottomt, &src->tmpbottomt, _state, make_automatic);
-    _sparsematrix_init_copy(&dst->tmpupdate, &src->tmpupdate, _state, make_automatic);
-    _sparsematrix_init_copy(&dst->tmpupdatet, &src->tmpupdatet, _state, make_automatic);
-    _sparsematrix_init_copy(&dst->tmpnewtailt, &src->tmpnewtailt, _state, make_automatic);
-    ae_vector_init_copy(&dst->tmpperm, &src->tmpperm, _state, make_automatic);
-    ae_vector_init_copy(&dst->invtmpperm, &src->invtmpperm, _state, make_automatic);
     ae_vector_init_copy(&dst->tmpx, &src->tmpx, _state, make_automatic);
     ae_vector_init_copy(&dst->simdbuf, &src->simdbuf, _state, make_automatic);
 }
@@ -6685,16 +6736,16 @@ void _spcholanalysis_clear(void* _p)
     ae_vector_clear(&p->rowstrides);
     ae_vector_clear(&p->rowoffsets);
     ae_vector_clear(&p->diagd);
-    _nbpool_clear(&p->nbooleanpool);
-    _nipool_clear(&p->nintegerpool);
+    _nbpool_clear(&p->n1booleanpool);
+    _nipool_clear(&p->n1integerpool);
     _nrpool_clear(&p->nrealpool);
     ae_vector_clear(&p->currowbegin);
     ae_vector_clear(&p->flagarray);
-    ae_vector_clear(&p->eligible);
     ae_vector_clear(&p->curpriorities);
     ae_vector_clear(&p->tmpparent);
     ae_vector_clear(&p->node2supernode);
     _amdbuffer_clear(&p->amdtmp);
+    _priorityamdbuffers_clear(&p->pamdtmp);
     ae_vector_clear(&p->tmp0);
     ae_vector_clear(&p->tmp1);
     ae_vector_clear(&p->tmp2);
@@ -6703,13 +6754,6 @@ void _spcholanalysis_clear(void* _p)
     ae_vector_clear(&p->raw2smap);
     _sparsematrix_clear(&p->tmpa);
     _sparsematrix_clear(&p->tmpat);
-    _sparsematrix_clear(&p->tmpa2);
-    _sparsematrix_clear(&p->tmpbottomt);
-    _sparsematrix_clear(&p->tmpupdate);
-    _sparsematrix_clear(&p->tmpupdatet);
-    _sparsematrix_clear(&p->tmpnewtailt);
-    ae_vector_clear(&p->tmpperm);
-    ae_vector_clear(&p->invtmpperm);
     ae_vector_clear(&p->tmpx);
     ae_vector_clear(&p->simdbuf);
 }
@@ -6740,16 +6784,16 @@ void _spcholanalysis_destroy(void* _p)
     ae_vector_destroy(&p->rowstrides);
     ae_vector_destroy(&p->rowoffsets);
     ae_vector_destroy(&p->diagd);
-    _nbpool_destroy(&p->nbooleanpool);
-    _nipool_destroy(&p->nintegerpool);
+    _nbpool_destroy(&p->n1booleanpool);
+    _nipool_destroy(&p->n1integerpool);
     _nrpool_destroy(&p->nrealpool);
     ae_vector_destroy(&p->currowbegin);
     ae_vector_destroy(&p->flagarray);
-    ae_vector_destroy(&p->eligible);
     ae_vector_destroy(&p->curpriorities);
     ae_vector_destroy(&p->tmpparent);
     ae_vector_destroy(&p->node2supernode);
     _amdbuffer_destroy(&p->amdtmp);
+    _priorityamdbuffers_destroy(&p->pamdtmp);
     ae_vector_destroy(&p->tmp0);
     ae_vector_destroy(&p->tmp1);
     ae_vector_destroy(&p->tmp2);
@@ -6758,13 +6802,6 @@ void _spcholanalysis_destroy(void* _p)
     ae_vector_destroy(&p->raw2smap);
     _sparsematrix_destroy(&p->tmpa);
     _sparsematrix_destroy(&p->tmpat);
-    _sparsematrix_destroy(&p->tmpa2);
-    _sparsematrix_destroy(&p->tmpbottomt);
-    _sparsematrix_destroy(&p->tmpupdate);
-    _sparsematrix_destroy(&p->tmpupdatet);
-    _sparsematrix_destroy(&p->tmpnewtailt);
-    ae_vector_destroy(&p->tmpperm);
-    ae_vector_destroy(&p->invtmpperm);
     ae_vector_destroy(&p->tmpx);
     ae_vector_destroy(&p->simdbuf);
 }
